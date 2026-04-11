@@ -19,7 +19,6 @@ import {
   Key,
   User,
   BookOpen,
-  PanelLeftClose,
   CheckSquare,
 } from 'lucide-react';
 import { NAV_ITEMS } from '@/lib/constants';
@@ -144,7 +143,6 @@ export default function Sidebar({
   const pathname = usePathname();
   const mainItems = NAV_ITEMS.filter((item) => item.roles.includes(userRole));
   const [hoverExpanded, setHoverExpanded] = useState(false);
-  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [toggleVisible, setToggleVisible] = useState(false);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -261,47 +259,6 @@ export default function Sidebar({
             {mainItems.map((item) => {
               const isActive = !!pathname?.startsWith(item.href);
               const IconComponent = ICON_MAP[item.icon] ?? LayoutDashboard;
-
-              if ('children' in item && item.children) {
-                const hasActiveChild = item.children.some(child => pathname?.startsWith(child.href));
-                const isGroupExpanded = expandedGroup === item.href || hasActiveChild;
-
-                return (
-                  <div key={item.href}>
-                    <NavButton
-                      icon={IconComponent}
-                      label={item.label}
-                      onClick={() => {
-                        if (expandedGroup === item.href) setExpandedGroup(null);
-                        else setExpandedGroup(item.href);
-                      }}
-                      isOpen={isOpen}
-                    />
-                    <div style={{
-                      overflow: 'hidden',
-                      height: isGroupExpanded && isOpen ? 'auto' : 0,
-                      opacity: isGroupExpanded && isOpen ? 1 : 0,
-                      transition: 'opacity 0.2s ease',
-                    }}>
-                      <div style={{ paddingLeft: 40, marginBottom: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        {item.children.map(child => {
-                          const childActive = pathname === child.href;
-                          return (
-                            <Link key={child.href} href={child.href} style={{
-                              display: 'block', padding: '5px 0', fontSize: 12.5,
-                              color: childActive ? '#fff' : 'rgba(255,255,255,0.45)',
-                              textDecoration: 'none', fontWeight: childActive ? 600 : 400,
-                              transition: 'color 0.15s ease',
-                            }}>
-                              {child.label}
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
 
               return (
                 <NavLink

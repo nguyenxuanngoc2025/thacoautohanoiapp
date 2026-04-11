@@ -182,9 +182,8 @@ export default function CompaniesPage() {
         </div>
         <button
           className="button-erp-primary"
-          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          onClick={() => setUnitModal({ open: true, mode: 'add', data: {} })}
           style={{ display: isSuperAdmin ? 'flex' : 'none', alignItems: 'center', gap: 6 }}
+          onClick={() => setUnitModal({ open: true, mode: 'add', data: {} })}
         >
           <Plus size={15} /> Thêm công ty
         </button>

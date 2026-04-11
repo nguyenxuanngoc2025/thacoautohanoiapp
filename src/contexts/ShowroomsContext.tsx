@@ -6,6 +6,7 @@
  * ✅ Load 1 lần tại root layout (giống BrandsContext)
  * ✅ Thay thế hoàn toàn MASTER_SHOWROOMS hard-coded
  * ✅ Cung cấp showrooms[] với weight, unit_id cho toàn bộ app
+ * ✅ TỰ ĐỘNG LỌC theo activeUnitId từ UnitContext (Multi-Tenant)
  * ✅ Khi user cập nhật showroom qua Settings, gọi refreshShowrooms()
  */
 
@@ -13,6 +14,7 @@ import React, { createContext, useContext, useMemo } from 'react';
 import useSWR from 'swr';
 import { createClient } from '@/lib/supabase/client';
 import { MASTER_SHOWROOMS } from '@/lib/master-data';
+import { useUnit } from '@/contexts/UnitContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,7 +43,9 @@ const STATIC_FALLBACK: ShowroomItem[] = MASTER_SHOWROOMS.map((s, i) => ({
 // ─── Context type ─────────────────────────────────────────────────────────────
 
 interface ShowroomsContextValue {
-  /** Danh sách showrooms active từ DB (có weight, unit_id) */
+  /** Tất cả showrooms active (không lọc Unit — dùng cho Settings/Admin) */
+  allShowrooms: ShowroomItem[];
+  /** Showrooms đã lọc theo activeUnitId (dùng cho Planning/Actual/Reports) */
   showrooms: ShowroomItem[];
   /** Map tên showroom → weight (tiện cho các trang nghiệp vụ) */
   weightMap: Record<string, number>;
@@ -52,6 +56,7 @@ interface ShowroomsContextValue {
 }
 
 const ShowroomsContext = createContext<ShowroomsContextValue>({
+  allShowrooms: STATIC_FALLBACK,
   showrooms: STATIC_FALLBACK,
   weightMap: Object.fromEntries(MASTER_SHOWROOMS.map(s => [s.name, s.weight])),
   showroomNames: MASTER_SHOWROOMS.map(s => s.name),
@@ -79,23 +84,44 @@ const fetchShowrooms = async (): Promise<ShowroomItem[]> => {
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function ShowroomsProvider({ children }: { children: React.ReactNode }) {
-  const { data: showrooms, error, isLoading, mutate } = useSWR<ShowroomItem[]>('master_showrooms', fetchShowrooms, {
-    fallbackData: STATIC_FALLBACK,
-    revalidateOnFocus: false, // Dữ liệu này ít đổi, không cần gọi lại khi switch tab màn hình
-    dedupingInterval: 60000,  // Cache 1 phút
-  });
+  const { activeUnitId } = useUnit();
 
-  // Derived values
+  const { data: allShowroomsRaw, error, isLoading, mutate } = useSWR<ShowroomItem[]>(
+    'master_showrooms',
+    fetchShowrooms,
+    {
+      fallbackData: STATIC_FALLBACK,
+      revalidateOnFocus: false,
+      dedupingInterval: 60000,
+    }
+  );
+
+  const allShowrooms = allShowroomsRaw || STATIC_FALLBACK;
+
+  // ─── CASCADE FILTER: Lọc showrooms theo Unit đang active ───────────────────
+  const showrooms = useMemo(() => {
+    if (activeUnitId === 'all') return allShowrooms;
+    return allShowrooms.filter(s => s.unit_id === activeUnitId);
+  }, [allShowrooms, activeUnitId]);
+
+  // Derived values — tính từ showrooms đã lọc
   const weightMap = React.useMemo(() => {
     const map: Record<string, number> = {};
-    (showrooms || []).forEach(s => { map[s.name] = s.weight; });
+    showrooms.forEach(s => { map[s.name] = s.weight; });
     return map;
   }, [showrooms]);
 
-  const showroomNames = React.useMemo(() => (showrooms || []).map(s => s.name), [showrooms]);
+  const showroomNames = React.useMemo(() => showrooms.map(s => s.name), [showrooms]);
 
   return (
-    <ShowroomsContext.Provider value={{ showrooms: showrooms || [], weightMap, showroomNames, isLoading, refreshShowrooms: async () => { mutate() } }}>
+    <ShowroomsContext.Provider value={{
+      allShowrooms,
+      showrooms,
+      weightMap,
+      showroomNames,
+      isLoading,
+      refreshShowrooms: async () => { mutate(); },
+    }}>
       {children}
     </ShowroomsContext.Provider>
   );

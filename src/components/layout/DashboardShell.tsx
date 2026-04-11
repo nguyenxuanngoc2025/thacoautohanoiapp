@@ -3,12 +3,15 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUnit } from '@/contexts/UnitContext';
 import TopBar from '@/components/layout/TopBar';
 import Sidebar from '@/components/layout/Sidebar';
+import StatusBar from '@/components/layout/StatusBar';
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { profile, isLoading, authUser } = useAuth();
+  const { activeUnit, activeUnitId } = useUnit();
   const [collapsed, setCollapsed] = useState(false);
 
   // Chờ auth xong trước khi render shell. Quá trình fetch profile có thể mất chút ms.
@@ -41,35 +44,48 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const userRole = profile?.role ?? 'mkt_showroom';
   const userName = profile?.full_name ?? (authUser.email ?? 'Unknown');
   const userCode = profile?.email?.split('@')[0]?.toUpperCase() ?? '';
-  const companyName = profile?.unit?.name ?? 'THACO AUTO';
+
+  // companyName: ưu tiên activeUnit (khi super_admin chọn Unit cụ thể)
+  // → 'all' → hiển thị 'TOÀN HỆ THỐNG'
+  // → Unit cụ thể → tên Unit đó
+  // → fallback về profile.unit.name
+  const companyName = activeUnitId === 'all'
+    ? 'TOÀN HỆ THỐNG'
+    : (activeUnit?.name ?? profile?.unit?.name ?? 'THACO AUTO');
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--color-bg)' }}>
-      <Sidebar
-        userRole={userRole}
-        userName={userName}
-        userCode={userCode}
-        companyName={companyName}
-        collapsed={collapsed}
-        onToggleCollapse={() => setCollapsed(prev => !prev)}
-      />
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--color-bg)', flexDirection: 'column' }}>
+      {/* Main layout (sidebar + content) */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <Sidebar
+          userRole={userRole}
+          userName={userName}
+          userCode={userCode}
+          companyName={companyName}
+          collapsed={collapsed}
+          onToggleCollapse={() => setCollapsed(prev => !prev)}
+        />
 
-      {/* Content area */}
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          minWidth: 0,
-          overflow: 'hidden',
-          transition: 'flex 0.25s cubic-bezier(0.4,0,0.2,1)',
-        }}
-      >
-        <TopBar userName={userName} />
-        <main style={{ flex: 1, overflowY: 'auto', background: 'var(--color-bg)', position: 'relative' }}>
-          {children}
-        </main>
+        {/* Content area */}
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            minWidth: 0,
+            overflow: 'hidden',
+            transition: 'flex 0.25s cubic-bezier(0.4,0,0.2,1)',
+          }}
+        >
+          <TopBar userName={userName} />
+          <main style={{ flex: 1, overflowY: 'auto', background: 'var(--color-bg)', position: 'relative' }}>
+            {children}
+          </main>
+        </div>
       </div>
+
+      {/* StatusBar — chân trang, chỉ hiện với super_admin */}
+      <StatusBar />
     </div>
   );
 }
