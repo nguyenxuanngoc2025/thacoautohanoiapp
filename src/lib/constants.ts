@@ -54,11 +54,7 @@ export const NAV_ITEMS = [
     label: 'Cài đặt', 
     href: '/settings', 
     icon: 'Settings',
-    roles: ['super_admin', 'bld'] as UserRole[],
-    children: [
-      { label: 'Danh mục thương hiệu', href: '/settings/brands' },
-      { label: 'Tài khoản & Phân quyền', href: '/settings/accounts' },
-    ]
+    roles: ['super_admin', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom', 'finance'] as UserRole[],
   },
   { 
     label: 'Hướng dẫn', 
