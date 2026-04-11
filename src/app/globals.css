@@ -1,0 +1,686 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* ===== 1. COLOR SYSTEM (MÀU SẮC) ===== */
+  /* Primary (Màu chủ đạo) */
+  --color-primary: #004b9b; /* Thaco Auto Navy Blue */
+  --color-primary-hover: #003b7a;
+  --color-primary-active: #002d5c;
+  --color-primary-light: #e6f0fa; /* Background nhẹ cho state active */
+
+  /* Secondary (Màu phụ họa - nếu có) */
+  --color-secondary: #0f172a;
+  --color-secondary-hover: #1e293b;
+
+  /* Background & Surfaces (Nền) */
+  --color-bg: #f8fafc; /* Nền tổng của web */
+  --color-surface: #ffffff; /* Nền của Card, Panel, Modal */
+  --color-sidebar: var(--color-primary);
+  --color-topbar: #ffffff;
+
+  /* Text Colors (Chữ) */
+  --color-text-primary: #0f172a;    /* Tiêu đề chính, đậm */
+  --color-text-secondary: #475569;  /* Chữ mờ hơn, đoạn văn */
+  --color-text-muted: #94a3b8;      /* Chữ rất mờ, placeholder, nhãn phụ */
+
+  /* Sidebar Text */
+  --color-sidebar-text: #e2e8f0;
+  --color-sidebar-hover: rgba(255, 255, 255, 0.1);
+
+  /* Border Colors (Đường viền) */
+  --color-border-light: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-border-dark: #cbd5e1;
+
+  /* Status Colors (Trạng thái) */
+  --color-success: #10b981;
+  --color-success-bg: #d1fae5;
+  --color-warning: #f59e0b;
+  --color-warning-bg: #fef3c7;
+  --color-danger: #ef4444;
+  --color-danger-bg: #fee2e2;
+  --color-info: #3b82f6;
+
+  /* Backward compatibility for previous classes */
+  --color-brand: var(--color-primary);
+  --color-brand-hover: var(--color-primary-hover);
+  --color-text: var(--color-text-primary);
+
+  /* ===== 2. TYPOGRAPHY (FONT CHỮ) ===== */
+  /* Cấp độ tiêu đề (Headings) */
+  --fs-h1: 20px;
+  --fs-h2: 18px;
+  --fs-h3: 16px;
+  --fs-h4: 14px;
+
+  /* Cấp độ nội dung (Body) */
+  --fs-body: 13px;       /* P chuẩn */
+  --fs-table: 12px;      /* Data grid, List */
+  --fs-label: 11px;      /* Chú thích, badge */
+  --fs-tiny: 10px;       /* Chữ siêu nhỏ */
+
+  /* ===== 3. SPACING & DIMENSIONS (KÍCH THƯỚC) ===== */
+  --sidebar-width: 250px;
+  --topbar-height: 48px;
+  --border-radius-sm: 2px;
+  --border-radius-erp: 4px; /* Chuẩn mới bo góc nhẹ cho component */
+  --border-radius-md: 6px;
+  --border-radius-lg: 8px;
+
+  /* ===== 4. SHADOWS (ĐỔ BÓNG) ===== */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-dropdown: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* ===== RESET ===== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--fs-body);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== ERP FLAT PANEL ===== */
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+/* ===== TOOLBAR ===== */
+.toolbar {
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--color-border);
+  min-height: 32px;
+}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #c1c8d0; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ===== DATA TABLE ===== */
+.table-scroll-container {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+  position: relative;
+  flex: 1;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--fs-table);
+}
+
+.data-table th {
+  background: #eef2f7;
+  color: #334155;
+  font-weight: 600;
+  padding: 6px 8px;
+  height: 32px;
+  border-bottom: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+  text-align: center;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-top: 1px solid var(--color-border);
+}
+
+.data-table th:first-child {
+  border-left: 1px solid var(--color-border);
+}
+
+.data-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--color-border-light);
+  border-right: 1px solid var(--color-border-light);
+  color: var(--color-text);
+  white-space: nowrap;
+  height: 30px;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table td:first-child {
+  border-left: 1px solid var(--color-border-light);
+}
+
+/* Zebra striping */
+.data-table tbody tr:nth-child(even) td {
+  background-color: #fafbfc;
+}
+
+.data-table tr:hover td {
+  background: #f1f5f9 !important;
+}
+
+.data-table tr.subtotal td {
+  background: #f8fafc;
+  font-weight: 600;
+}
+
+.data-table tr.grand-total td {
+  background: #f0f9ff;
+  font-weight: 700;
+  border-top: 2px solid var(--color-brand);
+  color: var(--color-brand);
+}
+
+/* ===== ERP BUTTONS ===== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  height: 28px;
+  font-size: var(--fs-table);
+  cursor: pointer;
+  border: 1px solid var(--color-border-dark);
+  background: #fff;
+  color: var(--color-text);
+  border-radius: var(--border-radius-erp);
+  transition: all 0.1s;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  background: #f3f4f6;
+  border-color: #94a3b8;
+}
+
+.btn-primary {
+  background: var(--color-brand);
+  color: white;
+  border-color: var(--color-brand);
+}
+
+.btn-primary:hover {
+  background: var(--color-brand-hover);
+}
+
+/* ERP Button Variants — used in toolbar */
+.button-erp-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 12px;
+  height: 28px;
+  font-size: var(--fs-table);
+  cursor: pointer;
+  border: 1px solid var(--color-border-dark);
+  background: #ffffff;
+  color: var(--color-text-secondary);
+  border-radius: var(--border-radius-erp);
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+.button-erp-secondary:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.button-erp-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 14px;
+  height: 28px;
+  font-size: var(--fs-table);
+  cursor: pointer;
+  border: 1px solid var(--color-brand);
+  background: var(--color-brand);
+  color: #ffffff;
+  border-radius: var(--border-radius-erp);
+  font-weight: 600;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+.button-erp-primary:hover {
+  background: var(--color-brand-hover);
+}
+
+/* ===== PERIOD TABS ===== */
+.period-tabs {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--color-border-dark);
+  border-radius: var(--border-radius-erp);
+  overflow: hidden;
+}
+
+.period-tab {
+  padding: 3px 10px;
+  font-size: var(--fs-table);
+  color: var(--color-text-secondary);
+  background: #fff;
+  border: none;
+  border-right: 1px solid var(--color-border-dark);
+  cursor: pointer;
+  transition: all 0.1s;
+  white-space: nowrap;
+}
+
+.period-tab:last-child {
+  border-right: none;
+}
+
+.period-tab.active {
+  background: var(--color-brand);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.period-tab:not(.active):hover {
+  background: #f1f5f9;
+}
+
+/* ===== FORM SELECT & INPUT ===== */
+.form-select,
+.form-input {
+  padding: 3px 8px;
+  font-size: var(--fs-table);
+  border: 1px solid var(--color-border-dark);
+  border-radius: var(--border-radius-erp);
+  background: #fff;
+  color: var(--color-text);
+  height: 28px;
+  outline: none;
+  font-family: inherit;
+}
+
+.form-select {
+  cursor: pointer;
+}
+
+.form-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.form-select:focus,
+.form-input:focus {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 1px var(--color-brand);
+}
+
+/* Remove number input spinners for standardized inputs */
+.form-input[type="number"]::-webkit-outer-spin-button,
+.form-input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.form-input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* ===== PROGRESS BAR ===== */
+.progress-bar {
+  height: 12px;
+  background: #e2e8f0;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+}
+
+/* ===== BADGE ===== */
+.badge {
+  padding: 0px 4px;
+  font-size: var(--fs-label);
+  font-weight: 500;
+  border: 1px solid transparent;
+  border-radius: var(--border-radius-erp);
+}
+
+.badge-success { color: #166534; border-color: #bbf7d0; background: #f0fdf4; }
+.badge-warning { color: #854d0e; border-color: #fef08a; background: #fefce8; }
+.badge-danger  { color: #991b1b; border-color: #fecaca; background: #fef2f2; }
+
+/* ===== ERP TAB SYSTEM ===== */
+.erp-tabs {
+  display: flex;
+  background: #eceef1;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.erp-tab {
+  padding: 5px 12px;
+  font-size: var(--fs-table);
+  color: var(--color-text-secondary);
+  border: 1px solid transparent;
+  border-bottom: none;
+  cursor: pointer;
+  background: transparent;
+}
+
+.erp-tab.active {
+  background: #fff;
+  border-color: var(--color-border);
+  color: var(--color-brand);
+  font-weight: 600;
+  margin-bottom: -1px;
+}
+
+.erp-tab:not(.active):hover {
+  color: var(--color-brand);
+}
+
+/* ===== STATUS BAR ===== */
+.status-bar {
+  height: 22px;
+  background: #e2e8f0;
+  border-top: 1px solid var(--color-border-dark);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: var(--fs-label);
+  color: var(--color-text-secondary);
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.status-bar-item {
+  padding: 0 10px;
+  border-left: 1px solid var(--color-border-dark);
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.status-bar-item:first-child {
+  border-left: none;
+  flex: 1;
+}
+
+.toolbar-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--color-border-dark);
+  flex-shrink: 0;
+  margin: 0 4px;
+}
+
+/* ===== QUICK SUMMARY STRIP ===== */
+.summary-strip {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0;
+  padding: 3px 8px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f4f8 100%);
+  border-bottom: 1px solid var(--color-border);
+  height: 28px;
+  min-height: 28px;
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.summary-chip {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.summary-chip-label {
+  font-size: var(--fs-label);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.summary-chip-value {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.summary-chip-unit {
+  font-size: var(--fs-label);
+  font-weight: 400;
+  color: var(--color-text-muted);
+  margin-left: 1px;
+}
+
+.summary-divider {
+  width: 1px;
+  height: 14px;
+  background: var(--color-border-dark);
+  flex-shrink: 0;
+}
+
+/* ===== SCROLL SHADOW FOR FROZEN COLUMNS ===== */
+.table-scroll-container.scrolled .data-table td:nth-child(2),
+.table-scroll-container.scrolled .data-table th:nth-child(2) {
+  box-shadow: 4px 0 8px -2px rgba(0,0,0,0.08);
+  clip-path: inset(0 -8px 0 0);
+}
+
+/* ===== CELL WRAPPER STYLES ===== */
+.cell-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  padding: 0 6px;
+  min-height: 28px;
+  cursor: text;
+  text-align: right;
+  font-size: var(--fs-table);
+  transition: background 0.08s ease;
+}
+
+.cell-idle:hover {
+  background: #f1f8ff;
+}
+
+.cell-editing {
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1.5px #0185ba;
+  z-index: 50;
+}
+
+.cell-input {
+  width: 100%;
+  text-align: right;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: var(--fs-table);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Remove number input spinners */
+.cell-input::-webkit-outer-spin-button,
+.cell-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.cell-input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* ===== SUBTOTAL ROW ENHANCEMENT ===== */
+.data-table tr.subtotal td {
+  background: #f0f4f8 !important;
+  font-weight: 600;
+  border-top: 1px solid #cbd5e1;
+  border-bottom: 1px solid #cbd5e1;
+  font-size: var(--fs-table);
+}
+
+.data-table tr.subtotal:hover td {
+  background: #e8eef4 !important;
+}
+
+/* ===== SIDEBAR NAV — ẨN SCROLLBAR, VẪN SCROLL ĐƯỢC ===== */
+/* Chrome, Safari, Edge (Chromium) */
+.sidebar-nav-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+}
+/* Firefox */
+.sidebar-nav-scroll {
+  scrollbar-width: none;
+}
+/* IE/Edge legacy */
+.sidebar-nav-scroll {
+  -ms-overflow-style: none;
+}
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}

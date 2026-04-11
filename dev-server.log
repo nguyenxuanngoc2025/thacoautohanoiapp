@@ -1,0 +1,811 @@
+▲ Next.js 16.2.2 (Turbopack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.1.10:3001
+- Environments: .env.local
+✓ Ready in 567ms
+⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of E:\ANTIGRAVITY\01_WORKSPACE_LAM_VIEC\projects\THACO_MKT_BUDGET\package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles: 
+   * E:\ANTIGRAVITY\01_WORKSPACE_LAM_VIEC\projects\THACO_MKT_BUDGET\app\package-lock.json
+
+Warning: Custom Cache-Control headers detected for the following routes:
+  - /_next/static/chunks/:filename*.css
+
+Setting a custom Cache-Control header can break Next.js development behavior.
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+
+ GET / 307 in 3.3s (next.js: 2.9s, proxy.ts: 107ms, application-code: 347ms)
+ GET /dashboard 200 in 1009ms (next.js: 878ms, proxy.ts: 8ms, application-code: 122ms)
+ GET /dashboard 200 in 82ms (next.js: 8ms, proxy.ts: 7ms, application-code: 67ms)
+ GET /dashboard 200 in 84ms (next.js: 5ms, proxy.ts: 9ms, application-code: 70ms)
+✓ Compiled in 70ms
+ GET /tasks 200 in 613ms (next.js: 534ms, proxy.ts: 10ms, application-code: 69ms)
+ GET /events 200 in 681ms (next.js: 643ms, proxy.ts: 4ms, application-code: 34ms)
+ GET /planning 200 in 611ms (next.js: 566ms, proxy.ts: 4ms, application-code: 42ms)
+[browser] Error upserting budget plan: {
+  code: [32m'PGRST204'[39m,
+  details: [1mnull[22m,
+  hint: [1mnull[22m,
+  message: [32m"Could not find the 'year' column of 'thaco_budget_plans' in the schema cache"[39m
+} 
+    at upsertBudgetPlan (src/lib/budget-data.ts:46:7)
+  44 |       year,
+  45 |       payload,
+> 46 |       notes,
+     |       ^
+  47 |       approval_status,
+  48 |       ...(unit_id && { unit_id }),
+  49 |       updated_at: new Date().toISOString() (src/lib/budget-data.ts:46:7)
+ GET /events 200 in 44ms (next.js: 6ms, proxy.ts: 8ms, application-code: 31ms)
+ GET /tasks 200 in 35ms (next.js: 4ms, proxy.ts: 6ms, application-code: 24ms)
+⚠ Fast Refresh had to perform a full reload when ./app/src/contexts/AuthContext.tsx [app-client] (ecmascript) <locals> changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+✓ Compiled in 57ms
+ GET /tasks 200 in 703ms (next.js: 96ms, proxy.ts: 6ms, application-code: 601ms)
+ GET /planning 200 in 40ms (next.js: 5ms, proxy.ts: 5ms, application-code: 30ms)
+[browser] Error upserting budget plan: {
+  code: [32m'PGRST204'[39m,
+  details: [1mnull[22m,
+  hint: [1mnull[22m,
+  message: [32m"Could not find the 'year' column of 'thaco_budget_plans' in the schema cache"[39m
+} 
+    at upsertBudgetPlan (src/lib/budget-data.ts:54:13)
+  52 |
+  53 |   if (error) {
+> 54 |     console.error('Error upserting budget plan:', error);
+     |             ^
+  55 |     return false;
+  56 |   }
+  57 |   return true; (src/lib/budget-data.ts:54:13)
+[browser] Error upserting budget plan: {
+  code: [32m'PGRST204'[39m,
+  details: [1mnull[22m,
+  hint: [1mnull[22m,
+  message: [32m"Could not find the 'year' column of 'thaco_budget_plans' in the schema cache"[39m
+} 
+    at upsertBudgetPlan (src/lib/budget-data.ts:54:13)
+  52 |
+  53 |   if (error) {
+> 54 |     console.error('Error upserting budget plan:', error);
+     |             ^
+  55 |     return false;
+  56 |   }
+  57 |   return true; (src/lib/budget-data.ts:54:13)
+[browser] Error upserting budget plan: {
+  code: [32m'PGRST204'[39m,
+  details: [1mnull[22m,
+  hint: [1mnull[22m,
+  message: [32m"Could not find the 'year' column of 'thaco_budget_plans' in the schema cache"[39m
+} 
+    at upsertBudgetPlan (src/lib/budget-data.ts:54:13)
+  52 |
+  53 |   if (error) {
+> 54 |     console.error('Error upserting budget plan:', error);
+     |             ^
+  55 |     return false;
+  56 |   }
+  57 |   return true; (src/lib/budget-data.ts:54:13)
+[browser] Error upserting budget plan: {
+  code: [32m'PGRST204'[39m,
+  details: [1mnull[22m,
+  hint: [1mnull[22m,
+  message: [32m"Could not find the 'year' column of 'thaco_budget_plans' in the schema cache"[39m
+} 
+    at upsertBudgetPlan (src/lib/budget-data.ts:54:13)
+  52 |
+  53 |   if (error) {
+> 54 |     console.error('Error upserting budget plan:', error);
+     |             ^
+  55 |     return false;
+  56 |   }
+  57 |   return true; (src/lib/budget-data.ts:54:13)
+ GET /tasks 200 in 120ms (next.js: 18ms, proxy.ts: 34ms, application-code: 69ms)
+[browser] Error upserting budget plan: {
+  code: [32m'PGRST204'[39m,
+  details: [1mnull[22m,
+  hint: [1mnull[22m,
+  message: [32m"Could not find the 'year' column of 'thaco_budget_plans' in the schema cache"[39m
+} 
+    at upsertBudgetPlan (src/lib/budget-data.ts:54:13)
+  52 |
+  53 |   if (error) {
+> 54 |     console.error('Error upserting budget plan:', error);
+     |             ^
+  55 |     return false;
+  56 |   }
+  57 |   return true; (src/lib/budget-data.ts:54:13)
+ GET /events 200 in 207ms (next.js: 117ms, proxy.ts: 7ms, application-code: 84ms)
+ GET /planning 200 in 32ms (next.js: 6ms, proxy.ts: 3ms, application-code: 23ms)
+ GET /tasks 200 in 33ms (next.js: 4ms, proxy.ts: 3ms, application-code: 26ms)
+ GET /actual 200 in 1162ms (next.js: 1097ms, proxy.ts: 3ms, application-code: 61ms)
+✓ Compiled in 261ms
+ GET /login 200 in 610ms (next.js: 412ms, proxy.ts: 4ms, application-code: 193ms)
+ GET /dashboard 200 in 199ms (next.js: 123ms, proxy.ts: 9ms, application-code: 67ms)
+ GET /login 200 in 124ms (next.js: 6ms, proxy.ts: 7ms, application-code: 111ms)
+ GET /dashboard 200 in 107ms (next.js: 10ms, proxy.ts: 10ms, application-code: 87ms)
+ GET /login 200 in 101ms (next.js: 5ms, proxy.ts: 5ms, application-code: 91ms)
+ GET /dashboard 200 in 149ms (next.js: 12ms, proxy.ts: 7ms, application-code: 130ms)
+ GET /login 200 in 93ms (next.js: 6ms, proxy.ts: 6ms, application-code: 81ms)
+ GET /dashboard 200 in 210ms (next.js: 19ms, proxy.ts: 10ms, application-code: 181ms)
+✓ Compiled in 64ms
+  Reload env: .env.local
+⚠ Fast Refresh had to perform a full reload when ./app/src/contexts/AuthContext.tsx [app-client] (ecmascript) <locals> changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+✓ Compiled in 0ms
+ GET /login 200 in 362ms (next.js: 82ms, proxy.ts: 21ms, application-code: 260ms)
+ GET /login 200 in 258ms (next.js: 4ms, proxy.ts: 5ms, application-code: 249ms)
+ GET /login 200 in 93ms (next.js: 8ms, proxy.ts: 13ms, application-code: 73ms)
+✓ Compiled in 417ms
+[browser] ./app/src/app/login/page.tsx:504:2
+Expression expected
+  502 |     </>
+  503 |   );
+> 504 | }={{ fontSize: 10, color: '#cbd5e1' }}>
+      |  ^
+  505 |               © 2026 THACO AUTO Hà Nội. Powered by Antigravity.
+  506 |             </span>
+  507 |           </div>
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./app/src/app/login/page.tsx [Client Component Browser]
+    ./app/src/app/login/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/src/app/login/page.tsx [Client Component SSR]
+    ./app/src/app/login/page.tsx [Server Component] 
+[browser] ./app/src/app/login/page.tsx:504:2
+Expression expected
+  502 |     </>
+  503 |   );
+> 504 | }={{ fontSize: 10, color: '#cbd5e1' }}>
+      |  ^
+  505 |               © 2026 THACO AUTO Hà Nội. Powered by Antigravity.
+  506 |             </span>
+  507 |           </div>
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./app/src/app/login/page.tsx [Client Component Browser]
+    ./app/src/app/login/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/src/app/login/page.tsx [Client Component SSR]
+    ./app/src/app/login/page.tsx [Server Component] 
+⨯ ./app/src/app/login/page.tsx:504:2
+Expression expected
+  [90m502 |[0m     </>
+  [90m503 |[0m   );
+[31m[1m>[0m [90m504 |[0m }={{ fontSize: [35m10[0m, color: [32m'#cbd5e1'[0m }}>
+  [90m    |[0m  [31m[1m^[0m
+  [90m505 |[0m               © [35m2026[0m [33mTHACO[0m [33mAUTO[0m [33mHà[0m [33mNội[0m. [33mPowered[0m by [33mAntigravity[0m.
+  [90m506 |[0m             </span>
+  [90m507 |[0m           </div>
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./app/src/app/login/page.tsx [Client Component Browser]
+    ./app/src/app/login/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/src/app/login/page.tsx [Client Component SSR]
+    ./app/src/app/login/page.tsx [Server Component]
+
+
+[browser] ./app/src/app/login/page.tsx:504:2
+Expression expected
+  502 |     </>
+  503 |   );
+> 504 | }={{ fontSize: 10, color: '#cbd5e1' }}>
+      |  ^
+  505 |               © 2026 THACO AUTO Hà Nội. Powered by Antigravity.
+  506 |             </span>
+  507 |           </div>
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./app/src/app/login/page.tsx [Client Component Browser]
+    ./app/src/app/login/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/src/app/login/page.tsx [Client Component SSR]
+    ./app/src/app/login/page.tsx [Server Component] 
+[browser] ./app/src/app/login/page.tsx:504:2
+Expression expected
+  502 |     </>
+  503 |   );
+> 504 | }={{ fontSize: 10, color: '#cbd5e1' }}>
+      |  ^
+  505 |               © 2026 THACO AUTO Hà Nội. Powered by Antigravity.
+  506 |             </span>
+  507 |           </div>
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./app/src/app/login/page.tsx [Client Component Browser]
+    ./app/src/app/login/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/src/app/login/page.tsx [Client Component SSR]
+    ./app/src/app/login/page.tsx [Server Component] 
+ GET /login 500 in 3.8s (next.js: 3.3s, proxy.ts: 86ms, application-code: 428ms)
+[browser] Uncaught Error: ./app/src/app/login/page.tsx:504:2
+Expression expected
+  502 |     </>
+  503 |   );
+> 504 | }={{ fontSize: 10, color: '#cbd5e1' }}>
+      |  ^
+  505 |               © 2026 THACO AUTO Hà Nội. Powered by Antigravity.
+  506 |             </span>
+  507 |           </div>
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./app/src/app/login/page.tsx [Client Component Browser]
+    ./app/src/app/login/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/src/app/login/page.tsx [Client Component SSR]
+    ./app/src/app/login/page.tsx [Server Component]
+
+
+    at <unknown> (Error: ./app/src/app/login/page.tsx:504:2)
+    at <unknown> (Error: (./app/src/app/login/page.tsx:504:2)
+[browser] ./app/src/app/login/page.tsx:504:2
+Expression expected
+  502 |     </>
+  503 |   );
+> 504 | }={{ fontSize: 10, color: '#cbd5e1' }}>
+      |  ^
+  505 |               © 2026 THACO AUTO Hà Nội. Powered by Antigravity.
+  506 |             </span>
+  507 |           </div>
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./app/src/app/login/page.tsx [Client Component Browser]
+    ./app/src/app/login/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/src/app/login/page.tsx [Client Component SSR]
+    ./app/src/app/login/page.tsx [Server Component] 
+[browser] ./app/src/app/login/page.tsx:504:2
+Expression expected
+  502 |     </>
+  503 |   );
+> 504 | }={{ fontSize: 10, color: '#cbd5e1' }}>
+      |  ^
+  505 |               © 2026 THACO AUTO Hà Nội. Powered by Antigravity.
+  506 |             </span>
+  507 |           </div>
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./app/src/app/login/page.tsx [Client Component Browser]
+    ./app/src/app/login/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/src/app/login/page.tsx [Client Component SSR]
+    ./app/src/app/login/page.tsx [Server Component] 
+[browser] ./app/src/app/login/page.tsx:504:2
+Expression expected
+  502 |     </>
+  503 |   );
+> 504 | }={{ fontSize: 10, color: '#cbd5e1' }}>
+      |  ^
+  505 |               © 2026 THACO AUTO Hà Nội. Powered by Antigravity.
+  506 |             </span>
+  507 |           </div>
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./app/src/app/login/page.tsx [Client Component Browser]
+    ./app/src/app/login/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/src/app/login/page.tsx [Client Component SSR]
+    ./app/src/app/login/page.tsx [Server Component] 
+[browser] ./app/src/app/login/page.tsx:504:2
+Expression expected
+  502 |     </>
+  503 |   );
+> 504 | }={{ fontSize: 10, color: '#cbd5e1' }}>
+      |  ^
+  505 |               © 2026 THACO AUTO Hà Nội. Powered by Antigravity.
+  506 |             </span>
+  507 |           </div>
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./app/src/app/login/page.tsx [Client Component Browser]
+    ./app/src/app/login/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/src/app/login/page.tsx [Client Component SSR]
+    ./app/src/app/login/page.tsx [Server Component] 
+⨯ ./app/src/app/login/page.tsx:504:2
+Expression expected
+  [90m502 |[0m     </>
+  [90m503 |[0m   );
+[31m[1m>[0m [90m504 |[0m }={{ fontSize: [35m10[0m, color: [32m'#cbd5e1'[0m }}>
+  [90m    |[0m  [31m[1m^[0m
+  [90m505 |[0m               © [35m2026[0m [33mTHACO[0m [33mAUTO[0m [33mHà[0m [33mNội[0m. [33mPowered[0m by [33mAntigravity[0m.
+  [90m506 |[0m             </span>
+  [90m507 |[0m           </div>
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./app/src/app/login/page.tsx [Client Component Browser]
+    ./app/src/app/login/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/src/app/login/page.tsx [Client Component SSR]
+    ./app/src/app/login/page.tsx [Server Component]
+
+
+ GET /login 500 in 33ms (next.js: 13ms, proxy.ts: 6ms, application-code: 14ms)
+[browser] Uncaught Error: ./app/src/app/login/page.tsx:504:2
+Expression expected
+  502 |     </>
+  503 |   );
+> 504 | }={{ fontSize: 10, color: '#cbd5e1' }}>
+      |  ^
+  505 |               © 2026 THACO AUTO Hà Nội. Powered by Antigravity.
+  506 |             </span>
+  507 |           </div>
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./app/src/app/login/page.tsx [Client Component Browser]
+    ./app/src/app/login/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/src/app/login/page.tsx [Client Component SSR]
+    ./app/src/app/login/page.tsx [Server Component]
+
+
+    at <unknown> (Error: ./app/src/app/login/page.tsx:504:2)
+    at <unknown> (Error: (./app/src/app/login/page.tsx:504:2)
+[browser] ./app/src/app/login/page.tsx:504:2
+Expression expected
+  502 |     </>
+  503 |   );
+> 504 | }={{ fontSize: 10, color: '#cbd5e1' }}>
+      |  ^
+  505 |               © 2026 THACO AUTO Hà Nội. Powered by Antigravity.
+  506 |             </span>
+  507 |           </div>
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./app/src/app/login/page.tsx [Client Component Browser]
+    ./app/src/app/login/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/src/app/login/page.tsx [Client Component SSR]
+    ./app/src/app/login/page.tsx [Server Component] 
+[browser] ./app/src/app/login/page.tsx:504:2
+Expression expected
+  502 |     </>
+  503 |   );
+> 504 | }={{ fontSize: 10, color: '#cbd5e1' }}>
+      |  ^
+  505 |               © 2026 THACO AUTO Hà Nội. Powered by Antigravity.
+  506 |             </span>
+  507 |           </div>
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./app/src/app/login/page.tsx [Client Component Browser]
+    ./app/src/app/login/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/src/app/login/page.tsx [Client Component SSR]
+    ./app/src/app/login/page.tsx [Server Component] 
+✓ Compiled in 166ms
+ GET /login 200 in 2.8s (next.js: 863ms, proxy.ts: 12ms, application-code: 1967ms)
+ GET /login 200 in 84ms (next.js: 11ms, proxy.ts: 10ms, application-code: 62ms)
+✓ Compiled in 103ms
+ GET /login 200 in 259ms (next.js: 79ms, proxy.ts: 4ms, application-code: 175ms)
+✓ Compiled in 397ms
+✓ Compiled in 56ms
+✓ Compiled in 52ms
+ GET /login 200 in 229ms (next.js: 57ms, proxy.ts: 6ms, application-code: 166ms)
+✓ Compiled in 54ms
+✓ Compiled in 53ms
+ GET /login 200 in 239ms (next.js: 64ms, proxy.ts: 5ms, application-code: 170ms)
+✓ Compiled in 62ms
+✓ Compiled in 52ms
+ GET /login 200 in 235ms (next.js: 59ms, proxy.ts: 7ms, application-code: 169ms)
+ GET /login 200 in 59ms (next.js: 4ms, proxy.ts: 6ms, application-code: 49ms)
+✓ Compiled in 60ms
+ GET /login 200 in 223ms (next.js: 54ms, proxy.ts: 5ms, application-code: 164ms)
+✓ Compiled in 49ms
+ GET /login 200 in 220ms (next.js: 58ms, proxy.ts: 6ms, application-code: 157ms)
+ GET /login 200 in 53ms (next.js: 4ms, proxy.ts: 5ms, application-code: 44ms)
+ GET /login 200 in 46ms (next.js: 3ms, proxy.ts: 7ms, application-code: 36ms)
+ GET /login 200 in 51ms (next.js: 3ms, proxy.ts: 4ms, application-code: 43ms)
+✓ Compiled in 48ms
+ GET /login 200 in 233ms (next.js: 61ms, proxy.ts: 7ms, application-code: 165ms)
+✓ Compiled in 46ms
+ GET /login 200 in 237ms (next.js: 63ms, proxy.ts: 9ms, application-code: 165ms)
+ GET /login 200 in 59ms (next.js: 5ms, proxy.ts: 4ms, application-code: 50ms)
+ GET /login 200 in 58ms (next.js: 3ms, proxy.ts: 7ms, application-code: 48ms)
+✓ Compiled in 47ms
+✓ Compiled in 45ms
+ GET /login 200 in 59ms (next.js: 5ms, proxy.ts: 5ms, application-code: 50ms)
+ GET /login 200 in 50ms (next.js: 4ms, proxy.ts: 4ms, application-code: 42ms)
+✓ Compiled in 49ms
+ GET /login 200 in 224ms (next.js: 56ms, proxy.ts: 5ms, application-code: 163ms)
+ GET /login 200 in 54ms (next.js: 4ms, proxy.ts: 4ms, application-code: 46ms)
+ GET /login 200 in 50ms (next.js: 4ms, proxy.ts: 4ms, application-code: 43ms)
+ GET /login 200 in 58ms (next.js: 5ms, proxy.ts: 3ms, application-code: 50ms)
+ GET /login 200 in 60ms (next.js: 3ms, proxy.ts: 3ms, application-code: 54ms)
+✓ Compiled in 74ms
+ GET /login 200 in 213ms (next.js: 59ms, proxy.ts: 3ms, application-code: 150ms)
+ GET /login 200 in 53ms (next.js: 4ms, proxy.ts: 5ms, application-code: 44ms)
+ GET /login 200 in 51ms (next.js: 4ms, proxy.ts: 4ms, application-code: 44ms)
+ GET /login 200 in 67ms (next.js: 4ms, proxy.ts: 4ms, application-code: 59ms)
+ GET /login 200 in 59ms (next.js: 7ms, proxy.ts: 4ms, application-code: 48ms)
+ GET /login 200 in 65ms (next.js: 7ms, proxy.ts: 4ms, application-code: 54ms)
+ GET /login 200 in 53ms (next.js: 4ms, proxy.ts: 4ms, application-code: 45ms)
+ GET /login 200 in 63ms (next.js: 5ms, proxy.ts: 6ms, application-code: 52ms)
+ GET /login 200 in 81ms (next.js: 5ms, proxy.ts: 6ms, application-code: 69ms)
+ GET /login 200 in 58ms (next.js: 4ms, proxy.ts: 5ms, application-code: 49ms)
+ GET /login 200 in 70ms (next.js: 3ms, proxy.ts: 5ms, application-code: 61ms)
+ GET /login 200 in 66ms (next.js: 4ms, proxy.ts: 7ms, application-code: 55ms)
+ GET /login 200 in 58ms (next.js: 4ms, proxy.ts: 4ms, application-code: 51ms)
+ GET /login 200 in 68ms (next.js: 4ms, proxy.ts: 6ms, application-code: 58ms)
+ GET /login 200 in 70ms (next.js: 8ms, proxy.ts: 4ms, application-code: 59ms)
+✓ Compiled in 251ms
+ GET /login 200 in 265ms (next.js: 62ms, proxy.ts: 4ms, application-code: 199ms)
+ GET /login 200 in 85ms (next.js: 9ms, proxy.ts: 10ms, application-code: 66ms)
+ GET /login 200 in 64ms (next.js: 6ms, proxy.ts: 4ms, application-code: 54ms)
+ GET /login 200 in 60ms (next.js: 5ms, proxy.ts: 4ms, application-code: 51ms)
+✓ Compiled in 56ms
+ GET /login 200 in 265ms (next.js: 68ms, proxy.ts: 3ms, application-code: 194ms)
+ GET /login 200 in 67ms (next.js: 4ms, proxy.ts: 6ms, application-code: 57ms)
+ GET /login 200 in 62ms (next.js: 4ms, proxy.ts: 7ms, application-code: 50ms)
+ GET /login 200 in 55ms (next.js: 5ms, proxy.ts: 6ms, application-code: 44ms)
+ GET /login 200 in 65ms (next.js: 4ms, proxy.ts: 4ms, application-code: 57ms)
+ GET /login 200 in 84ms (next.js: 7ms, proxy.ts: 7ms, application-code: 70ms)
+ GET /login 200 in 58ms (next.js: 4ms, proxy.ts: 4ms, application-code: 50ms)
+✓ Compiled in 65ms
+ GET /login 200 in 300ms (next.js: 74ms, proxy.ts: 4ms, application-code: 222ms)
+ GET /login 200 in 76ms (next.js: 4ms, proxy.ts: 6ms, application-code: 66ms)
+ GET /login 200 in 197ms (next.js: 8ms, proxy.ts: 9ms, application-code: 180ms)
+✓ Compiled in 80ms
+[browser] TypeError: Failed to fetch
+    at AuthProvider.useCallback[signIn] (src/contexts/AuthContext.tsx:158:43)
+    at handleSubmit (src/app/login/page.tsx:129:34)
+  156 |
+  157 |   const signIn = useCallback(async (email: string, password: string) => {
+> 158 |     const { error } = await supabase.auth.signInWithPassword({ email, password });
+      |                                           ^
+  159 |     if (error) return { error: error.message };
+  160 |     return { error: null };
+  161 |   }, [supabase]); (src/contexts/AuthContext.tsx:158:23)
+✓ Compiled in 254ms
+⚠ Fast Refresh had to perform a full reload when ./app/src/contexts/AuthContext.tsx [app-client] (ecmascript) <locals> changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+✓ Compiled in 136ms
+ GET /login 200 in 758ms (next.js: 223ms, proxy.ts: 77ms, application-code: 458ms)
+ GET /login 200 in 22ms (next.js: 6ms, proxy.ts: 3ms, application-code: 13ms)
+ GET /login 200 in 14ms (next.js: 5ms, proxy.ts: 4ms, application-code: 5ms)
+ GET /login 200 in 60ms (next.js: 5ms, proxy.ts: 5ms, application-code: 51ms)
+ GET /login 200 in 19ms (next.js: 5ms, proxy.ts: 6ms, application-code: 7ms)
+ GET /login 200 in 13ms (next.js: 3ms, proxy.ts: 3ms, application-code: 7ms)
+ GET /login 200 in 76ms (next.js: 5ms, proxy.ts: 6ms, application-code: 65ms)
+✓ Compiled in 49ms
+⚠ Fast Refresh had to perform a full reload when ./app/src/contexts/AuthContext.tsx [app-client] (ecmascript) <locals> changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+✓ Compiled in 57ms
+ GET /login 200 in 349ms (next.js: 72ms, proxy.ts: 8ms, application-code: 270ms)
+ GET /login 200 in 21ms (next.js: 4ms, proxy.ts: 8ms, application-code: 9ms)
+ GET /login 200 in 15ms (next.js: 4ms, proxy.ts: 5ms, application-code: 6ms)
+⚠ Fast Refresh had to perform a full reload when ./app/src/contexts/AuthContext.tsx [app-client] (ecmascript) <locals> changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+✓ Compiled in 61ms
+ GET /login 200 in 264ms (next.js: 66ms, proxy.ts: 6ms, application-code: 192ms)
+ GET /login 200 in 39ms (next.js: 6ms, proxy.ts: 10ms, application-code: 23ms)
+ GET /login 200 in 19ms (next.js: 6ms, proxy.ts: 8ms, application-code: 5ms)
+ GET /login 200 in 72ms (next.js: 5ms, proxy.ts: 5ms, application-code: 62ms)
+ GET /login 200 in 78ms (next.js: 6ms, proxy.ts: 5ms, application-code: 66ms)
+ GET /login 200 in 18ms (next.js: 4ms, proxy.ts: 5ms, application-code: 9ms)
+ GET /login 200 in 16ms (next.js: 3ms, proxy.ts: 7ms, application-code: 6ms)
+ GET /login 200 in 104ms (next.js: 6ms, proxy.ts: 6ms, application-code: 93ms)
+ GET /login 200 in 16ms (next.js: 4ms, proxy.ts: 6ms, application-code: 6ms)
+ GET /login 200 in 15ms (next.js: 3ms, proxy.ts: 5ms, application-code: 6ms)
+ GET /login 200 in 66ms (next.js: 5ms, proxy.ts: 5ms, application-code: 57ms)
+ GET /login 200 in 41ms (next.js: 10ms, proxy.ts: 13ms, application-code: 19ms)
+ GET /login 200 in 16ms (next.js: 6ms, proxy.ts: 5ms, application-code: 5ms)
+✓ Compiled in 166ms
+ GET /login 200 in 825ms (next.js: 292ms, proxy.ts: 249ms, application-code: 284ms)
+⚠ Fast Refresh had to perform a full reload when ./app/src/contexts/AuthContext.tsx [app-client] (ecmascript) <locals> changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+✓ Compiled in 91ms
+ GET /login 200 in 571ms (next.js: 112ms, proxy.ts: 13ms, application-code: 446ms)
+ GET /login 200 in 69ms (next.js: 5ms, proxy.ts: 6ms, application-code: 58ms)
+ GET /dashboard 200 in 207ms (next.js: 113ms, proxy.ts: 6ms, application-code: 88ms)
+ GET /dashboard 200 in 40ms (next.js: 6ms, proxy.ts: 3ms, application-code: 31ms)
+ GET /dashboard 200 in 250ms (next.js: 7ms, proxy.ts: 4ms, application-code: 239ms)
+ GET /login 200 in 284ms (next.js: 121ms, proxy.ts: 7ms, application-code: 155ms)
+ GET /login 200 in 79ms (next.js: 10ms, proxy.ts: 7ms, application-code: 62ms)
+[browser] Cannot update a component (`Router`) while rendering a different component (`DashboardLayout`). To locate the bad setState() call inside `DashboardLayout`, follow the stack trace as described in https://react.dev/link/setstate-in-render 
+    at DashboardLayout (src/app/(dashboard)/layout.tsx:29:12)
+  27 |   // Middleware đã redirect nhưng client-side cần bắt thêm
+  28 |   if (!authUser) {
+> 29 |     router.replace('/login');
+     |            ^
+  30 |     return null;
+  31 |   }
+  32 | (src/app/(dashboard)
+ GET /dashboard 200 in 66ms (next.js: 4ms, proxy.ts: 4ms, application-code: 57ms)
+ GET /dashboard 200 in 35ms (next.js: 3ms, proxy.ts: 3ms, application-code: 29ms)
+⚠ Fast Refresh had to perform a full reload when ./app/src/contexts/AuthContext.tsx [app-client] (ecmascript) <locals> changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+✓ Compiled in 162ms
+ GET /dashboard 200 in 410ms (next.js: 135ms, proxy.ts: 5ms, application-code: 270ms)
+⚠ Fast Refresh had to perform a full reload when ./app/src/contexts/AuthContext.tsx [app-client] (ecmascript) <locals> changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+✓ Compiled in 88ms
+ GET /dashboard 200 in 470ms (next.js: 114ms, proxy.ts: 6ms, application-code: 351ms)
+✓ Compiled in 634ms
+✓ Compiled in 91ms
+[browser] Cannot update a component (`Router`) while rendering a different component (`DashboardLayout`). To locate the bad setState() call inside `DashboardLayout`, follow the stack trace as described in https://react.dev/link/setstate-in-render 
+    at DashboardLayout (src/app/(dashboard)/layout.tsx:22:52)
+  20 | ...rn (
+  21 | ...iv style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'ce...
+> 22 | ...<span style={{ color: '#64748b', fontSize: 13 }}>Đang tải...</span>
+     |                                               ^
+  23 | ...div>
+  24 | ...
+  25 | ... (src/app/(dashboard)
+ GET /login 200 in 384ms (next.js: 131ms, proxy.ts: 90ms, application-code: 163ms)
+ GET /login 200 in 103ms (next.js: 16ms, proxy.ts: 10ms, application-code: 76ms)
+ GET /login 200 in 33ms (next.js: 6ms, proxy.ts: 7ms, application-code: 20ms)
+ GET /dashboard 200 in 186ms (next.js: 91ms, proxy.ts: 4ms, application-code: 91ms)
+ GET /dashboard 200 in 35ms (next.js: 4ms, proxy.ts: 3ms, application-code: 27ms)
+ GET /login 200 in 114ms (next.js: 5ms, proxy.ts: 7ms, application-code: 102ms)
+ GET /login 200 in 98ms (next.js: 6ms, proxy.ts: 6ms, application-code: 86ms)
+ GET /login 200 in 46ms (next.js: 9ms, proxy.ts: 9ms, application-code: 29ms)
+✓ Compiled in 70ms
+[browser] Uncaught ReferenceError: isExiting is not defined
+    at LoginPage (src/app/login/page.tsx:172:18)
+    at Set.forEach (<anonymous>)
+  170 |         display: 'flex', height: '100vh', overflow: 'hidden',
+  171 |         fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-s...
+> 172 |         opacity: isExiting ? 0 : 1,
+      |                  ^
+  173 |         transform: isExiting ? 'scale(1.08)' : 'scale(1)',
+  174 |         filter: isExiting ? 'blur(10px)' : 'none',
+  175 |         transition: 'all 0.55s cubic-bezier(0.22, 1, 0.36, 1)',
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+✓ Compiled in 63ms
+ GET /login 200 in 343ms (next.js: 73ms, proxy.ts: 7ms, application-code: 263ms)
+✓ Compiled in 81ms
+ GET /login 200 in 277ms (next.js: 6ms, proxy.ts: 7ms, application-code: 263ms)
+ GET /login 200 in 236ms (next.js: 8ms, proxy.ts: 5ms, application-code: 222ms)
+ GET /login 200 in 168ms (next.js: 22ms, proxy.ts: 18ms, application-code: 128ms)
+ GET /login 200 in 167ms (next.js: 67ms, proxy.ts: 20ms, application-code: 80ms)
+ GET /login 200 in 166ms (next.js: 99ms, proxy.ts: 23ms, application-code: 44ms)
+[browser] ./app/src/app/(dashboard)/layout.tsx:84:1
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+  82 |     </BrandsProvider>
+  83 |   );
+> 84 | }
+     | ^
+  85 |
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./app/src/app/(dashboard)/layout.tsx [Client Component Browser]
+    ./app/src/app/(dashboard)/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/src/app/(dashboard)/layout.tsx [Client Component SSR]
+    ./app/src/app/(dashboard)/layout.tsx [Server Component] 
+ GET /dashboard 200 in 246ms (next.js: 111ms, proxy.ts: 5ms, application-code: 131ms)
+ GET /dashboard 200 in 41ms (next.js: 5ms, proxy.ts: 6ms, application-code: 30ms)
+[browser] Cannot update a component (`Router`) while rendering a different component (`DashboardLayout`). To locate the bad setState() call inside `DashboardLayout`, follow the stack trace as described in https://react.dev/link/setstate-in-render 
+    at DashboardLayout (src/app/(dashboard)/layout.tsx:37:12)
+  35 |   // Middleware đã redirect nhưng client-side cần bắt thêm
+  36 |   if (!authUser) {
+> 37 |     router.replace('/login');
+     |            ^
+  38 |     return null;
+  39 |   }
+  40 | (src/app/(dashboard)
+ GET /login 200 in 100ms (next.js: 8ms, proxy.ts: 8ms, application-code: 84ms)
+ GET /login 200 in 70ms (next.js: 4ms, proxy.ts: 6ms, application-code: 60ms)
+ GET /login 200 in 35ms (next.js: 6ms, proxy.ts: 5ms, application-code: 24ms)
+ GET /dashboard 200 in 39ms (next.js: 5ms, proxy.ts: 3ms, application-code: 31ms)
+ GET /dashboard 200 in 36ms (next.js: 4ms, proxy.ts: 3ms, application-code: 29ms)
+ GET /dashboard 200 in 60ms (next.js: 7ms, proxy.ts: 9ms, application-code: 43ms)
+ GET /login 200 in 97ms (next.js: 18ms, proxy.ts: 11ms, application-code: 68ms)
+ GET /login 200 in 73ms (next.js: 4ms, proxy.ts: 4ms, application-code: 65ms)
+ GET /login 200 in 40ms (next.js: 4ms, proxy.ts: 6ms, application-code: 30ms)
+ GET /dashboard 200 in 526ms (next.js: 413ms, proxy.ts: 7ms, application-code: 106ms)
+ GET /dashboard 200 in 61ms (next.js: 6ms, proxy.ts: 5ms, application-code: 50ms)
+✓ Compiled in 247ms
+✓ Compiled in 137ms
+ GET /login 200 in 1964ms (next.js: 330ms, proxy.ts: 24ms, application-code: 1609ms)
+ GET /login 200 in 545ms (next.js: 157ms, proxy.ts: 190ms, application-code: 198ms)
+ GET /login 200 in 532ms (next.js: 281ms, proxy.ts: 180ms, application-code: 70ms)
+○ Compiling /dashboard ...
+ GET /login 200 in 223ms (next.js: 179ms, proxy.ts: 8ms, application-code: 36ms)
+ GET /login 200 in 310ms (next.js: 246ms, proxy.ts: 6ms, application-code: 58ms)
+ GET /login 200 in 89ms (next.js: 51ms, proxy.ts: 4ms, application-code: 33ms)
+ GET /login 200 in 49ms (next.js: 8ms, proxy.ts: 4ms, application-code: 37ms)
+ GET /login 200 in 164ms (next.js: 19ms, proxy.ts: 6ms, application-code: 139ms)
+ GET /dashboard 200 in 5.0s (next.js: 3.8s, proxy.ts: 98ms, application-code: 1099ms)
+ GET /login 200 in 2.4s (next.js: 130ms, proxy.ts: 443ms, application-code: 1838ms)
+ GET /dashboard 200 in 2.5s (next.js: 330ms, proxy.ts: 444ms, application-code: 1767ms)
+ GET /login 200 in 1771ms (next.js: 131ms, proxy.ts: 438ms, application-code: 1202ms)
+ GET /dashboard 200 in 1328ms (next.js: 594ms, proxy.ts: 13ms, application-code: 721ms)
+ GET /dashboard 200 in 1447ms (next.js: 374ms, proxy.ts: 72ms, application-code: 1000ms)
+ GET /dashboard 200 in 472ms (next.js: 241ms, proxy.ts: 31ms, application-code: 200ms)
+ GET /dashboard 200 in 496ms (next.js: 37ms, proxy.ts: 34ms, application-code: 424ms)
+ GET /dashboard 200 in 227ms (next.js: 18ms, proxy.ts: 12ms, application-code: 197ms)
+ GET /dashboard 200 in 226ms (next.js: 113ms, proxy.ts: 13ms, application-code: 99ms)
+ GET /dashboard 200 in 647ms (next.js: 57ms, proxy.ts: 73ms, application-code: 516ms)
+ GET /dashboard 200 in 645ms (next.js: 381ms, proxy.ts: 71ms, application-code: 193ms)
+ GET /dashboard 200 in 238ms (next.js: 18ms, proxy.ts: 40ms, application-code: 181ms)
+✓ Compiled in 6.5s
+ GET /login 200 in 7.0s (next.js: 5.8s, proxy.ts: 55ms, application-code: 1192ms)
+ GET /login 200 in 6.9s (next.js: 5.5s, proxy.ts: 60ms, application-code: 1366ms)
+ GET /login 200 in 7.1s (next.js: 5.8s, proxy.ts: 37ms, application-code: 1252ms)
+ GET /login 200 in 7.5s (next.js: 6.1s, proxy.ts: 274ms, application-code: 1143ms)
+ GET /dashboard 200 in 2.1s (next.js: 94ms, proxy.ts: 123ms, application-code: 1898ms)
+ GET /dashboard 200 in 1558ms (next.js: 151ms, proxy.ts: 940ms, application-code: 466ms)
+ GET /dashboard 200 in 1023ms (next.js: 18ms, proxy.ts: 16ms, application-code: 990ms)
+ GET /dashboard 200 in 854ms (next.js: 21ms, proxy.ts: 26ms, application-code: 807ms)
+ GET /dashboard 200 in 618ms (next.js: 163ms, proxy.ts: 91ms, application-code: 364ms)
+ GET /dashboard 200 in 290ms (next.js: 6ms, proxy.ts: 4ms, application-code: 280ms)
+ GET /dashboard 200 in 254ms (next.js: 18ms, proxy.ts: 9ms, application-code: 227ms)
+ GET /dashboard 200 in 252ms (next.js: 62ms, proxy.ts: 8ms, application-code: 183ms)
+ GET /dashboard 200 in 252ms (next.js: 108ms, proxy.ts: 9ms, application-code: 136ms)
+ GET /dashboard 200 in 298ms (next.js: 141ms, proxy.ts: 10ms, application-code: 147ms)
+ GET /dashboard 200 in 283ms (next.js: 6ms, proxy.ts: 3ms, application-code: 274ms)
+ GET /dashboard 200 in 278ms (next.js: 13ms, proxy.ts: 4ms, application-code: 261ms)
+ GET /dashboard 200 in 225ms (next.js: 16ms, proxy.ts: 10ms, application-code: 200ms)
+ GET /dashboard 200 in 224ms (next.js: 49ms, proxy.ts: 8ms, application-code: 167ms)
+ GET /dashboard 200 in 223ms (next.js: 83ms, proxy.ts: 10ms, application-code: 131ms)
+ GET /dashboard 200 in 246ms (next.js: 119ms, proxy.ts: 3ms, application-code: 124ms)
+ GET /dashboard 200 in 254ms (next.js: 6ms, proxy.ts: 4ms, application-code: 244ms)
+ GET /dashboard 200 in 290ms (next.js: 10ms, proxy.ts: 4ms, application-code: 277ms)
+ GET /dashboard 200 in 256ms (next.js: 24ms, proxy.ts: 4ms, application-code: 227ms)
+ GET /dashboard 200 in 252ms (next.js: 45ms, proxy.ts: 11ms, application-code: 197ms)
+ GET /dashboard 200 in 252ms (next.js: 75ms, proxy.ts: 10ms, application-code: 167ms)
+ GET /dashboard 200 in 279ms (next.js: 100ms, proxy.ts: 5ms, application-code: 175ms)
+ GET /dashboard 200 in 353ms (next.js: 9ms, proxy.ts: 6ms, application-code: 338ms)
+ GET /dashboard 200 in 323ms (next.js: 13ms, proxy.ts: 4ms, application-code: 307ms)
+ GET /dashboard 200 in 321ms (next.js: 18ms, proxy.ts: 39ms, application-code: 264ms)
+ GET /dashboard 200 in 284ms (next.js: 54ms, proxy.ts: 5ms, application-code: 225ms)
+ GET /dashboard 200 in 285ms (next.js: 104ms, proxy.ts: 6ms, application-code: 175ms)
+ GET /dashboard 200 in 330ms (next.js: 156ms, proxy.ts: 4ms, application-code: 170ms)
+ GET /dashboard 200 in 282ms (next.js: 6ms, proxy.ts: 5ms, application-code: 271ms)
+ GET /dashboard 200 in 274ms (next.js: 13ms, proxy.ts: 5ms, application-code: 257ms)
+ GET /dashboard 200 in 273ms (next.js: 28ms, proxy.ts: 52ms, application-code: 194ms)
+ GET /dashboard 200 in 230ms (next.js: 57ms, proxy.ts: 9ms, application-code: 164ms)
+ GET /dashboard 200 in 221ms (next.js: 82ms, proxy.ts: 11ms, application-code: 128ms)
+ GET /dashboard 200 in 254ms (next.js: 113ms, proxy.ts: 6ms, application-code: 134ms)
+ GET /dashboard 200 in 114ms (next.js: 4ms, proxy.ts: 4ms, application-code: 106ms)
+ GET /dashboard 200 in 74ms (next.js: 13ms, proxy.ts: 5ms, application-code: 56ms)
+ GET /login 200 in 174ms (next.js: 27ms, proxy.ts: 15ms, application-code: 132ms)
+ GET /login 200 in 129ms (next.js: 52ms, proxy.ts: 9ms, application-code: 68ms)
+ GET /login 200 in 35ms (next.js: 6ms, proxy.ts: 4ms, application-code: 26ms)
+ GET /login 200 in 345ms (next.js: 5ms, proxy.ts: 5ms, application-code: 335ms)
+ GET /login 200 in 135ms (next.js: 8ms, proxy.ts: 19ms, application-code: 108ms)
+ GET /login 200 in 76ms (next.js: 4ms, proxy.ts: 9ms, application-code: 63ms)
+ GET /login 200 in 59ms (next.js: 6ms, proxy.ts: 5ms, application-code: 48ms)
+ GET /dashboard 200 in 80ms (next.js: 5ms, proxy.ts: 4ms, application-code: 71ms)
+ GET /dashboard 200 in 48ms (next.js: 6ms, proxy.ts: 4ms, application-code: 38ms)
+○ Compiling /dashboard ...
+✓ Finished writing to filesystem cache in 19.0s
+ GET /dashboard 200 in 28.5s (next.js: 14.0s, proxy.ts: 231ms, application-code: 14.2s)
+ GET /dashboard 200 in 5.0s (next.js: 479ms, proxy.ts: 391ms, application-code: 4.1s)
+ GET /dashboard 200 in 5.0s (next.js: 950ms, proxy.ts: 391ms, application-code: 3.7s)
+ GET /dashboard 200 in 5.1s (next.js: 1747ms, proxy.ts: 391ms, application-code: 2.9s)
+ GET /dashboard 200 in 5.1s (next.js: 2.0s, proxy.ts: 392ms, application-code: 2.6s)
+ GET /dashboard 200 in 5.0s (next.js: 2.1s, proxy.ts: 108ms, application-code: 2.9s)
+ GET /dashboard 200 in 1951ms (next.js: 207ms, proxy.ts: 101ms, application-code: 1643ms)
+✓ Compiled in 682ms
+✓ Compiled in 894ms
+✓ Compiled in 132ms
+✓ Compiled in 215ms
+✓ Compiled in 4.2s
+ GET /dashboard 200 in 753ms (next.js: 285ms, proxy.ts: 121ms, application-code: 347ms)
+ GET /dashboard 200 in 294ms (next.js: 21ms, proxy.ts: 22ms, application-code: 251ms)
+ GET /dashboard 200 in 291ms (next.js: 90ms, proxy.ts: 22ms, application-code: 180ms)
+ GET /dashboard 200 in 3.8s (next.js: 2.9s, proxy.ts: 20ms, application-code: 885ms)
+ GET /dashboard 200 in 289ms (next.js: 174ms, proxy.ts: 22ms, application-code: 93ms)
+ GET /dashboard 200 in 823ms (next.js: 20ms, proxy.ts: 120ms, application-code: 683ms)
+ GET /dashboard 200 in 764ms (next.js: 122ms, proxy.ts: 47ms, application-code: 595ms)
+[browser] Cannot update a component (`Router`) while rendering a different component (`DashboardLayout`). To locate the bad setState() call inside `DashboardLayout`, follow the stack trace as described in https://react.dev/link/setstate-in-render 
+    at DashboardLayout (src/app/(dashboard)/layout.tsx:29:12)
+  27 |   // Middleware đã redirect nhưng client-side cần bắt thêm
+  28 |   if (!authUser) {
+> 29 |     router.replace('/login');
+     |            ^
+  30 |     return null;
+  31 |   }
+  32 | (src/app/(dashboard)
+ GET /login 200 in 364ms (next.js: 165ms, proxy.ts: 19ms, application-code: 179ms)
+ GET /login 200 in 143ms (next.js: 21ms, proxy.ts: 11ms, application-code: 111ms)
+ GET /login 200 in 53ms (next.js: 10ms, proxy.ts: 8ms, application-code: 35ms)
+ GET /dashboard 200 in 143ms (next.js: 7ms, proxy.ts: 5ms, application-code: 131ms)
+ GET /dashboard 200 in 76ms (next.js: 7ms, proxy.ts: 7ms, application-code: 63ms)
+✓ Compiled in 3.4s
+ GET /dashboard 200 in 2.8s (next.js: 498ms, proxy.ts: 11ms, application-code: 2.3s)
+ GET /dashboard 200 in 4.6s (next.js: 3.1s, proxy.ts: 151ms, application-code: 1397ms)
+ GET /dashboard 200 in 925ms (next.js: 99ms, proxy.ts: 95ms, application-code: 730ms)
+ GET /dashboard 200 in 560ms (next.js: 96ms, proxy.ts: 21ms, application-code: 443ms)
+ GET /dashboard 200 in 567ms (next.js: 23ms, proxy.ts: 23ms, application-code: 521ms)
+ GET /dashboard 200 in 558ms (next.js: 215ms, proxy.ts: 19ms, application-code: 324ms)
+ GET /dashboard 200 in 557ms (next.js: 302ms, proxy.ts: 18ms, application-code: 237ms)
+ GET /dashboard 200 in 757ms (next.js: 14ms, proxy.ts: 8ms, application-code: 735ms)
+ GET /dashboard 200 in 660ms (next.js: 22ms, proxy.ts: 13ms, application-code: 625ms)
+ GET /dashboard 200 in 628ms (next.js: 193ms, proxy.ts: 24ms, application-code: 411ms)
+ GET /dashboard 200 in 638ms (next.js: 36ms, proxy.ts: 27ms, application-code: 576ms)
+ GET /dashboard 200 in 626ms (next.js: 317ms, proxy.ts: 23ms, application-code: 286ms)
+ GET /dashboard 200 in 767ms (next.js: 413ms, proxy.ts: 23ms, application-code: 331ms)
+ GET /dashboard 200 in 929ms (next.js: 14ms, proxy.ts: 7ms, application-code: 909ms)
+ GET /dashboard 200 in 879ms (next.js: 19ms, proxy.ts: 8ms, application-code: 852ms)
+ GET /dashboard 200 in 892ms (next.js: 46ms, proxy.ts: 35ms, application-code: 811ms)
+ GET /dashboard 200 in 891ms (next.js: 174ms, proxy.ts: 36ms, application-code: 681ms)
+ GET /dashboard 200 in 1001ms (next.js: 373ms, proxy.ts: 41ms, application-code: 587ms)
+ GET /dashboard 200 in 971ms (next.js: 508ms, proxy.ts: 12ms, application-code: 451ms)
+ GET /dashboard 200 in 680ms (next.js: 21ms, proxy.ts: 16ms, application-code: 642ms)
+ GET /dashboard 200 in 548ms (next.js: 23ms, proxy.ts: 13ms, application-code: 513ms)
+ GET /dashboard 200 in 511ms (next.js: 40ms, proxy.ts: 15ms, application-code: 456ms)
+ GET /dashboard 200 in 513ms (next.js: 107ms, proxy.ts: 17ms, application-code: 389ms)
+ GET /dashboard 200 in 619ms (next.js: 199ms, proxy.ts: 15ms, application-code: 405ms)
+ GET /dashboard 200 in 616ms (next.js: 263ms, proxy.ts: 12ms, application-code: 341ms)
+ GET /dashboard 200 in 392ms (next.js: 18ms, proxy.ts: 13ms, application-code: 361ms)
+ GET /dashboard 200 in 285ms (next.js: 26ms, proxy.ts: 10ms, application-code: 249ms)
+ GET /dashboard 200 in 277ms (next.js: 125ms, proxy.ts: 14ms, application-code: 138ms)
+ GET /login 200 in 1927ms (next.js: 523ms, proxy.ts: 208ms, application-code: 1196ms)
+ GET /login 200 in 580ms (next.js: 104ms, proxy.ts: 20ms, application-code: 457ms)
+ GET /login 200 in 154ms (next.js: 16ms, proxy.ts: 87ms, application-code: 51ms)
+ GET /dashboard 200 in 75ms (next.js: 8ms, proxy.ts: 3ms, application-code: 64ms)
+ GET /dashboard 200 in 39ms (next.js: 6ms, proxy.ts: 3ms, application-code: 30ms)
+ GET /dashboard 200 in 274ms (next.js: 7ms, proxy.ts: 5ms, application-code: 261ms)
+[browser] Cannot update a component (`Router`) while rendering a different component (`DashboardLayout`). To locate the bad setState() call inside `DashboardLayout`, follow the stack trace as described in https://react.dev/link/setstate-in-render 
+    at DashboardLayout (src/app/(dashboard)/layout.tsx:29:12)
+  27 |   // Middleware đã redirect nhưng client-side cần bắt thêm
+  28 |   if (!authUser) {
+> 29 |     router.replace('/login');
+     |            ^
+  30 |     return null;
+  31 |   }
+  32 | (src/app/(dashboard)
+ GET /login 200 in 102ms (next.js: 8ms, proxy.ts: 8ms, application-code: 87ms)
+ GET /login 200 in 105ms (next.js: 10ms, proxy.ts: 8ms, application-code: 87ms)
+ GET /login 200 in 64ms (next.js: 25ms, proxy.ts: 6ms, application-code: 33ms)
+ GET /dashboard 200 in 95ms (next.js: 12ms, proxy.ts: 6ms, application-code: 77ms)
+ GET /dashboard 200 in 44ms (next.js: 5ms, proxy.ts: 5ms, application-code: 35ms)
