@@ -308,13 +308,8 @@ const FilterDropdown = ({
 export default function PlanningPage() {
   // ─── Dynamic brands từ DB (thay thế DEMO_BRANDS tĩnh) ───────────────────────
   const { brands } = useBrands();
-  // Alias để tất cả code cũ hoạt động không đổi
-  const DEMO_BRANDS = brands;
-
   // ─── Dynamic showrooms từ DB (thay thế MASTER_SHOWROOMS hard-coded) ──────────
   const { showrooms, weightMap: SR_WEIGHTS, showroomNames: SHOWROOMS } = useShowrooms();
-
-
 
   const [mounted, setMounted] = useState(false);
   const [eventsLoaded, setEventsLoaded] = useState(false);
@@ -322,6 +317,14 @@ export default function PlanningPage() {
   const [month, setMonth] = useState(4);
   const [viewMode, setViewMode] = useState<'month' | 'quarter' | 'year'>('month');
   const [selectedShowroom, setSelectedShowroom] = useState('all');
+
+  // Alias để tất cả code cũ hoạt động không đổi - được lọc qua ràng buộc brands của showroom
+  const DEMO_BRANDS = useMemo(() => {
+    if (selectedShowroom === 'all') return brands;
+    const sr = showrooms.find(s => s.name === selectedShowroom);
+    if (!sr || !sr.brands || sr.brands.length === 0) return brands; 
+    return brands.filter(b => sr.brands.includes(b.name));
+  }, [brands, selectedShowroom, showrooms]);
   const [selectedBrand, setSelectedBrand] = useState('all');
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
   const [compareMode, setCompareMode] = useState('none');

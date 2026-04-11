@@ -43,7 +43,7 @@ function ModalOverlay({ onClose, children }: { onClose: () => void; children: Re
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CompaniesPage() {
-  const { isSuperAdmin, isLoading: authLoading } = useAuth();
+  const { isSuperAdmin, role, profile, isLoading: authLoading } = useAuth();
   const { brands: masterBrands } = useBrands();
   const { refreshShowrooms } = useShowrooms();
   const supabase = createClient();
@@ -72,17 +72,18 @@ export default function CompaniesPage() {
       if (showroomsRes.error) throw showroomsRes.error;
 
       const showrooms = (showroomsRes.data ?? []) as ShowroomRow[];
-      const result = (unitsRes.data ?? [] as UnitRow[]).map((u: UnitRow) => ({
+      let result = (unitsRes.data ?? [] as UnitRow[]).map((u: UnitRow) => ({
         ...u,
         showrooms: showrooms.filter(s => s.unit_id === u.id),
       }));
+      if (!isSuperAdmin && profile?.unit_id) result = result.filter(u => u.id === profile.unit_id);
       setUnits(result);
     } catch (e: any) {
       setError(e.message ?? 'Lỗi tải dữ liệu');
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, isSuperAdmin, profile]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -156,11 +157,11 @@ export default function CompaniesPage() {
     );
   }
 
-  if (!isSuperAdmin) {
+  if (!isSuperAdmin && profile?.role !== 'bld') {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '40vh', gap: 10, color: '#dc2626' }}>
         <AlertCircle size={20} />
-        <span style={{ fontSize: 14, fontWeight: 600 }}>Chỉ Super Admin mới có quyền truy cập trang này.</span>
+        <span style={{ fontSize: 14, fontWeight: 600 }}>Chỉ Super Admin hoặc Ban Giám Đốc mới có quyền truy cập trang này.</span>
       </div>
     );
   }
@@ -183,6 +184,7 @@ export default function CompaniesPage() {
           className="button-erp-primary"
           style={{ display: 'flex', alignItems: 'center', gap: 6 }}
           onClick={() => setUnitModal({ open: true, mode: 'add', data: {} })}
+          style={{ display: isSuperAdmin ? 'flex' : 'none', alignItems: 'center', gap: 6 }}
         >
           <Plus size={15} /> Thêm công ty
         </button>
@@ -398,7 +400,7 @@ export default function CompaniesPage() {
                           setShowroomModal(p => ({ ...p, data: { ...p.data, brands: newBrands } }));
                         }}
                       />
-                      <span style={{ color: b.color || '#374151' }}>{b.name}</span>
+                      <span style={{ color: '#374151', fontWeight: 500 }}>{b.name}</span>
                     </label>
                   ))}
                 </div>
