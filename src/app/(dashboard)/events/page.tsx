@@ -8,14 +8,17 @@ import {
   Plus, X, Edit2, CalendarDays, Pencil, FileCheck2, ChevronDown,
 } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
-import EventFormModal from '@/components/events/EventFormModal';
+import dynamic from 'next/dynamic';
 import {
   fetchEventsFromDB, upsertEventToDB, inferEventStatus,
   EVENT_TYPE_COLORS, STATUS_CONFIG, PRIORITY_CONFIG,
   type EventItem, type EventsByMonth, type EventStatus, type EventPriority,
   emptyEvent
 } from '@/lib/events-data';
-import CloseReportModal from '@/components/events/CloseReportModal';
+
+// Lazy load Modals để giảm kích thước bundle ban đầu
+const EventFormModal = dynamic(() => import('@/components/events/EventFormModal'), { ssr: false });
+const CloseReportModal = dynamic(() => import('@/components/events/CloseReportModal'), { ssr: false });
 import { KPICard, MiniBarChart, DonutChart, MonthlySparkline } from '@/components/events/EventDashboardCards';
 import { useShowrooms } from '@/contexts/ShowroomsContext';
 

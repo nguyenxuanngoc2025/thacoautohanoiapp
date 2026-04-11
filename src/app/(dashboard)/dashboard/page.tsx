@@ -8,7 +8,10 @@ import { fetchAllActualEntries } from '@/lib/actual-data';
 import { fetchEventsFromDB } from '@/lib/events-data';
 import { useBrands } from '@/contexts/BrandsContext';
 import { useShowrooms } from '@/contexts/ShowroomsContext';
-import { BudgetBarChart, DonutChart } from '@/components/charts/ChartComponents';
+import dynamic from 'next/dynamic';
+
+const BudgetBarChart = dynamic(() => import('@/components/charts/ChartComponents').then(mod => mod.BudgetBarChart), { ssr: false });
+const DonutChart = dynamic(() => import('@/components/charts/ChartComponents').then(mod => mod.DonutChart), { ssr: false });
 import {
   Users, UserCheck, FileSignature, TrendingDown,
   AlertTriangle, CheckCircle, XCircle, ChevronUp, ChevronDown,

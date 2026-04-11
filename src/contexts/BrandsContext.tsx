@@ -8,7 +8,8 @@
  * ✅ Khi user cập nhật brands/models qua Settings, gọi refreshBrands() để reload
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
+import useSWR from 'swr';
 import { fetchBrandsWithModels, type BrandWithModels } from '@/lib/brands-data';
 import { MASTER_BRANDS } from '@/lib/master-data';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,7 +28,7 @@ const STATIC_FALLBACK: BrandWithModels[] = MASTER_BRANDS.map(b => ({
 interface BrandsContextValue {
   brands: BrandWithModels[];       // Danh sách brands+models đang active từ DB
   isLoading: boolean;
-  refreshBrands: () => Promise<void>;
+  refreshBrands: () => Promise<any>;
 }
 
 const BrandsContext = createContext<BrandsContextValue>({
@@ -40,40 +41,31 @@ const BrandsContext = createContext<BrandsContextValue>({
 
 export function BrandsProvider({ children }: { children: React.ReactNode }) {
   const { profile } = useAuth();
-  const [allBrands, setAllBrands] = useState<BrandWithModels[]>(STATIC_FALLBACK);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const refreshBrands = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await fetchBrandsWithModels();
-      if (data && data.length > 0) setAllBrands(data);
-    } catch (e) {
-      console.warn('[BrandsContext] Error loading brands, keeping fallback:', e);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Load lần đầu
-  useEffect(() => {
-    refreshBrands();
-  }, [refreshBrands]);
+  
+  const { data: allBrands, error, isLoading, mutate } = useSWR<BrandWithModels[]>('master_brands', async () => {
+    const data = await fetchBrandsWithModels();
+    return data && data.length > 0 ? data : STATIC_FALLBACK;
+  }, {
+    fallbackData: STATIC_FALLBACK,
+    revalidateOnFocus: false, // Dữ liệu danh mục xe hiếm khi đổi
+    dedupingInterval: 60000,
+  });
 
   // Filter theo user's allowed brands (chỉ áp dụng với mkt_brand có brands[])
   const brands: BrandWithModels[] = React.useMemo(() => {
+    const brandsData = allBrands || STATIC_FALLBACK;
     if (
       profile?.role === 'mkt_brand' &&
       profile.brands &&
       profile.brands.length > 0
     ) {
-      return allBrands.filter(b => profile.brands.includes(b.name));
+      return brandsData.filter(b => profile.brands.includes(b.name));
     }
-    return allBrands;
+    return brandsData;
   }, [allBrands, profile?.role, profile?.brands]);
 
   return (
-    <BrandsContext.Provider value={{ brands, isLoading, refreshBrands }}>
+    <BrandsContext.Provider value={{ brands, isLoading, refreshBrands: async () => { mutate() } }}>
       {children}
     </BrandsContext.Provider>
   );

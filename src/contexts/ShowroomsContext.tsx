@@ -9,7 +9,8 @@
  * ✅ Khi user cập nhật showroom qua Settings, gọi refreshShowrooms()
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
+import useSWR from 'swr';
 import { createClient } from '@/lib/supabase/client';
 import { MASTER_SHOWROOMS } from '@/lib/master-data';
 
@@ -47,7 +48,7 @@ interface ShowroomsContextValue {
   /** Danh sách tên showroom (thay thế DEMO_SHOWROOMS) */
   showroomNames: string[];
   isLoading: boolean;
-  refreshShowrooms: () => Promise<void>;
+  refreshShowrooms: () => Promise<any>;
 }
 
 const ShowroomsContext = createContext<ShowroomsContextValue>({
@@ -58,53 +59,43 @@ const ShowroomsContext = createContext<ShowroomsContextValue>({
   refreshShowrooms: async () => {},
 });
 
+// ─── Fetcher ──────────────────────────────────────────────────────────────────
+const fetchShowrooms = async (): Promise<ShowroomItem[]> => {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('thaco_showrooms')
+    .select('id, code, name, weight, unit_id, is_active, brands')
+    .eq('is_active', true)
+    .order('weight', { ascending: false });
+
+  if (error) throw error;
+  return (data || []).map(row => ({
+    ...row,
+    weight: Number(row.weight) || 0,
+    brands: row.brands || [],
+  }));
+};
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function ShowroomsProvider({ children }: { children: React.ReactNode }) {
-  const [showrooms, setShowrooms] = useState<ShowroomItem[]>(STATIC_FALLBACK);
-  const [isLoading, setIsLoading] = useState(false);
-  const supabase = createClient();
-
-  const refreshShowrooms = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('thaco_showrooms')
-        .select('id, code, name, weight, unit_id, is_active, brands')
-        .eq('is_active', true)
-        .order('weight', { ascending: false });
-
-      if (error) throw error;
-      if (data && data.length > 0) {
-        setShowrooms(data.map(row => ({
-          ...row,
-          weight: Number(row.weight) || 0,
-          brands: row.brands || [],
-        })));
-      }
-    } catch (e) {
-      console.warn('[ShowroomsContext] Error loading showrooms, keeping fallback:', e);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [supabase]);
-
-  // Load lần đầu
-  useEffect(() => {
-    refreshShowrooms();
-  }, [refreshShowrooms]);
+  const { data: showrooms, error, isLoading, mutate } = useSWR<ShowroomItem[]>('master_showrooms', fetchShowrooms, {
+    fallbackData: STATIC_FALLBACK,
+    revalidateOnFocus: false, // Dữ liệu này ít đổi, không cần gọi lại khi switch tab màn hình
+    dedupingInterval: 60000,  // Cache 1 phút
+  });
 
   // Derived values
   const weightMap = React.useMemo(() => {
     const map: Record<string, number> = {};
-    showrooms.forEach(s => { map[s.name] = s.weight; });
+    (showrooms || []).forEach(s => { map[s.name] = s.weight; });
     return map;
   }, [showrooms]);
 
-  const showroomNames = React.useMemo(() => showrooms.map(s => s.name), [showrooms]);
+  const showroomNames = React.useMemo(() => (showrooms || []).map(s => s.name), [showrooms]);
 
   return (
-    <ShowroomsContext.Provider value={{ showrooms, weightMap, showroomNames, isLoading, refreshShowrooms }}>
+    <ShowroomsContext.Provider value={{ showrooms: showrooms || [], weightMap, showroomNames, isLoading, refreshShowrooms: async () => { mutate() } }}>
       {children}
     </ShowroomsContext.Provider>
   );
