@@ -8,7 +8,7 @@ import { DownloadCloud, UploadCloud, Save, Send, Copy, Wallet, Users, FileSignat
 import EventFormModal from '@/components/events/EventFormModal';
 import { type EventItem, EVENT_CPL, EVENT_CR1, EVENT_CR2, fetchEventsFromDB, upsertEventToDB, deleteEventFromDB } from '@/lib/events-data';
 import { fetchAllBudgetPlans, upsertBudgetPlan } from '@/lib/budget-data';
-import { computeHistoricalCPL } from '@/lib/actual-data';
+import { computeHistoricalCPL, fetchAllActualEntries, upsertActualEntry } from '@/lib/actual-data';
 import { MASTER_BRANDS } from '@/lib/master-data';
 import { useBrands } from '@/contexts/BrandsContext';
 import { useShowrooms } from '@/contexts/ShowroomsContext';
@@ -363,15 +363,43 @@ export default function PlanningPage() {
       setApprovalStatuses(prev => ({ ...prev, [month]: st }));
   }
 
-  const cellData = dataByMonth[month] || {};
-  
+  // ─── Mode switcher: KẾ HOẠCH / THỰC HIỆN ─────────────────────────────────
+  const [pageMode, setPageMode] = useState<'plan' | 'actual'>('plan');
+
+  // Actual entries data
+  const [actualDataByMonth, setActualDataByMonth] = useState<Record<number, CellData>>({});
+  const [actualStatusByMonth, setActualStatusByMonth] = useState<Record<number, string>>({});
+
+  // Mode-aware cell data
+  const cellData = pageMode === 'plan'
+    ? (dataByMonth[month] || {})
+    : (actualDataByMonth[month] || {});
+
+  // Plan data luôn available để hiện ghost value trong actual mode
+  const planCellData = dataByMonth[month] || {};
+
+  // ─── Edit lock guard (mode-aware) ────────────────────────────────────────
+  // Plan mode: locked khi showroom = 'all' HOẶC kế hoạch không ở draft
+  // Actual mode: locked khi entry đã submitted
+  const isDataLocked = pageMode === 'plan'
+    ? (selectedShowroom === 'all' || approvalStatus !== 'draft')
+    : (actualStatusByMonth[month] || 'draft') === 'submitted';
+
   const setCellData = useCallback((action: React.SetStateAction<CellData>) => {
-    setDataByMonth(prev => {
-      const current = prev[month] || {};
-      const next = typeof action === 'function' ? action(current) : action;
-      return { ...prev, [month]: next };
-    });
-  }, [month]);
+    if (pageMode === 'plan') {
+      setDataByMonth(prev => {
+        const current = prev[month] || {};
+        const next = typeof action === 'function' ? action(current) : action;
+        return { ...prev, [month]: next };
+      });
+    } else {
+      setActualDataByMonth(prev => {
+        const current = prev[month] || {};
+        const next = typeof action === 'function' ? action(current) : action;
+        return { ...prev, [month]: next };
+      });
+    }
+  }, [month, pageMode]);
 
   const currentWeight = useMemo(() => {
     return selectedShowroom === 'all' ? 1 : (SR_WEIGHTS[selectedShowroom] || 1);
@@ -512,14 +540,15 @@ export default function PlanningPage() {
   const [eventsByMonth, setEventsByMonth] = useState<Record<number, EventItem[]>>({});
 
   const loadData = useCallback(async () => {
-    const [eventsData, budgetPlans, cplData] = await Promise.all([
+    const [eventsData, budgetPlans, cplData, actualEntries] = await Promise.all([
       fetchEventsFromDB(),
       fetchAllBudgetPlans(),
       computeHistoricalCPL(),
+      fetchAllActualEntries(year),
     ]);
     if (Object.keys(cplData).length > 0) setHistoricalCPL(cplData);
     setEventsByMonth(eventsData);
-    
+
     if (budgetPlans && budgetPlans.length > 0) {
       setDataByMonth(prev => {
         const next = { ...prev };
@@ -543,27 +572,53 @@ export default function PlanningPage() {
         return next;
       });
     }
-  }, []);
 
-  // Sync back to Supabase (debounce 1.5s)
+    // Load actual entries — reset trước để tránh data từ năm cũ còn lại
+    const newActualData: Record<number, CellData> = {};
+    const newActualStatus: Record<number, string> = {};
+    if (actualEntries && actualEntries.length > 0) {
+      actualEntries.forEach(a => {
+        if (Object.keys(a.payload).length > 0) newActualData[a.month] = a.payload;
+        newActualStatus[a.month] = a.status;
+      });
+    }
+    setActualDataByMonth(newActualData);
+    setActualStatusByMonth(newActualStatus);
+  }, [year]);
+
+  // Auto-save plan data (debounce 1.5s)
   const lastSavedPayload = useRef<string>('');
   React.useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || pageMode !== 'plan') return;
     const currentPayload = dataByMonth[month];
     const currentNotes = notesByMonth[month] || {};
-    
     if (!currentPayload || Object.keys(currentPayload).length === 0) return;
-
     const payloadStr = JSON.stringify({ currentPayload, currentNotes, approvalStatus });
     if (payloadStr === lastSavedPayload.current) return;
-    
     const timeout = setTimeout(() => {
       upsertBudgetPlan(month, currentPayload, currentNotes, approvalStatus).then(success => {
         if (success) lastSavedPayload.current = payloadStr;
       });
     }, 1500);
     return () => clearTimeout(timeout);
-  }, [dataByMonth, notesByMonth, approvalStatus, month, mounted]);
+  }, [dataByMonth, notesByMonth, approvalStatus, month, mounted, pageMode]);
+
+  // Auto-save actual data (debounce 1.5s)
+  const lastSavedActualPayload = useRef<string>('');
+  React.useEffect(() => {
+    if (!mounted || pageMode !== 'actual') return;
+    const currentPayload = actualDataByMonth[month];
+    if (!currentPayload || Object.keys(currentPayload).length === 0) return;
+    const payloadStr = JSON.stringify(currentPayload);
+    if (payloadStr === lastSavedActualPayload.current) return;
+    const actualStatus = actualStatusByMonth[month] || 'draft';
+    const timeout = setTimeout(() => {
+      upsertActualEntry(month, year, currentPayload, {}, actualStatus).then(success => {
+        if (success) lastSavedActualPayload.current = payloadStr;
+      });
+    }, 1500);
+    return () => clearTimeout(timeout);
+  }, [actualDataByMonth, actualStatusByMonth, month, year, mounted, pageMode]);
 
   // Load on mount and focus
   React.useEffect(() => {
@@ -900,7 +955,7 @@ export default function PlanningPage() {
       if (selectedCells.size === 0) return;
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedShowroom === 'all' || approvalStatus !== 'draft') {
+        if (isDataLocked) {
           setAlertInfo({ type: 'warning', title: 'Không hợp lệ', message: 'Dữ liệu không thể xoá trong trạng thái hiện tại.' });
           return;
         }
@@ -946,7 +1001,7 @@ export default function PlanningPage() {
              }
          }
          else if (e.key === 'v' || e.key === 'V') {
-             if (selectedShowroom === 'all' || approvalStatus !== 'draft') {
+             if (isDataLocked) {
                setAlertInfo({ type: 'warning', title: 'Không hợp lệ', message: 'Dữ liệu không thể dán trong trạng thái hiện tại.' });
                return;
              }
@@ -1032,7 +1087,7 @@ export default function PlanningPage() {
          }
       }
       else if (e.key === 'Enter' || e.key === 'F2') {
-         if (selectedShowroom === 'all' || approvalStatus !== 'draft') {
+         if (isDataLocked) {
            setAlertInfo({ type: 'warning', title: 'Không hợp lệ', message: 'Dữ liệu đang bị khoá chỉnh sửa.' });
            return;
          }
@@ -1045,7 +1100,7 @@ export default function PlanningPage() {
          }
       }
       else if (e.key.length === 1 && /[0-9\-]/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
-         if (selectedShowroom === 'all' || approvalStatus !== 'draft') {
+         if (isDataLocked) {
            setAlertInfo({ type: 'warning', title: 'Không hợp lệ', message: 'Bạn không thể gõ dữ liệu trong trạng thái hiện tại.' });
            return;
          }
@@ -1416,6 +1471,43 @@ export default function PlanningPage() {
     setAllocationModal(null);
   };
 
+// ─── Actual mode: ghost plan value + delta helpers ──────────────────────────
+  const getActualDelta = useCallback((cellKey: string, actualVal: number): number | null => {
+    if (pageMode !== 'actual') return null;
+    const planVal = planCellData[cellKey] || 0;
+    if (planVal === 0) return actualVal > 0 ? 100 : null;
+    return Math.round(((actualVal - planVal) / planVal) * 100);
+  }, [pageMode, planCellData]);
+
+  // Render actual mode cell: actual value + ghost plan + delta
+  const renderActualCell = useCallback((cellKey: string, val: number, isEditing: boolean) => {
+    const ghost = planCellData[cellKey] || 0;
+    const delta = getActualDelta(cellKey, val);
+    const isBudget = cellKey.endsWith('-Ngân sách');
+    // budget: tăng = xấu (đỏ); KPI: tăng = tốt (xanh)
+    const deltaColor = delta === null ? 'transparent'
+      : delta === 0 ? 'var(--color-text-muted)'
+      : (isBudget ? (delta > 0 ? '#dc2626' : '#059669') : (delta > 0 ? '#059669' : '#dc2626'));
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', height: '100%', justifyContent: 'center', lineHeight: 1.2, gap: 1, opacity: isEditing ? 0 : 1 }}>
+        <span style={{ color: val > 0 ? 'var(--color-text)' : 'transparent', fontWeight: val > 0 ? 600 : 400 }}>
+          {val > 0 ? formatNumber(val) : ''}
+        </span>
+        {ghost > 0 && (
+          <span style={{ fontSize: 9, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 2 }}>
+            {formatNumber(ghost)}
+            {delta !== null && (
+              <span style={{ color: deltaColor, fontWeight: 700 }}>
+                {delta > 0 ? `▲${delta}%` : delta < 0 ? `▼${Math.abs(delta)}%` : '—'}
+              </span>
+            )}
+          </span>
+        )}
+      </div>
+    );
+  }, [planCellData, getActualDelta]);
+
 // FilterDropdown — using top-level definition (L215) to avoid shadow/duplicate
 
   return (
@@ -1432,6 +1524,58 @@ export default function PlanningPage() {
         }}
         filters={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', flexShrink: 0 }}>
+            {/* ── Mode Switcher KẾ HOẠCH / THỰC HIỆN ── */}
+            <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', flexShrink: 0, boxShadow: '0 1px 2px rgba(0,0,0,0.06)' }}>
+              <button
+                onClick={() => setPageMode('plan')}
+                style={{
+                  padding: '3px 14px', height: 28, fontSize: 11, fontWeight: pageMode === 'plan' ? 700 : 500,
+                  background: pageMode === 'plan' ? 'var(--color-primary)' : '#fff',
+                  color: pageMode === 'plan' ? '#fff' : 'var(--color-text-secondary)',
+                  borderTop: `1px solid ${pageMode === 'plan' ? 'var(--color-primary)' : 'var(--color-border-dark)'}`,
+                  borderBottom: `1px solid ${pageMode === 'plan' ? 'var(--color-primary)' : 'var(--color-border-dark)'}`,
+                  borderLeft: `1px solid ${pageMode === 'plan' ? 'var(--color-primary)' : 'var(--color-border-dark)'}`,
+                  borderRight: 'none',
+                  borderRadius: '6px 0 0 6px',
+                  cursor: 'pointer', transition: 'all 0.15s', letterSpacing: '0.03em',
+                }}
+              >
+                KẾ HOẠCH
+              </button>
+              <button
+                onClick={() => setPageMode('actual')}
+                style={{
+                  padding: '3px 14px', height: 28, fontSize: 11, fontWeight: pageMode === 'actual' ? 700 : 500,
+                  background: pageMode === 'actual' ? '#f59e0b' : '#fff',
+                  color: pageMode === 'actual' ? '#fff' : 'var(--color-text-secondary)',
+                  borderTop: `1px solid ${pageMode === 'actual' ? '#f59e0b' : 'var(--color-border-dark)'}`,
+                  borderBottom: `1px solid ${pageMode === 'actual' ? '#f59e0b' : 'var(--color-border-dark)'}`,
+                  borderRight: `1px solid ${pageMode === 'actual' ? '#f59e0b' : 'var(--color-border-dark)'}`,
+                  borderLeft: `1px solid ${pageMode === 'actual' ? '#f59e0b' : 'var(--color-border-dark)'}`,
+                  borderRadius: '0 6px 6px 0',
+                  cursor: 'pointer', transition: 'all 0.15s', letterSpacing: '0.03em',
+                }}
+              >
+                THỰC HIỆN
+              </button>
+            </div>
+
+            {/* Status badge actual mode */}
+            {pageMode === 'actual' && (
+              <span style={{
+                fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                background: (actualStatusByMonth[month] || 'draft') === 'submitted' ? '#ecfdf5' : '#fffbeb',
+                color: (actualStatusByMonth[month] || 'draft') === 'submitted' ? '#059669' : '#d97706',
+                border: '1px solid',
+                borderColor: (actualStatusByMonth[month] || 'draft') === 'submitted' ? '#bbf7d0' : '#fde68a',
+                letterSpacing: '0.04em',
+              }}>
+                {(actualStatusByMonth[month] || 'draft') === 'submitted' ? 'ĐÃ NỘP' : 'NHÁP'}
+              </span>
+            )}
+
+            <div className="toolbar-sep" style={{ height: 14 }} />
+
             {/* 1. Đơn vị */}
             <FilterDropdown
               label="Đơn vị"
@@ -1507,26 +1651,65 @@ export default function PlanningPage() {
               <Save size={13} />
               <span style={{ fontSize: 12 }}>Lưu nháp</span>
             </button>
-            <button
-              className="button-erp-primary"
-              style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4, background: approvalStatus !== 'draft' ? 'var(--color-text-muted)' : undefined, borderColor: approvalStatus !== 'draft' ? 'var(--color-text-muted)' : undefined }}
-              onClick={() => {
-                if (approvalStatus !== 'draft') {
-                    setAlertInfo({ type: 'info', title: 'Thông báo', message: `Kế hoạch đang ở trạng thái: ${approvalStatus === 'pending' ? 'Chờ duyệt' : 'Đã duyệt'}` });
-                } else if (budgetCap > 0 && summary.budget > budgetCap) {
-                    // Sprint 4: Hard cap — chặn gửi duyệt khi vượt ngân sách
-                    setAlertInfo({ type: 'warning', title: 'Vuot gioi han ngan sach', message: `Tong ngan sach ke hoach (${formatNumber(summary.budget)} tr) da vuot gioi han cho phep (${formatNumber(budgetCap)} tr). Vui long dieu chinh truoc khi gui duyet.` });
-                } else {
-                    setConfirmInfo({ type: 'submit', title: 'Xác nhận Gửi duyệt', message: 'Sau khi gửi duyệt, bạn sẽ không thể chỉnh sửa kế hoạch này cho đến khi có phản hồi từ Quản lý. Bạn có chắc chắn?' });
-                }
-              }}
-            >
-              <Send size={13} />
-              <span style={{ fontSize: 12 }}>{approvalStatus === 'draft' ? 'Gửi duyệt' : (approvalStatus === 'pending' ? 'Đã gửi duyệt' : 'Hoàn tất')}</span>
-            </button>
+            {pageMode === 'plan' ? (
+              <button
+                className="button-erp-primary"
+                style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4, background: approvalStatus !== 'draft' ? 'var(--color-text-muted)' : undefined, borderColor: approvalStatus !== 'draft' ? 'var(--color-text-muted)' : undefined }}
+                onClick={() => {
+                  if (approvalStatus !== 'draft') {
+                      setAlertInfo({ type: 'info', title: 'Thông báo', message: `Kế hoạch đang ở trạng thái: ${approvalStatus === 'pending' ? 'Chờ duyệt' : 'Đã duyệt'}` });
+                  } else if (budgetCap > 0 && summary.budget > budgetCap) {
+                      setAlertInfo({ type: 'warning', title: 'Vượt giới hạn ngân sách', message: `Tổng ngân sách kế hoạch (${formatNumber(summary.budget)} tr) đã vượt giới hạn cho phép (${formatNumber(budgetCap)} tr). Vui lòng điều chỉnh trước khi gửi duyệt.` });
+                  } else {
+                      setConfirmInfo({ type: 'submit', title: 'Xác nhận Gửi duyệt', message: 'Sau khi gửi duyệt, bạn sẽ không thể chỉnh sửa kế hoạch này cho đến khi có phản hồi từ Quản lý. Bạn có chắc chắn?' });
+                  }
+                }}
+              >
+                <Send size={13} />
+                <span style={{ fontSize: 12 }}>{approvalStatus === 'draft' ? 'Gửi duyệt' : (approvalStatus === 'pending' ? 'Đã gửi duyệt' : 'Hoàn tất')}</span>
+              </button>
+            ) : (
+              <button
+                className="button-erp-primary"
+                style={{
+                  padding: '2px 12px', height: 26, display: 'flex', alignItems: 'center', gap: 4,
+                  background: (actualStatusByMonth[month] || 'draft') === 'submitted' ? '#059669' : '#f59e0b',
+                  borderColor: (actualStatusByMonth[month] || 'draft') === 'submitted' ? '#059669' : '#f59e0b',
+                }}
+                onClick={() => {
+                  const curStatus = actualStatusByMonth[month] || 'draft';
+                  if (curStatus === 'submitted') return;
+                  const payload = actualDataByMonth[month] || {};
+                  if (Object.keys(payload).length === 0) {
+                    setAlertInfo({ type: 'warning', title: 'Chưa có dữ liệu', message: 'Chưa có số liệu thực hiện để nộp.' });
+                    return;
+                  }
+                  upsertActualEntry(month, year, payload, {}, 'submitted').then(ok => {
+                    if (ok) {
+                      setActualStatusByMonth(prev => ({ ...prev, [month]: 'submitted' }));
+                      setAlertInfo({ type: 'success', title: 'Thành công', message: `Đã nộp số thực hiện tháng ${month}.` });
+                    }
+                  });
+                }}
+                title="Nộp số thực hiện"
+              >
+                <Send size={13} />
+                <span style={{ fontSize: 12 }}>
+                  {(actualStatusByMonth[month] || 'draft') === 'submitted' ? '✓ Đã nộp' : 'Nộp TH'}
+                </span>
+              </button>
+            )}
           </div>
         }
       />
+
+      {/* Amber accent strip khi actual mode */}
+      {pageMode === 'actual' && (
+        <div style={{
+          height: 3, background: 'linear-gradient(90deg, #f59e0b, #fbbf24)',
+          flexShrink: 0,
+        }} />
+      )}
 
       {/* ROW 3: Tất cả căn trái: Kênh | Metric toggles | Ẩn dòng | Import/Export */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface)', flexShrink: 0, flexWrap: 'nowrap', overflowX: 'auto' }}>
@@ -1784,14 +1967,15 @@ export default function PlanningPage() {
                           {ch.category}
                           <span 
                             onClick={() => {
-                               if (selectedShowroom === 'all' || approvalStatus !== 'draft') {
+                               if (pageMode === 'actual') return; // allocation chỉ dùng trong plan mode
+                               if (isDataLocked) {
                                  setAlertInfo({ type: 'warning', title: 'Không hợp lệ', message: 'Dữ liệu đang bị khóa chỉnh sửa.' });
                                } else {
                                  setAllocationModal({ open: true, type: 'category', name: ch.category });
                                }
-                            }} 
-                            style={{ cursor: 'pointer', opacity: 0.7, padding: '2px', marginLeft: 2 }} 
-                            title="Thao tác nhanh cho nhóm kênh này"
+                            }}
+                            style={{ cursor: pageMode === 'actual' ? 'default' : 'pointer', opacity: pageMode === 'actual' ? 0.3 : 0.7, padding: '2px', marginLeft: 2 }}
+                            title={pageMode === 'actual' ? 'Phân bổ chỉ dùng trong KẾ HOẠCH' : 'Thao tác nhanh cho nhóm kênh này'}
                           >
                             <Zap size={11} style={{ verticalAlign: 'text-bottom', color: catColor }} />
                           </span>
@@ -1855,14 +2039,15 @@ export default function PlanningPage() {
                         {ch.name !== 'Tổng Digital' && (
                           <span 
                             onClick={() => {
-                               if (selectedShowroom === 'all' || approvalStatus !== 'draft') {
+                               if (pageMode === 'actual') return; // allocation chỉ dùng trong plan mode
+                               if (isDataLocked) {
                                  setAlertInfo({ type: 'warning', title: 'Không hợp lệ', message: 'Dữ liệu đang bị khóa chỉnh sửa.' });
                                } else {
                                  setAllocationModal({ open: true, type: 'channel', name: ch.name });
                                }
-                            }} 
-                            style={{ cursor: 'pointer', opacity: 0.7, padding: '2px', display: 'flex' }} 
-                            title="Tăng/giảm ngân sách hàng loạt cho kênh này"
+                            }}
+                            style={{ cursor: pageMode === 'actual' ? 'default' : 'pointer', opacity: pageMode === 'actual' ? 0.3 : 0.7, padding: '2px', display: 'flex' }}
+                            title={pageMode === 'actual' ? 'Phân bổ chỉ dùng trong KẾ HOẠCH' : 'Tăng/giảm ngân sách hàng loạt cho kênh này'}
                           >
                             <Zap size={11} />
                           </span>
@@ -2030,25 +2215,28 @@ export default function PlanningPage() {
                                     }}
                                     onDoubleClick={(e) => {
                                       e.preventDefault();
-                                      if (selectedShowroom === 'all' || approvalStatus !== 'draft') {
+                                      if (isDataLocked) {
                                         setAlertInfo({ type: 'warning', title: 'Không hợp lệ', message: 'Dữ liệu đang bị khoá chỉnh sửa.' });
                                         return;
                                       }
                                       if (ch.readonly || isComputedRow) return;
                                       if (cellKey.includes('-Tổng Digital-') || isComputedRow) return;
-                                      setUndoStack(us => [...us.slice(-19), dataByMonth[month] || {}]);
+                                      setUndoStack(us => [...us.slice(-19), cellData]); // Bug fix: dùng cellData (mode-aware) thay vì dataByMonth
                                       setEditingCell(cellKey);
                                       setEditValue(currentWeight === 1 ? String(val || '') : String((val * currentWeight).toFixed(2)));
                                       setEditingNoteCell(null);
                                     }}
-                                     style={{ 
-                                        height: '100%', position: 'relative', 
-                                        background: (ch.readonly || isComputedRow) ? '#f0f4f8' : (isHighCpl ? '#fef08a' : (selectedCells.has(cellKey) ? '#e0f2fe' : 'transparent')), 
-                                        boxShadow: selectedCells.has(cellKey) ? 'inset 0 0 0 1.5px var(--color-brand)' : 'none',
-                                        cursor: (ch.readonly || isComputedRow) ? 'default' : (selectedCells.has(cellKey) ? 'cell' : 'text'),
-                                        fontWeight: isComputedRow ? 600 : 'normal',
-                                        color: isComputedRow ? 'var(--color-brand)' : 'inherit'
-                                      }}
+                                     style={(() => {
+                                        const isOverBudget = pageMode === 'actual' && cellKey.endsWith('-Ngân sách') && val > 0 && (planCellData[cellKey] || 0) > 0 && val > (planCellData[cellKey] || 0) * 1.1;
+                                        return {
+                                          height: '100%', position: 'relative' as const,
+                                          background: isOverBudget ? '#fff5f5' : ((ch.readonly || isComputedRow) ? '#f0f4f8' : (isHighCpl ? '#fef08a' : (selectedCells.has(cellKey) ? '#e0f2fe' : 'transparent'))),
+                                          boxShadow: isOverBudget ? 'inset 0 0 0 1.5px #ef4444' : (selectedCells.has(cellKey) ? 'inset 0 0 0 1.5px var(--color-brand)' : 'none'),
+                                          cursor: (ch.readonly || isComputedRow) ? 'default' : (selectedCells.has(cellKey) ? 'cell' : 'text'),
+                                          fontWeight: isComputedRow ? 600 : 'normal',
+                                          color: isComputedRow ? 'var(--color-brand)' : 'inherit',
+                                        };
+                                      })()}
                                   >
                                     {isHighCpl && (
                                       <div className="group" style={{ position: 'absolute', top: 2, right: 2, color: '#eab308', zIndex: 20, cursor: 'help' }}>
@@ -2138,7 +2326,9 @@ export default function PlanningPage() {
                                           style={{ position: 'absolute', inset: 0, zIndex: 10, background: '#fff' }}
                                         />
                                     )}
-                                    {renderDualValue(val, histVal, editingCell === cellKey)}
+                                    {pageMode === 'actual' && editingCell !== cellKey
+                                      ? renderActualCell(cellKey, val, false)
+                                      : renderDualValue(val, histVal, editingCell === cellKey)}
                                   </div>
                                 </td>
                               );
