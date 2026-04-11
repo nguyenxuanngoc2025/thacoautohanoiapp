@@ -388,6 +388,9 @@ export default function PlanningPage() {
     ? (selectedShowroom === 'all' || approvalStatus !== 'draft')
     : (actualStatusByMonth[month] || 'draft') === 'submitted';
 
+  // Actual split mode: draft months show Plan | Actual 2-column layout
+  const isActualSplitMode = pageMode === 'actual' && (actualStatusByMonth[month] || 'draft') === 'draft';
+
   const setCellData = useCallback((action: React.SetStateAction<CellData>) => {
     if (pageMode === 'plan') {
       setDataByMonth(prev => {
@@ -1576,65 +1579,6 @@ export default function PlanningPage() {
                 {(actualStatusByMonth[month] || 'draft') === 'submitted' ? 'ĐÃ NỘP' : 'NHÁP'}
               </span>
             )}
-
-            <div className="toolbar-sep" style={{ height: 14 }} />
-
-            {/* 1. Đơn vị */}
-            <FilterDropdown
-              label="Đơn vị"
-              value={selectedShowroom}
-              options={[{value: 'all', label: '— Tất cả SR —'}, ...SHOWROOMS.map(sr => ({value: sr, label: sr}))]}
-              onChange={setSelectedShowroom}
-              width={140}
-              placeholder="— Tất cả SR —"
-            />
-
-            <div className="toolbar-sep" style={{ height: 14 }} />
-
-            {/* 2. Thương hiệu */}
-            <FilterDropdown
-              label="Thương hiệu"
-              value={selectedBrand}
-              options={[{value: 'all', label: '— Tất cả —'}, ...DEMO_BRANDS.map(b => ({value: b.name, label: b.name}))]}
-              onChange={(val: string) => { setSelectedBrand(val); setSelectedModels([]); }}
-              width={120}
-            />
-
-            <div className="toolbar-sep" style={{ height: 14 }} />
-
-            {/* 3. Dòng xe */}
-            <FilterDropdown
-              label="Dòng xe"
-              value={selectedModels}
-              options={availableModels.map(m => ({value: m, label: m}))}
-              onChange={setSelectedModels}
-              width={130}
-              isMulti={true}
-              placeholder="— Tất cả —"
-            />
-
-            <div className="toolbar-sep" style={{ height: 14 }} />
-
-            {/* 4. So sánh — đã chuyển lên ROW 2 */}
-            <FilterDropdown
-              label="So sánh"
-              value={compareMode}
-              options={[
-                { value: 'none', label: '— Không so sánh —' },
-                ...(viewMode === 'month' ? [
-                  { value: 'prev_period', label: `Tháng trước (T${month === 1 ? 12 : month - 1}/${month === 1 ? year - 1 : year})` },
-                  { value: 'prev_year', label: `Cùng kỳ năm trước (T${month}/${year - 1})` }
-                ] : viewMode === 'quarter' ? [
-                  { value: 'prev_period', label: `Quý trước (Q${Math.ceil(month/3) === 1 ? 4 : Math.ceil(month/3) - 1})` },
-                  { value: 'prev_year', label: `Cùng kỳ năm trước` }
-                ] : [
-                  { value: 'prev_period', label: `Năm trước (${year - 1})` }
-                ])
-              ]}
-              onChange={setCompareMode}
-              width={110}
-              placeholder="— Không so sánh —"
-            />
           </div>
         }
         actions={
@@ -1714,7 +1658,68 @@ export default function PlanningPage() {
         }} />
       )}
 
-      {/* ROW 3: Tất cả căn trái: Kênh | Metric toggles | Ẩn dòng | Import/Export */}
+      {/* ROW 3: Entity Selection — Đơn vị | Thương hiệu | Dòng xe | So sánh */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 0,
+        padding: '0 12px', height: 34, minHeight: 34,
+        borderBottom: '1px solid var(--color-border)',
+        background: pageMode === 'actual' ? '#fffbeb' : 'var(--color-surface)',
+        flexShrink: 0, flexWrap: 'nowrap',
+      }}>
+        {/* Nhóm 1: Đơn vị */}
+        <FilterDropdown
+          label="Đơn vị"
+          value={selectedShowroom}
+          options={[{value: 'all', label: '— Tất cả SR —'}, ...SHOWROOMS.map(sr => ({value: sr, label: sr}))]}
+          onChange={setSelectedShowroom}
+          width={140}
+          placeholder="— Tất cả SR —"
+        />
+        <div className="toolbar-sep" style={{ height: 14, margin: '0 10px' }} />
+        {/* Nhóm 2: Thương hiệu */}
+        <FilterDropdown
+          label="Thương hiệu"
+          value={selectedBrand}
+          options={[{value: 'all', label: '— Tất cả —'}, ...DEMO_BRANDS.map(b => ({value: b.name, label: b.name}))]}
+          onChange={(val: string) => { setSelectedBrand(val); setSelectedModels([]); }}
+          width={120}
+        />
+        <div className="toolbar-sep" style={{ height: 14, margin: '0 10px' }} />
+        {/* Nhóm 3: Dòng xe */}
+        <FilterDropdown
+          label="Dòng xe"
+          value={selectedModels}
+          options={availableModels.map(m => ({value: m, label: m}))}
+          onChange={setSelectedModels}
+          width={130}
+          isMulti={true}
+          placeholder="— Tất cả —"
+        />
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+        {/* Nhóm 4: So sánh — đẩy sang phải */}
+        <FilterDropdown
+          label="So sánh"
+          value={compareMode}
+          options={[
+            { value: 'none', label: '— Không so sánh —' },
+            ...(viewMode === 'month' ? [
+              { value: 'prev_period', label: `Tháng trước (T${month === 1 ? 12 : month - 1}/${month === 1 ? year - 1 : year})` },
+              { value: 'prev_year', label: `Cùng kỳ năm trước (T${month}/${year - 1})` }
+            ] : viewMode === 'quarter' ? [
+              { value: 'prev_period', label: `Quý trước (Q${Math.ceil(month/3) === 1 ? 4 : Math.ceil(month/3) - 1})` },
+              { value: 'prev_year', label: `Cùng kỳ năm trước` }
+            ] : [
+              { value: 'prev_period', label: `Năm trước (${year - 1})` }
+            ])
+          ]}
+          onChange={setCompareMode}
+          width={110}
+          placeholder="— Không so sánh —"
+        />
+      </div>
+
+      {/* ROW 4: Kênh | Metric toggles | Ẩn dòng trống */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface)', flexShrink: 0, flexWrap: 'nowrap', overflowX: 'auto' }}>
           {/* Kênh chips */}
           <span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>Kênh:</span>
@@ -1907,10 +1912,10 @@ export default function PlanningPage() {
             <thead>
               {/* Tier 1: Category Group Headers */}
               <tr style={{ height: 28 }}>
-                <th rowSpan={hasTier2 ? 3 : 2} style={{ ...stickyHeaderCol1, top: 0 }}>
+                <th rowSpan={hasTier2 ? (isActualSplitMode ? 4 : 3) : (isActualSplitMode ? 3 : 2)} style={{ ...stickyHeaderCol1, top: 0 }}>
                   Thương hiệu
                 </th>
-                <th rowSpan={hasTier2 ? 3 : 2} style={{ ...stickyHeaderCol2, top: 0 }}>
+                <th rowSpan={hasTier2 ? (isActualSplitMode ? 4 : 3) : (isActualSplitMode ? 3 : 2)} style={{ ...stickyHeaderCol2, top: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
                     <span>Dòng xe</span>
                     <span 
@@ -1948,7 +1953,8 @@ export default function PlanningPage() {
                       }
                     }
                     
-                    const colSpanCount = visibleChannelsInCat.length * visibleMetrics.length;
+                    const metricMultiplier = isActualSplitMode ? 2 : 1;
+                    const colSpanCount = visibleChannelsInCat.length * visibleMetrics.length * metricMultiplier;
                     const rowSpanCount = (hasTier2 && visibleChannelsInCat.length === 1) ? 2 : 1;
 
                     return (
@@ -2024,7 +2030,7 @@ export default function PlanningPage() {
                   return (
                     <th
                       key={`channel-${ch.name}`}
-                      colSpan={visibleMetrics.length}
+                      colSpan={visibleMetrics.length * (isActualSplitMode ? 2 : 1)}
                       style={{
                         position: 'sticky', top: 28, zIndex: 20,
                         textAlign: 'center',
@@ -2069,17 +2075,18 @@ export default function PlanningPage() {
                   return visibleMetrics.map((metric) => (
                     <th
                       key={`${ch.name}-${metric}`}
+                      colSpan={isActualSplitMode ? 2 : 1}
                       style={{
                         position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 20,
                         background: `color-mix(in srgb, ${color} 10%, #f8fafc)`,
-                        width: 72, minWidth: 72,
+                        width: isActualSplitMode ? 80 : 72, minWidth: isActualSplitMode ? 80 : 72,
                         textAlign: 'center',
                         fontSize: 'var(--fs-label)',
-                        borderBottom: '1px solid #cbd5e1',
+                        borderBottom: isActualSplitMode ? 'none' : '1px solid #cbd5e1',
                         padding: '4px 8px'
                       }}
                     >
-                      {metric}
+                      {metric === 'Ngân sách' ? 'NS' : metric}
                     </th>
                   ));
                 })}
@@ -2088,6 +2095,44 @@ export default function PlanningPage() {
                 <th style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 20, width: 60, minWidth: 60, background: '#e8f4fd', textAlign: 'right', fontWeight: 600, borderBottom: '1px solid #cbd5e1', padding: '4px 8px' }}>GDTD</th>
                 <th style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 20, width: 60, minWidth: 60, background: '#e8f4fd', textAlign: 'right', fontWeight: 600, borderBottom: '1px solid #cbd5e1', padding: '4px 8px' }}>KHĐ</th>
               </tr>
+
+              {/* Tier 4 (actual split mode only): KH | TH sub-headers per metric */}
+              {isActualSplitMode && (
+                <tr style={{ height: 22 }}>
+                  {visibleChannels.map((ch) => {
+                    const color = getChannelColor(ch);
+                    return visibleMetrics.map((metric) => (
+                      <React.Fragment key={`${ch.name}-${metric}-split`}>
+                        <th style={{
+                          position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 20,
+                          background: `color-mix(in srgb, ${color} 8%, #f0f4f8)`,
+                          width: 40, minWidth: 40, maxWidth: 40,
+                          textAlign: 'center', fontSize: 9, fontWeight: 600,
+                          color: '#64748b', letterSpacing: '0.04em',
+                          borderBottom: '2px solid #cbd5e1',
+                          borderRight: '1px dashed #e2e8f0',
+                          padding: '2px 4px'
+                        }}>
+                          KH
+                        </th>
+                        <th style={{
+                          position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 20,
+                          background: `color-mix(in srgb, #f59e0b 8%, #fffbeb)`,
+                          width: 40, minWidth: 40, maxWidth: 40,
+                          textAlign: 'center', fontSize: 9, fontWeight: 700,
+                          color: '#d97706', letterSpacing: '0.04em',
+                          borderBottom: '2px solid #fde68a',
+                          padding: '2px 4px'
+                        }}>
+                          TH
+                        </th>
+                      </React.Fragment>
+                    ));
+                  })}
+                  {/* TỔNG CỘNG: không split */}
+                  <th colSpan={4} style={{ position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 20, background: '#e8f4fd', borderBottom: '2px solid #cbd5e1' }} />
+                </tr>
+              )}
             </thead>
             <tbody>
               {DEMO_BRANDS.filter(b => selectedBrand === 'all' || b.name === selectedBrand).map((brand) => {
@@ -2161,6 +2206,52 @@ export default function PlanningPage() {
                                   totalKhd += val;
                                   if (histVal !== null) histTotalKhd += histVal;
                                 }
+                              }
+
+                              // ── ACTUAL SPLIT MODE: Tháng chưa chốt → 2 cột KH | TH ──
+                              if (isActualSplitMode && !ch.readonly && !isComputedRow && !cellKey.includes('-Tổng Digital-')) {
+                                const planVal = planCellData[cellKey] || 0;
+                                const actualVal = (actualDataByMonth[month] || {})[cellKey] || 0;
+                                const isIntField = cellKey.endsWith('-KHQT') || cellKey.endsWith('-GDTD') || cellKey.endsWith('-KHĐ');
+                                return (
+                                  <React.Fragment key={cellKey}>
+                                    {/* KH — Plan value: read-only reference */}
+                                    <td style={{ padding: 0, borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', borderLeft: '1px solid #e2e8f0', borderRight: '1px dashed #cbd5e1', height: 26, background: '#f8fafc' }}>
+                                      <div style={{ padding: '2px 6px', textAlign: 'right', fontSize: 'var(--fs-table)', color: '#94a3b8', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                        {planVal > 0 ? formatNumber(planVal) : ''}
+                                      </div>
+                                    </td>
+                                    {/* TH — Actual value: inline editable */}
+                                    <td style={{ padding: 0, borderTop: '1px solid #fde68a', borderBottom: '1px solid #fde68a', borderLeft: 'none', borderRight: '1px solid #fde68a', height: 26, background: actualVal > 0 ? '#fffbeb' : '#ffffff' }}>
+                                      <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={actualVal > 0 ? String(actualVal) : ''}
+                                        onChange={(e) => {
+                                          const raw = e.target.value;
+                                          if (raw === '') {
+                                            setCellData(prev => { const n = {...prev}; delete n[cellKey]; return n; });
+                                          } else {
+                                            const num = parseFloat(raw);
+                                            if (!isNaN(num)) {
+                                              if (isIntField && !Number.isInteger(num)) return;
+                                              setCellData(prev => ({ ...prev, [cellKey]: num }));
+                                            }
+                                          }
+                                        }}
+                                        onFocus={(e) => e.target.select()}
+                                        style={{
+                                          width: '100%', height: '100%', border: 'none', background: 'transparent',
+                                          textAlign: 'right', fontSize: 'var(--fs-table)', padding: '2px 6px',
+                                          outline: 'none',
+                                          color: actualVal > 0 ? '#92400e' : '#d1d5db',
+                                          fontWeight: actualVal > 0 ? 600 : 400,
+                                        }}
+                                        placeholder="—"
+                                      />
+                                    </td>
+                                  </React.Fragment>
+                                );
                               }
 
                               return (
