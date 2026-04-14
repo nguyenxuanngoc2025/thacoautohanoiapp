@@ -3,10 +3,10 @@
 export type ReportTabId = 'budget-summary' | 'plan-vs-actual' | 'channel-efficiency' | 'events';
 
 export const REPORT_TABS: Array<{ id: ReportTabId; label: string; icon: string }> = [
-  { id: 'budget-summary',      label: 'Tổng hợp NS',        icon: '📊' },
-  { id: 'plan-vs-actual',      label: 'KH vs Thực hiện',    icon: '📋' },
-  { id: 'channel-efficiency',  label: 'Hiệu quả kênh',      icon: '⚡' },
-  { id: 'events',              label: 'Sự kiện',             icon: '📅' },
+  { id: 'budget-summary',      label: 'Tổng hợp NS',        icon: '' },
+  { id: 'plan-vs-actual',      label: 'KH vs Thực hiện',    icon: '' },
+  { id: 'channel-efficiency',  label: 'Hiệu quả kênh',      icon: '' },
+  { id: 'events',              label: 'Sự kiện',             icon: '' },
 ];
 
 export function ReportTabBar({
@@ -42,7 +42,7 @@ export function ReportTabBar({
               transition: 'all 0.15s ease',
             }}
           >
-            <span style={{ marginRight: 5 }}>{tab.icon}</span>
+            {tab.icon && <span style={{ marginRight: 5 }}>{tab.icon}</span>}
             {tab.label}
           </button>
         );

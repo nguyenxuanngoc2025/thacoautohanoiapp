@@ -3,9 +3,9 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import PageHeader from '@/components/layout/PageHeader';
 import {
-  CalendarCheck, MapPin, Users, Wallet, TrendingUp, Clock,
-  AlertTriangle, CheckCircle2, BarChart3, Activity, Calendar, Flag, Eye,
-  Plus, X, Edit2, CalendarDays, Pencil, FileCheck2, ChevronDown,
+  CalendarCheck, MapPin, Users, Wallet, TrendingUp,
+  CheckCircle2, BarChart3, Activity, Calendar, Flag, Eye,
+  Plus, Pencil, FileCheck2,
 } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
 import dynamic from 'next/dynamic';
@@ -27,7 +27,7 @@ type ModalState =
   | { mode: 'closed' }
   | { mode: 'create'; data: EventItem }
   | { mode: 'edit';   data: EventItem }
-  | { mode: 'close_report'; data: EventItem };  // báo cáo kết thúc
+  | { mode: 'close_report'; data: EventItem };
 
 // ─── Main Page ──────────────────────────────────────────────────────────────────
 export default function EventsPage() {
@@ -129,6 +129,12 @@ export default function EventsPage() {
 
   if (!mounted) return null;
 
+  // Helper period label
+  const periodLabel =
+    viewMode === 'month'   ? ` — Tháng ${month}/${year}` :
+    viewMode === 'quarter' ? ` — Q${Math.ceil(month/3)}/${year}` :
+                             ` — Năm ${year}`;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <PageHeader
@@ -138,10 +144,10 @@ export default function EventsPage() {
         onViewModeChange={setViewMode}
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div style={{ display:'flex', gap:4 }}>
-              {kpis.completed > 0 && <span style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 8px', fontSize:11, fontWeight:600, color:'#059669', background:'#ecfdf5', borderRadius:4, border:'1px solid #bbf7d0' }}><CheckCircle2 size={12} />{kpis.completed} HT</span>}
-              {kpis.inProgress > 0 && <span style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 8px', fontSize:11, fontWeight:600, color:'#2563eb', background:'#eff6ff', borderRadius:4, border:'1px solid #bfdbfe' }}><Activity size={12} />{kpis.inProgress} đang chạy</span>}
-              {kpis.upcoming > 0 && <span style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 8px', fontSize:11, fontWeight:600, color:'#d97706', background:'#fffbeb', borderRadius:4, border:'1px solid #fde68a' }}><Clock size={12} />{kpis.upcoming} sắp tới</span>}
+            <div style={{ display: 'flex', gap: 4 }}>
+              {kpis.completed  > 0 && <span className="header-badge header-badge-success"><CheckCircle2 size={12} />{kpis.completed} HT</span>}
+              {kpis.inProgress > 0 && <span className="header-badge header-badge-info"><Activity size={12} />{kpis.inProgress} đang chạy</span>}
+              {kpis.upcoming   > 0 && <span className="header-badge header-badge-warn"><Calendar size={12} />{kpis.upcoming} sắp tới</span>}
             </div>
             <button
               className="button-erp-primary"
@@ -159,36 +165,62 @@ export default function EventsPage() {
         {/* Row 1: KPI Cards */}
         <div style={{ display: 'flex', gap: 12 }}>
           <KPICard icon={CalendarCheck} label="Tổng sự kiện" value={kpis.total}
-            subValue={`${kpis.completed} HT · ${kpis.inProgress} đang chạy · ${kpis.upcoming} sắp tới`} color="#3B82F6" trend="up" />
+            subValue={`${kpis.completed} HT · ${kpis.inProgress} đang chạy · ${kpis.upcoming} sắp tới`}
+            color="#3B82F6" trend="up" />
           <KPICard icon={Wallet} label="Tổng ngân sách" value={kpis.totalBudget} unit="tr"
-            subValue={`Đã chi: ${formatNumber(kpis.totalSpent)} tr (${kpis.utilPct}%)`} color="#10B981" />
+            subValue={`Đã chi: ${formatNumber(kpis.totalSpent)} tr (${kpis.utilPct}%)`}
+            color="#10B981" />
           <KPICard icon={Users} label="Tổng KHQT" value={kpis.totalLeads}
-            subValue={kpis.cpl > 0 ? `CPL: ${formatNumber(kpis.cpl)}đ` : '—'} color="#F59E0B" trend="up" />
+            subValue={kpis.cpl > 0 ? `CPL: ${formatNumber(kpis.cpl)}đ` : '—'}
+            color="#F59E0B" trend="up" />
           <KPICard icon={TrendingUp} label="Hợp đồng" value={kpis.totalDeals}
-            subValue={kpis.totalLeads > 0 ? `CR: ${((kpis.totalDeals / kpis.totalLeads)*100).toFixed(1)}%` : '—'} color="#8B5CF6" />
+            subValue={kpis.totalLeads > 0 ? `CR: ${((kpis.totalDeals / kpis.totalLeads)*100).toFixed(1)}%` : '—'}
+            color="#8B5CF6" />
         </div>
 
-        {/* Row 2: Charts */}
+        {/* Row 2: Charts (4 cột) */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-          <div style={{ background: '#fff', border: '1px solid var(--color-border)', borderRadius: 8, padding: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><BarChart3 size={15} style={{ color: '#3B82F6' }} />Sự kiện / Nhóm</div>
+
+          {/* Biểu đồ tròn: Loại sự kiện */}
+          <div className="chart-panel">
+            <div className="chart-panel-title">
+              <BarChart3 size={15} style={{ color: '#3B82F6' }} />Sự kiện / Nhóm
+            </div>
             <DonutChart data={byTypeData} />
           </div>
-          <div style={{ background: '#fff', border: '1px solid var(--color-border)', borderRadius: 8, padding: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><MapPin size={15} style={{ color: '#10B981' }} />Ngân sách / Showroom (tr)</div>
-            {byShowroomData.length > 0 ? <MiniBarChart data={byShowroomData} /> : <div style={{ color:'var(--color-text-muted)', fontSize:12, padding:20, textAlign:'center' }}>Chưa có dữ liệu</div>}
+
+          {/* Bar chart: NS / Showroom */}
+          <div className="chart-panel">
+            <div className="chart-panel-title">
+              <MapPin size={15} style={{ color: '#10B981' }} />Ngân sách / Showroom (tr)
+            </div>
+            {byShowroomData.length > 0
+              ? <MiniBarChart data={byShowroomData} />
+              : <div className="chart-empty">Chưa có dữ liệu</div>
+            }
           </div>
-          <div style={{ background: '#fff', border: '1px solid var(--color-border)', borderRadius: 8, padding: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><Flag size={15} style={{ color: '#EF4444' }} />Ngân sách / Hãng (tr)</div>
-            {byBrandData.length > 0 ? <DonutChart data={byBrandData} /> : <div style={{ color:'var(--color-text-muted)', fontSize:12, padding:20, textAlign:'center' }}>Chưa có dữ liệu</div>}
+
+          {/* Biểu đồ tròn: NS / Hãng */}
+          <div className="chart-panel">
+            <div className="chart-panel-title">
+              <Flag size={15} style={{ color: '#EF4444' }} />Ngân sách / Hãng (tr)
+            </div>
+            {byBrandData.length > 0
+              ? <DonutChart data={byBrandData} />
+              : <div className="chart-empty">Chưa có dữ liệu</div>
+            }
           </div>
-          <div style={{ background: '#fff', border: '1px solid var(--color-border)', borderRadius: 8, padding: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><Activity size={15} style={{ color: '#8B5CF6' }} />Xu hướng {year}</div>
+
+          {/* Xu hướng năm */}
+          <div className="chart-panel">
+            <div className="chart-panel-title">
+              <Activity size={15} style={{ color: '#8B5CF6' }} />Xu hướng {year}
+            </div>
             <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 4 }}>Số lượng</div>
             <MonthlySparkline data={monthlyTrend} color="#3B82F6" />
             <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 4, marginTop: 4 }}>Ngân sách (tr)</div>
             <MonthlySparkline data={monthlyBudget} color="#10B981" />
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:8, color:'var(--color-text-muted)', marginTop:2 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, color: 'var(--color-text-muted)', marginTop: 2 }}>
               {['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12'].map(l => <span key={l}>{l}</span>)}
             </div>
           </div>
@@ -197,36 +229,38 @@ export default function EventsPage() {
         {/* Row 3: Timeline + Table */}
         <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 12 }}>
 
-          {/* Timeline */}
-          <div style={{ background: '#fff', border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #fffbeb, #fef3c7)', flexShrink: 0 }}>
+          {/* Timeline — Nhắc tiến độ */}
+          <div className="timeline-panel">
+            <div className="timeline-header">
               <Flag size={14} style={{ color: '#d97706' }} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>Nhắc tiến độ</span>
-              <span style={{ marginLeft:'auto', fontSize:10, fontWeight:600, padding:'2px 7px', background:'#fbbf24', color:'#78350f', borderRadius:10 }}>{upcomingDeadlines.length}</span>
+              <span className="timeline-header-title">Nhắc tiến độ</span>
+              <span className="timeline-header-count">{upcomingDeadlines.length}</span>
             </div>
-            <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div className="chart-panel-scroll">
               {upcomingDeadlines.length === 0 ? (
-                <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 12 }}>
-                  <CheckCircle2 size={24} style={{ margin: '0 auto 8px', color: '#10B981' }} />Không có sự kiện cần nhắc
+                <div className="timeline-empty">
+                  <CheckCircle2 size={24} style={{ margin: '0 auto 8px', color: '#10B981', display: 'block' }} />
+                  Không có sự kiện cần nhắc
                 </div>
               ) : upcomingDeadlines.map((ev, i) => {
                 const isPast = ev.daysUntil < 0, isToday = ev.daysUntil === 0, isUrgent = ev.daysUntil <= 3 && !isPast;
                 const dot = isPast ? '#ef4444' : isToday ? '#3B82F6' : isUrgent ? '#f59e0b' : '#94a3b8';
+                const itemClass = `timeline-item${isPast ? ' timeline-item-past' : isUrgent ? ' timeline-item-urgent' : ''}`;
+                const countdownColor = isPast ? '#dc2626' : isToday ? '#2563eb' : isUrgent ? '#d97706' : '#64748b';
                 return (
-                  <div key={ev.id} style={{ padding: '9px 14px', borderBottom: i < upcomingDeadlines.length-1 ? '1px solid #f1f5f9' : 'none', display: 'flex', gap: 8, alignItems: 'flex-start', background: isPast ? '#fef2f2' : isUrgent ? '#fefce8' : 'transparent' }}>
-                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', marginTop:2, flexShrink:0 }}>
-                      <div style={{ width:8, height:8, borderRadius:'50%', background:dot, boxShadow:`0 0 0 2px ${dot}44` }} />
-                      {i < upcomingDeadlines.length-1 && <div style={{ width:1, flex:1, minHeight:16, background:'#e2e8f0', marginTop:3 }} />}
+                  <div key={ev.id} className={itemClass} style={{ borderBottom: i < upcomingDeadlines.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                    <div className="timeline-item-connector">
+                      <div className="timeline-dot" style={{ background: dot, boxShadow: `0 0 0 2px ${dot}44` }} />
+                      {i < upcomingDeadlines.length - 1 && <div className="timeline-line" />}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize:12, fontWeight:600, color:'var(--color-text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ev.name}</div>
-                      <div style={{ fontSize:10, color:'var(--color-text-muted)' }}>{ev.date} · {ev.showroom}</div>
-                      <div style={{ fontSize:10, fontWeight:700, color: isPast?'#dc2626':isToday?'#2563eb':isUrgent?'#d97706':'#64748b' }}>
+                    <div className="timeline-item-content">
+                      <div className="timeline-item-name">{ev.name}</div>
+                      <div className="timeline-item-meta">{ev.date} · {ev.showroom}</div>
+                      <div className="timeline-item-countdown" style={{ color: countdownColor }}>
                         {isPast ? `Quá hạn ${Math.abs(ev.daysUntil)}d` : isToday ? '📍 Hôm nay!' : `Còn ${ev.daysUntil} ngày`}
                       </div>
                     </div>
-                    <button title="Sửa" onClick={() => setModal({ mode: 'edit', data: ev })}
-                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', padding: 2 }}>
+                    <button title="Sửa" className="timeline-item-edit-btn" onClick={() => setModal({ mode: 'edit', data: ev })}>
                       <Pencil size={11} />
                     </button>
                   </div>
@@ -236,68 +270,67 @@ export default function EventsPage() {
           </div>
 
           {/* Event Table */}
-          <div style={{ background: '#fff', border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <div className="table-panel">
+            <div className="table-panel-header">
               <Calendar size={14} style={{ color: '#3B82F6' }} />
-              <span style={{ fontSize:13, fontWeight:700, color:'var(--color-text)' }}>
-                Danh sách sự kiện
-                {viewMode==='month' && ` — Tháng ${month}/${year}`}
-                {viewMode==='quarter' && ` — Q${Math.ceil(month/3)}/${year}`}
-                {viewMode==='year' && ` — Năm ${year}`}
+              <span className="table-panel-title">
+                Danh sách sự kiện{periodLabel}
               </span>
-              <span style={{ fontSize:11, color:'var(--color-text-muted)', marginLeft:2 }}>({events.length})</span>
+              <span className="table-panel-count">({events.length})</span>
             </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>
-              <table className="data-table" style={{ width: '100%' }}>
+              <table className="data-table">
                 <thead>
                   <tr>
-                    <th style={{ width:28, textAlign:'center' }}>#</th>
-                    <th style={{ textAlign:'left', minWidth:160 }}>Sự kiện</th>
-                    <th style={{ width:90 }}>Loại</th>
-                    <th style={{ width:95 }}>Trạng thái</th>
-                    <th style={{ width:100 }}>Showroom</th>
-                    <th style={{ width:78 }}>Ngày</th>
-                    <th style={{ width:54, textAlign:'right' }}>NS (tr)</th>
-                    <th style={{ width:54, textAlign:'right' }}>KHQT</th>
-                    <th style={{ width:52, textAlign:'right' }}>Lái thử</th>
-                    <th style={{ width:50, textAlign:'right' }}>GDTD</th>
-                    <th style={{ width:44, textAlign:'right' }}>KHĐ</th>
-                    <th style={{ width:100, textAlign:'center' }}>Thao tác</th>
+                    <th style={{ width: 28, textAlign: 'center' }}>#</th>
+                    <th style={{ textAlign: 'left', minWidth: 160 }}>Sự kiện</th>
+                    <th style={{ width: 90 }}>Loại</th>
+                    <th style={{ width: 95 }}>Trạng thái</th>
+                    <th style={{ width: 100 }}>Showroom</th>
+                    <th style={{ width: 78 }}>Ngày</th>
+                    <th style={{ width: 54, textAlign: 'right' }}>NS (tr)</th>
+                    <th style={{ width: 54, textAlign: 'right' }}>KHQT</th>
+                    <th style={{ width: 52, textAlign: 'right' }}>Lái thử</th>
+                    <th style={{ width: 50, textAlign: 'right' }}>GDTD</th>
+                    <th style={{ width: 44, textAlign: 'right' }}>KHĐ</th>
+                    <th style={{ width: 100, textAlign: 'center' }}>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
                   {events.length === 0 ? (
-                    <tr><td colSpan={11} style={{ textAlign:'center', padding:40, color:'var(--color-text-muted)' }}>
+                    <tr><td colSpan={12} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-muted)' }}>
                       Chưa có sự kiện trong kỳ này —{' '}
-                      <button onClick={() => setModal({ mode: 'create', data: emptyEvent(month, showroomNames[0] || '') })} style={{ border:'none', background:'none', color:'var(--color-brand, #004B9B)', cursor:'pointer', fontWeight:600, fontSize:13 }}>Tạo sự kiện mới</button>
+                      <button onClick={() => setModal({ mode: 'create', data: emptyEvent(month, showroomNames[0] || '') })} style={{ border: 'none', background: 'none', color: 'var(--color-brand, #004B9B)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Tạo sự kiện mới</button>
                     </td></tr>
                   ) : events.map((ev, i) => {
                     const stCfg = STATUS_CONFIG[ev.status as EventStatus] || STATUS_CONFIG.upcoming;
                     return (
                       <tr key={ev.id}>
-                        <td style={{ textAlign:'center', color:'var(--color-text-muted)' }}>{i+1}</td>
+                        <td style={{ textAlign: 'center', color: 'var(--color-text-muted)' }}>{i + 1}</td>
                         <td>
-                          <div style={{ fontWeight:600 }}>{ev.name}</div>
-                          <div style={{ fontSize:10, color:'var(--color-text-muted)' }}>{ev.location}</div>
+                          <div style={{ fontWeight: 600 }}>{ev.name}</div>
+                          <div style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{ev.location}</div>
                         </td>
-                        <td><span style={{ fontSize:10, fontWeight:600, padding:'2px 6px', borderRadius:3, background:(EVENT_TYPE_COLORS[ev.type]||'#94a3b8')+'15', color:EVENT_TYPE_COLORS[ev.type]||'#94a3b8' }}>{ev.type}</span></td>
-                        <td><span style={{ fontSize:11, fontWeight:600, color:stCfg.color }}>{stCfg.label}</span></td>
-                        <td style={{ fontSize:11 }}>{ev.showroom}</td>
-                        <td style={{ fontSize:11 }}>{ev.date.includes('-') ? ev.date.split('-').reverse().join('/') : ev.date}</td>
-                        <td style={{ textAlign:'right', fontWeight:600 }}>{formatNumber(ev.budget)}</td>
-                        <td style={{ textAlign:'right', color:'#3b82f6' }}>{ev.leads != null ? formatNumber(ev.leads) : '—'}</td>
-                        <td style={{ textAlign:'right', color:'#06b6d4' }}>{ev.testDrives != null ? ev.testDrives : '—'}</td>
-                        <td style={{ textAlign:'right', color:'#f59e0b' }}>{ev.gdtd != null ? formatNumber(ev.gdtd) : '—'}</td>
-                        <td style={{ textAlign:'right', color:'#10b981', fontWeight:600 }}>{ev.deals || '—'}</td>
-                        <td style={{ textAlign:'center' }}>
-                          <div style={{ display:'flex', gap:4, justifyContent:'center' }}>
-                            <button title="Chỉnh sửa" onClick={() => setModal({ mode: 'edit', data: ev })}
-                              style={{ border:'1px solid var(--color-border)', borderRadius:4, background:'#fff', cursor:'pointer', padding:'2px 6px', display:'flex', alignItems:'center', gap:3, fontSize:11, color:'var(--color-text-secondary)' }}>
+                        <td>
+                          <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 3, background: (EVENT_TYPE_COLORS[ev.type] || '#94a3b8') + '15', color: EVENT_TYPE_COLORS[ev.type] || '#94a3b8' }}>
+                            {ev.type}
+                          </span>
+                        </td>
+                        <td><span className="status-badge" style={{ color: stCfg.color }}>{stCfg.label}</span></td>
+                        <td style={{ fontSize: 11 }}>{ev.showroom}</td>
+                        <td style={{ fontSize: 11 }}>{ev.date.includes('-') ? ev.date.split('-').reverse().join('/') : ev.date}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatNumber(ev.budget)}</td>
+                        <td style={{ textAlign: 'right', color: '#3b82f6' }}>{ev.leads != null ? formatNumber(ev.leads) : '—'}</td>
+                        <td style={{ textAlign: 'right', color: '#06b6d4' }}>{ev.testDrives != null ? ev.testDrives : '—'}</td>
+                        <td style={{ textAlign: 'right', color: '#f59e0b' }}>{ev.gdtd != null ? formatNumber(ev.gdtd) : '—'}</td>
+                        <td style={{ textAlign: 'right', color: '#10b981', fontWeight: 600 }}>{ev.deals || '—'}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                            <button title="Chỉnh sửa" className="action-btn" onClick={() => setModal({ mode: 'edit', data: ev })}>
                               <Pencil size={11} /> Sửa
                             </button>
                             {ev.status !== 'completed' && (
-                              <button title="Báo cáo kết thúc" onClick={() => setModal({ mode: 'close_report', data: ev })}
-                                style={{ border:'1px solid #bbf7d0', borderRadius:4, background:'#ecfdf5', cursor:'pointer', padding:'2px 6px', display:'flex', alignItems:'center', gap:3, fontSize:11, color:'#059669' }}>
+                              <button title="Báo cáo kết thúc" className="action-btn action-btn-success" onClick={() => setModal({ mode: 'close_report', data: ev })}>
                                 <FileCheck2 size={11} /> Kết thúc
                               </button>
                             )}
@@ -310,13 +343,15 @@ export default function EventsPage() {
               </table>
             </div>
             {events.length > 0 && (
-              <div style={{ padding:'7px 16px', borderTop:'1px solid var(--color-border)', display:'flex', gap:16, alignItems:'center', flexShrink:0, background:'#f8fafc', fontSize:11, color:'var(--color-text-secondary)' }}>
+              <div className="table-panel-footer">
                 <span><strong>Tổng NS:</strong> {formatNumber(kpis.totalBudget)} tr</span>
                 <span><strong>Đã thực hiện:</strong> {kpis.completed} sự kiện</span>
                 <span><strong>KHQT:</strong> {formatNumber(kpis.totalLeads)}</span>
                 <span><strong>Lái thử:</strong> {formatNumber(kpis.totalTestDrives)}</span>
                 <span><strong>KHĐ:</strong> {formatNumber(kpis.totalDeals)}</span>
-                <span style={{ marginLeft:'auto', color:'var(--color-text-muted)' }}><Eye size={11} style={{ verticalAlign:'middle', marginRight:3 }} />Shared với Lập kế hoạch</span>
+                <span className="table-panel-footer-spacer" style={{ color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <Eye size={11} />Shared với Lập kế hoạch
+                </span>
               </div>
             )}
           </div>

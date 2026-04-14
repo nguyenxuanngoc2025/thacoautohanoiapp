@@ -340,7 +340,7 @@ export default function BrandSettingsPage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: 12, fontSize: 12, color: 'var(--color-text-muted)' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-brand)', display: 'inline-block' }} />
               {activeCount} thương hiệu
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -350,7 +350,7 @@ export default function BrandSettingsPage() {
           </div>
           <button
             onClick={() => loadAll()}
-            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: '#f8fafc', border: '1px solid var(--color-border)', borderRadius: 6, fontSize: 12, color: 'var(--color-text-muted)', cursor: 'pointer' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 6, fontSize: 12, color: 'var(--color-text)', cursor: 'pointer' }}
           >
             <RefreshCw size={13} />
             Làm mới
@@ -375,8 +375,8 @@ export default function BrandSettingsPage() {
 
       {/* Add Brand Form */}
       {addingBrand && (
-        <div style={{ background: '#f0f9ff', border: '2px solid var(--color-brand)', borderRadius: 8, padding: 16, marginBottom: 16, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-brand)' }}>Tên thương hiệu mới:</span>
+        <div style={{ background: '#fafafa', border: '1px solid var(--color-border)', borderRadius: 8, padding: 16, marginBottom: 16, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text)' }}>Tên thương hiệu mới:</span>
           <input
             autoFocus
             type="text"
@@ -389,13 +389,13 @@ export default function BrandSettingsPage() {
           <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Màu:</span>
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {BRAND_COLORS.map(c => (
-              <button key={c} onClick={() => setNewBrandColor(c)} style={{ width: 20, height: 20, background: c, borderRadius: 4, border: newBrandColor === c ? '2px solid #1e293b' : '2px solid transparent', cursor: 'pointer', padding: 0 }} />
+              <button key={c} onClick={() => setNewBrandColor(c)} style={{ width: 20, height: 20, background: c, borderRadius: 4, border: newBrandColor === c ? '2px solid #1e293b' : '1px solid var(--color-border)', opacity: newBrandColor === c ? 1 : 0.7, cursor: 'pointer', padding: 0 }} />
             ))}
           </div>
-          <button disabled={saving || !newBrandName.trim()} onClick={handleAddBrand} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', background: '#22c55e', border: 'none', borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+          <button disabled={saving || !newBrandName.trim()} onClick={handleAddBrand} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', background: 'var(--color-brand)', border: 'none', borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
             <Check size={13} /> Lưu
           </button>
-          <button onClick={() => setAddingBrand(false)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', background: '#f1f5f9', border: 'none', borderRadius: 6, color: '#64748b', fontSize: 12, cursor: 'pointer' }}>
+          <button onClick={() => setAddingBrand(false)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text)', fontSize: 12, cursor: 'pointer' }}>
             <X size={13} /> Hủy
           </button>
         </div>
@@ -444,7 +444,7 @@ export default function BrandSettingsPage() {
                   opacity: brand.is_active ? (draggedBrandId === brand.id ? 0.3 : 1) : 0.55 
                 }}>
                 {/* Brand Row */}
-                <div style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', background: brand.is_active ? '#fafafa' : '#f1f5f9', gap: 10, cursor: isEditingBrand ? 'default' : 'grab' }} onClick={() => {
+                <div style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', background: brand.is_active ? '#fff' : '#f8fafc', gap: 10, cursor: isEditingBrand ? 'default' : 'grab' }} onClick={() => {
                   if (isEditingBrand) return;
                   setExpandedBrands(prev => {
                     const s = new Set(prev);
@@ -462,26 +462,26 @@ export default function BrandSettingsPage() {
                       <input autoFocus type="text" className="form-input" value={editingBrandName} onChange={e => setEditingBrandName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleSaveBrand(brand.id); if (e.key === 'Escape') setEditingBrandId(null); }} style={{ width: 200, fontSize: 13 }} />
                       <div style={{ display: 'flex', gap: 4 }}>
                         {BRAND_COLORS.map(c => (
-                          <button key={c} onClick={() => setEditingBrandColor(c)} style={{ width: 18, height: 18, background: c, borderRadius: 3, border: editingBrandColor === c ? '2px solid #1e293b' : '1.5px solid transparent', cursor: 'pointer', padding: 0 }} />
+                          <button key={c} onClick={() => setEditingBrandColor(c)} style={{ width: 18, height: 18, background: c, borderRadius: 3, border: editingBrandColor === c ? '2px solid #1e293b' : '1px solid var(--color-border)', opacity: editingBrandColor === c ? 1 : 0.7, cursor: 'pointer', padding: 0 }} />
                         ))}
                       </div>
-                      <button disabled={saving} onClick={() => handleSaveBrand(brand.id)} style={{ padding: '4px 10px', background: '#22c55e', border: 'none', borderRadius: 5, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}><Check size={12} />Lưu</button>
-                      <button onClick={() => setEditingBrandId(null)} style={{ padding: '4px 8px', background: '#f1f5f9', border: 'none', borderRadius: 5, color: '#64748b', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}><X size={12} /></button>
+                      <button disabled={saving} onClick={() => handleSaveBrand(brand.id)} style={{ padding: '4px 10px', background: 'var(--color-brand)', border: 'none', borderRadius: 5, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}><Check size={12} />Lưu</button>
+                      <button onClick={() => setEditingBrandId(null)} style={{ padding: '4px 8px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 5, color: 'var(--color-text)', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}><X size={12} /></button>
                     </div>
                   ) : (
                     <>
                       <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-text)', flex: 1 }}>{brand.name}</span>
                       <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginRight: 8 }}>
                         {activeModels.filter(m => !m.is_aggregate).length} dòng xe
-                        {!brand.is_active && <span style={{ marginLeft: 6, color: '#ef4444', fontWeight: 600 }}>[Ẩn]</span>}
+                        {!brand.is_active && <span style={{ marginLeft: 6, color: '#ef4444', fontWeight: 600 }}>[Đã Ẩn]</span>}
                       </span>
                     </>
                   )}
 
                   {!isEditingBrand && (
                     <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }} onClick={e => e.stopPropagation()}>
-                      <button onClick={() => { setEditingBrandId(brand.id); setEditingBrandName(brand.name); setEditingBrandColor(brand.color ?? BRAND_COLORS[0]); }} style={{ padding: '5px 8px', background: 'transparent', border: '1px solid var(--color-border)', borderRadius: 5, cursor: 'pointer', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}><Pencil size={12} />Sửa</button>
-                      <button onClick={() => handleToggleBrandActive(brand)} style={{ padding: '5px 8px', background: brand.is_active ? '#fef2f2' : '#f0fdf4', border: `1px solid ${brand.is_active ? '#fecaca' : '#bbf7d0'}`, borderRadius: 5, cursor: 'pointer', color: brand.is_active ? '#dc2626' : '#16a34a', fontSize: 11, fontWeight: 600 }}>
+                      <button onClick={() => { setEditingBrandId(brand.id); setEditingBrandName(brand.name); setEditingBrandColor(brand.color ?? BRAND_COLORS[0]); }} style={{ padding: '5px 8px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 5, cursor: 'pointer', color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}><Pencil size={12} />Sửa</button>
+                      <button onClick={() => handleToggleBrandActive(brand)} style={{ padding: '5px 8px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 5, cursor: 'pointer', color: brand.is_active ? 'var(--color-text)' : 'var(--color-text-muted)', fontSize: 11, fontWeight: 600 }}>
                         {brand.is_active ? 'Ẩn' : 'Hiện'}
                       </button>
                     </div>
@@ -534,24 +534,24 @@ export default function BrandSettingsPage() {
                           {isEditingModel ? (
                             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: 1 }} onClick={e => e.stopPropagation()}>
                               <input autoFocus type="text" className="form-input" value={editingModelName} onChange={e => setEditingModelName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleSaveModel(model.id); if (e.key === 'Escape') setEditingModelId(null); }} style={{ width: 200, fontSize: 12 }} />
-                              <button disabled={saving} onClick={() => handleSaveModel(model.id)} style={{ padding: '3px 8px', background: '#22c55e', border: 'none', borderRadius: 4, color: '#fff', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}><Check size={11} />Lưu</button>
-                              <button onClick={() => setEditingModelId(null)} style={{ padding: '3px 7px', background: '#f1f5f9', border: 'none', borderRadius: 4, color: '#64748b', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center' }}><X size={11} /></button>
+                              <button disabled={saving} onClick={() => handleSaveModel(model.id)} style={{ padding: '3px 8px', background: 'var(--color-brand)', border: 'none', borderRadius: 4, color: '#fff', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}><Check size={11} />Lưu</button>
+                              <button onClick={() => setEditingModelId(null)} style={{ padding: '3px 7px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 4, color: 'var(--color-text)', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center' }}><X size={11} /></button>
                             </div>
                           ) : (
                             <span style={{ fontSize: 13, flex: 1, fontStyle: model.is_aggregate ? 'italic' : 'normal', color: model.is_aggregate ? '#94a3b8' : 'var(--color-text)' }}>
                               {model.name}
                               {model.is_aggregate && <span style={{ marginLeft: 6, fontSize: 10, color: '#94a3b8' }}>(tổng hợp)</span>}
-                              {!model.is_active && <span style={{ marginLeft: 6, fontSize: 10, color: '#ef4444', fontWeight: 600 }}>[Ẩn]</span>}
+                              {!model.is_active && <span style={{ marginLeft: 6, fontSize: 10, color: '#ef4444', fontWeight: 600 }}>[Đã Ẩn]</span>}
                             </span>
                           )}
 
                           {!isEditingModel && (
                             <div style={{ display: 'flex', gap: 4 }}>
-                              <button onClick={() => { setEditingModelId(model.id); setEditingModelName(model.name); }} style={{ padding: '3px 7px', background: 'transparent', border: '1px solid var(--color-border)', borderRadius: 4, cursor: 'pointer', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 3, fontSize: 11 }} title="Sửa tên"><Pencil size={11} /></button>
-                              <button onClick={() => handleToggleModelActive(model)} style={{ padding: '3px 7px', background: model.is_active ? '#fef2f2' : '#f0fdf4', border: `1px solid ${model.is_active ? '#fecaca' : '#bbf7d0'}`, borderRadius: 4, cursor: 'pointer', color: model.is_active ? '#dc2626' : '#16a34a', fontSize: 11, fontWeight: 600 }}>
+                              <button onClick={() => { setEditingModelId(model.id); setEditingModelName(model.name); }} style={{ padding: '3px 7px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 4, cursor: 'pointer', color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 3, fontSize: 11 }} title="Sửa tên"><Pencil size={11} /></button>
+                              <button onClick={() => handleToggleModelActive(model)} style={{ padding: '3px 7px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 4, cursor: 'pointer', color: model.is_active ? 'var(--color-text)' : 'var(--color-text-muted)', fontSize: 11, fontWeight: 600 }}>
                                 {model.is_active ? 'Ẩn' : 'Hiện'}
                               </button>
-                              <button onClick={() => handleDeleteModel(model)} style={{ padding: '3px 7px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 4, cursor: 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center' }} title="Xóa vĩnh viễn">
+                              <button onClick={() => handleDeleteModel(model)} style={{ padding: '3px 7px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 4, cursor: 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center' }} title="Xóa vĩnh viễn">
                                 <Trash2 size={11} />
                               </button>
                             </div>
@@ -562,8 +562,8 @@ export default function BrandSettingsPage() {
 
                     {/* Add model inline */}
                     {addingModelForBrand === brand.name ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px 8px 38px', background: '#f0fdf4', borderTop: '1px solid #bbf7d0' }}>
-                        <Plus size={12} style={{ color: '#22c55e' }} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px 8px 38px', background: '#fafafa', borderTop: '1px solid var(--color-border)' }}>
+                        <Plus size={12} style={{ color: 'var(--color-brand)' }} />
                         <input
                           autoFocus
                           type="text"
@@ -589,8 +589,8 @@ export default function BrandSettingsPage() {
                             <option value="TONG_BUS">Tính vào Tổng Bus</option>
                           </select>
                         )}
-                        <button disabled={saving || !newModelName.trim()} onClick={() => handleAddModel(brand.name)} style={{ padding: '4px 10px', background: '#22c55e', border: 'none', borderRadius: 5, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}><Check size={12} />Thêm</button>
-                        <button onClick={() => { setAddingModelForBrand(null); setNewModelName(''); setNewModelAggregate(false); setNewModelAggregateGroup(null); }} style={{ padding: '4px 8px', background: '#f1f5f9', border: 'none', borderRadius: 5, color: '#64748b', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}><X size={12} /></button>
+                        <button disabled={saving || !newModelName.trim()} onClick={() => handleAddModel(brand.name)} style={{ padding: '4px 10px', background: 'var(--color-brand)', border: 'none', borderRadius: 5, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}><Check size={12} />Thêm</button>
+                        <button onClick={() => { setAddingModelForBrand(null); setNewModelName(''); setNewModelAggregate(false); setNewModelAggregateGroup(null); }} style={{ padding: '4px 8px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 5, color: 'var(--color-text)', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}><X size={12} /></button>
                       </div>
                     ) : (
                       <button

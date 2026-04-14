@@ -8,15 +8,15 @@ export const NAV_ITEMS = [
     icon: 'LayoutDashboard',
     roles: ['super_admin', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom', 'finance'] as UserRole[]
   },
-  { 
-    label: 'Lập kế hoạch', 
-    href: '/planning', 
+  {
+    label: 'Quản trị kế hoạch',
+    href: '/planning',
     icon: 'CalendarRange',
     roles: ['super_admin', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom'] as UserRole[]
   },
-  { 
-    label: 'Quản trị sự kiện', 
-    href: '/events', 
+  {
+    label: 'Quản trị sự kiện',
+    href: '/events',
     icon: 'CalendarCheck',
     roles: ['super_admin', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom'] as UserRole[]
   },
@@ -25,24 +25,6 @@ export const NAV_ITEMS = [
     href: '/tasks',
     icon: 'CheckSquare',
     roles: ['super_admin', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom', 'finance'] as UserRole[]
-  },
-  {
-    label: 'Nhập thực hiện',
-    href: '/actual',
-    icon: 'ClipboardEdit',
-    roles: ['super_admin', 'mkt_brand', 'mkt_showroom'] as UserRole[]
-  },
-  { 
-    label: 'Kiểm soát ngân sách', 
-    href: '/budget', 
-    icon: 'Wallet',
-    roles: ['super_admin', 'bld', 'gd_showroom', 'mkt_brand', 'finance'] as UserRole[]
-  },
-  { 
-    label: 'So sánh & Phân tích', 
-    href: '/compare', 
-    icon: 'BarChart3',
-    roles: ['super_admin', 'bld', 'gd_showroom', 'mkt_brand', 'finance'] as UserRole[]
   },
   { 
     label: 'Báo cáo', 

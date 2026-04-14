@@ -112,10 +112,16 @@ import { createClient } from '@/lib/supabase/client';
 /**
  * Đọc events từ Supabase. Nếu trống → trả về SEED_EVENTS_BY_MONTH.
  */
-export async function fetchEventsFromDB(): Promise<EventsByMonth> {
+export async function fetchEventsFromDB(unit_id?: string): Promise<EventsByMonth> {
   if (typeof window === 'undefined') return SEED_EVENTS_BY_MONTH;
   const supabase = createClient();
-  const { data, error } = await supabase.from('thaco_events').select('*');
+  let query = supabase.from('thaco_events').select('*');
+  
+  if (unit_id && unit_id !== 'all') {
+    query = query.eq('unit_id', unit_id);
+  }
+
+  const { data, error } = await query;
   
   if (error || !data) return SEED_EVENTS_BY_MONTH;
 

@@ -11,11 +11,12 @@ export interface BudgetPlanData {
   approval_status: 'draft' | 'pending' | 'approved';
 }
 
-export async function fetchBudgetPlan(month: number): Promise<BudgetPlanData | null> {
+export async function fetchBudgetPlan(month: number, year: number = 2026): Promise<BudgetPlanData | null> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from('thaco_budget_plans')
     .select('*')
+    .eq('year', year)
     .eq('month', month)
     .single();
 
@@ -47,7 +48,7 @@ export async function upsertBudgetPlan(
       approval_status,
       ...(unit_id && { unit_id }),
       updated_at: new Date().toISOString()
-    }, { onConflict: 'month,year' });
+    }, { onConflict: 'year,month' });
 
   if (error) {
     console.error('Error upserting budget plan:', error);
@@ -56,9 +57,13 @@ export async function upsertBudgetPlan(
   return true;
 }
 
-export async function fetchAllBudgetPlans(): Promise<BudgetPlanData[]> {
+export async function fetchAllBudgetPlans(unit_id?: string): Promise<BudgetPlanData[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.from('thaco_budget_plans').select('*');
+  let query = supabase.from('thaco_budget_plans').select('*');
+  if (unit_id && unit_id !== 'all') {
+    query = query.eq('unit_id', unit_id);
+  }
+  const { data, error } = await query;
   if (error) {
     console.error('Error fetching all budget plans:', error);
     return [];

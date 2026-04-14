@@ -8,10 +8,9 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Building2, ChevronUp, Globe, CheckCircle2 } from 'lucide-react';
+import { Building2, ChevronUp, Globe, CheckCircle2, Bell } from 'lucide-react';
 import { useUnit } from '@/contexts/UnitContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { type Unit } from '@/types/database';
 
 export default function StatusBar() {
   const { isSuperAdmin, profile } = useAuth();
@@ -19,7 +18,6 @@ export default function StatusBar() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  // Đóng dropdown khi click ngoài
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
@@ -28,32 +26,66 @@ export default function StatusBar() {
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  // Chỉ render cho super_admin
-  if (!isSuperAdmin) return null;
+  const roleMap: Record<string, string> = {
+    super_admin: 'SUPER ADMIN',
+    bld: 'BAN LÃNH ĐẠO',
+    gd_showroom: 'GĐ SHOWROOM',
+    mkt_brand: 'MKT BRAND',
+    mkt_showroom: 'MKT SHOWROOM',
+    finance: 'KẾ TOÁN',
+  };
+  const roleDisplay = profile?.role ? (roleMap[profile.role] || profile.role.toUpperCase()) : 'USER';
 
   const displayName = activeUnitId === 'all'
     ? 'TOÀN HỆ THỐNG'
     : (activeUnit?.name ?? 'Đang tải...');
 
-  const displayCode = activeUnitId === 'all'
-    ? 'ALL'
-    : (activeUnit?.code ?? '—');
-
   return (
     <div
       style={{
         height: 28,
-        background: '#0f172a',
-        borderTop: '1px solid rgba(255,255,255,0.06)',
+        background: '#e5e7eb',
+        borderTop: '1px solid #d1d5db',
+        color: '#111827',
         display: 'flex',
         alignItems: 'center',
         padding: '0 12px',
-        gap: 8,
+        gap: 12,
         flexShrink: 0,
         zIndex: 500,
         userSelect: 'none',
       }}
     >
+      {/* Đẩy toàn bộ nội dung sang phải */}
+      <div style={{ flex: 1 }} />
+
+      {/* ── System status ── */}
+      <span style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        fontSize: 10,
+        color: '#4b5563',
+        fontWeight: 500,
+      }}>
+        <CheckCircle2 size={10} style={{ color: '#16a34a' }} />
+        Hệ thống hoạt động
+      </span>
+
+      <div style={{ width: 1, height: 14, background: 'rgba(0,0,0,0.15)' }} />
+
+      {/* ── Role badge ── */}
+      <span style={{
+        fontSize: 10,
+        color: '#374151',
+        fontWeight: 700,
+        letterSpacing: '0.05em',
+      }}>
+        {roleDisplay}
+      </span>
+
+      <div style={{ width: 1, height: 14, background: 'rgba(0,0,0,0.15)' }} />
+
       {/* ── Unit Switcher ── */}
       <div ref={ref} style={{ position: 'relative' }}>
         <button
@@ -62,52 +94,53 @@ export default function StatusBar() {
             display: 'flex',
             alignItems: 'center',
             gap: 5,
-            background: open ? 'rgba(255,255,255,0.12)' : 'transparent',
+            background: open ? 'rgba(0,0,0,0.06)' : 'transparent',
             border: 'none',
             borderRadius: 3,
             padding: '2px 7px',
             cursor: canSwitchUnits ? 'pointer' : 'default',
-            color: activeUnitId === 'all' ? '#60a5fa' : '#a3e635',
+            color: '#111827',
             fontSize: 11,
             fontWeight: 600,
-            letterSpacing: '0.04em',
+            letterSpacing: '0.02em',
             transition: 'background 0.15s',
             height: 22,
           }}
-          onMouseEnter={e => { if (canSwitchUnits) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
+          onMouseEnter={e => { if (canSwitchUnits && !open) (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.04)'; }}
           onMouseLeave={e => { if (!open) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
           title={canSwitchUnits ? 'Chuyển đổi Công ty' : displayName}
         >
           {activeUnitId === 'all'
-            ? <Globe size={12} />
-            : <Building2 size={12} />
+            ? <Globe size={12} style={{ color: '#4b5563' }} />
+            : <Building2 size={12} style={{ color: '#4b5563' }} />
           }
           <span>{displayName}</span>
           {canSwitchUnits && (
             <ChevronUp
               size={11}
               style={{
-                opacity: 0.6,
+                opacity: 0.7,
                 transform: open ? 'rotate(180deg)' : 'none',
                 transition: 'transform 0.15s',
+                color: '#4b5563',
               }}
             />
           )}
         </button>
 
-        {/* ── Dropdown (mở lên trên) ── */}
+        {/* ── Dropdown ── */}
         {open && (
           <div
             style={{
               position: 'absolute',
               bottom: '100%',
-              left: 0,
+              right: 0,
               marginBottom: 4,
               width: 320,
-              background: '#1e293b',
-              border: '1px solid rgba(255,255,255,0.1)',
+              background: '#ffffff',
+              border: '1px solid #e5e7eb',
               borderRadius: 6,
-              boxShadow: '0 -8px 32px rgba(0,0,0,0.4)',
+              boxShadow: '0 -8px 32px rgba(0,0,0,0.1)',
               overflow: 'hidden',
               zIndex: 600,
             }}
@@ -115,9 +148,9 @@ export default function StatusBar() {
             {/* Header */}
             <div style={{
               padding: '8px 12px 6px',
-              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              borderBottom: '1px solid #f3f4f6',
               fontSize: 10,
-              color: '#64748b',
+              color: '#6b7280',
               fontWeight: 700,
               letterSpacing: '0.08em',
               textTransform: 'uppercase',
@@ -132,58 +165,59 @@ export default function StatusBar() {
               name="Toàn hệ thống"
               code="ALL"
               subtitle={`${availableUnits.length} công ty`}
-              color="#60a5fa"
+              color="#2563eb"
               onClick={() => { setActiveUnitId('all'); setOpen(false); }}
             />
 
             {/* Divider */}
-            <div style={{ height: 1, background: 'rgba(255,255,255,0.04)', margin: '2px 0' }} />
+            <div style={{ height: 1, background: '#f3f4f6', margin: '2px 0' }} />
 
             {/* Individual units */}
-            {availableUnits.map(unit => (
-              <UnitOption
-                key={unit.id}
-                isActive={activeUnitId === unit.id}
-                icon={<Building2 size={13} />}
-                name={unit.name}
-                code={unit.code}
-                color="#a3e635"
-                onClick={() => { setActiveUnitId(unit.id); setOpen(false); }}
-              />
-            ))}
+            <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+              {availableUnits.map(unit => (
+                <UnitOption
+                  key={unit.id}
+                  isActive={activeUnitId === unit.id}
+                  icon={<Building2 size={13} />}
+                  name={unit.name}
+                  code={unit.code}
+                  color="#16a34a"
+                  onClick={() => { setActiveUnitId(unit.id); setOpen(false); }}
+                />
+              ))}
+            </div>
           </div>
         )}
       </div>
 
-      {/* ── Separator ── */}
-      <div style={{ width: 1, height: 14, background: 'rgba(255,255,255,0.1)' }} />
+      <div style={{ width: 1, height: 14, background: 'rgba(0,0,0,0.15)' }} />
 
-      {/* ── Role badge ── */}
-      <span style={{
-        fontSize: 10,
-        color: '#f59e0b',
-        fontWeight: 700,
-        letterSpacing: '0.05em',
-        opacity: 0.85,
-      }}>
-        SUPER ADMIN
-      </span>
-
-      {/* ── Spacer ── */}
-      <div style={{ flex: 1 }} />
-
-      {/* ── System status ── */}
-      <span style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 4,
-        fontSize: 10,
-        color: '#22c55e',
-        opacity: 0.7,
-      }}>
-        <CheckCircle2 size={10} />
-        Hệ thống hoạt động
-      </span>
+      {/* ── Notification (WIP) ── */}
+      <button
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'transparent',
+          border: 'none',
+          padding: '4px',
+          borderRadius: 4,
+          cursor: 'pointer',
+          color: '#4b5563',
+          transition: 'background 0.15s, color 0.15s',
+        }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.06)';
+          (e.currentTarget as HTMLElement).style.color = '#111827';
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLElement).style.background = 'transparent';
+          (e.currentTarget as HTMLElement).style.color = '#4b5563';
+        }}
+        title="Thông báo (Đang phát triển)"
+      >
+        <Bell size={13} />
+      </button>
     </div>
   );
 }
@@ -216,22 +250,22 @@ function UnitOption({
         alignItems: 'center',
         gap: 10,
         padding: '8px 12px',
-        background: isActive ? 'rgba(255,255,255,0.07)' : 'transparent',
+        background: isActive ? '#f8fafc' : 'transparent',
         border: 'none',
         cursor: 'pointer',
         textAlign: 'left',
-        transition: 'background 0.12s',
+        transition: 'background 0.1s',
         borderLeft: `2px solid ${isActive ? color : 'transparent'}`,
       }}
-      onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'; }}
+      onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = '#f1f5f9'; }}
       onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
     >
-      <span style={{ color, display: 'flex', flexShrink: 0 }}>{icon}</span>
+      <span style={{ color: isActive ? color : '#64748b', display: 'flex', flexShrink: 0 }}>{icon}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           fontSize: 12,
-          fontWeight: isActive ? 700 : 500,
-          color: isActive ? '#f1f5f9' : '#94a3b8',
+          fontWeight: isActive ? 600 : 500,
+          color: isActive ? '#0f172a' : '#475569',
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -239,15 +273,15 @@ function UnitOption({
           {name}
         </div>
         {subtitle && (
-          <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>{subtitle}</div>
+          <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{subtitle}</div>
         )}
       </div>
       <span style={{
         fontSize: 10,
-        color: '#475569',
+        color: '#64748b',
         fontFamily: 'monospace',
         fontWeight: 600,
-        background: 'rgba(255,255,255,0.05)',
+        background: isActive ? '#e2e8f0' : '#f1f5f9',
         padding: '1px 5px',
         borderRadius: 3,
         flexShrink: 0,
@@ -255,7 +289,7 @@ function UnitOption({
         {code}
       </span>
       {isActive && (
-        <CheckCircle2 size={12} style={{ color, flexShrink: 0 }} />
+        <CheckCircle2 size={12} style={{ color, flexShrink: 0, marginLeft: 4 }} />
       )}
     </button>
   );

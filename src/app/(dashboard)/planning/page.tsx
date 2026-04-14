@@ -4,7 +4,8 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import PageHeader from '@/components/layout/PageHeader';
 import { formatNumber, cn } from '@/lib/utils';
 import { CHANNEL_CATEGORIES } from '@/lib/constants';
-import { DownloadCloud, UploadCloud, Save, Send, Copy, Wallet, Users, FileSignature, BarChart3, Wand2, Zap, X, CheckCircle2, AlertTriangle, Edit2, Trash2, ArrowUpRight, CalendarDays, Keyboard, ChevronDown } from 'lucide-react';
+import { DownloadCloud, UploadCloud, Save, Send, Copy, Wallet, Users, FileSignature, BarChart3, Wand2, Zap, X, CheckCircle2, AlertTriangle, Edit2, Trash2, ArrowUpRight, CalendarDays, Keyboard, ChevronDown, CloudUpload } from 'lucide-react';
+import { Badge } from '@/components/reui/badge';
 import EventFormModal from '@/components/events/EventFormModal';
 import { type EventItem, EVENT_CPL, EVENT_CR1, EVENT_CR2, fetchEventsFromDB, upsertEventToDB, deleteEventFromDB } from '@/lib/events-data';
 import { fetchAllBudgetPlans, upsertBudgetPlan } from '@/lib/budget-data';
@@ -12,20 +13,13 @@ import { computeHistoricalCPL, fetchAllActualEntries, upsertActualEntry } from '
 import { MASTER_BRANDS } from '@/lib/master-data';
 import { useBrands } from '@/contexts/BrandsContext';
 import { useShowrooms } from '@/contexts/ShowroomsContext';
+import { useUnit } from '@/contexts/UnitContext';
+import { useChannels, type Channel } from '@/contexts/ChannelsContext';
 import type { BrandWithModels } from '@/lib/brands-data';
 
 
-const CHANNELS = [
-  // --- DIGITAL: mỗi platform có màu brand riêng ---
-  { name: 'Google',   category: 'DIGITAL',     color: '#EA4335', readonly: false }, // Google Red
-  { name: 'Facebook', category: 'DIGITAL',     color: '#1877F2', readonly: false }, // Facebook Blue
-  { name: 'Khác',     category: 'DIGITAL',     color: '#64748B', readonly: false }, // Neutral slate
-  { name: 'Tổng Digital', category: 'DIGITAL', color: '#0F172A', readonly: true }, // Aggregate column
-  // --- Other categories ---
-  { name: 'Sự kiện',  category: 'SỰ KIỆN',    color: '#10B981', readonly: true },  // Emerald — driven by events[], NOT editable in grid
-  { name: 'CSKH',     category: 'CSKH',        color: '#F59E0B', readonly: false }, // Amber
-  { name: 'Nhận diện',category: 'NHẬN DIỆN',  color: '#8B5CF6', readonly: false }, // Violet
-] as const;
+// CHANNELS được cung cấp động bởi ChannelsContext — xem useChannels() bên dưới
+// Giữ lại METRICS, COL_WIDTH và helper function ở đây
 
 const METRICS = ['Ngân sách', 'KHQT', 'GDTD', 'KHĐ'];
 
@@ -39,14 +33,14 @@ CHANNEL_CATEGORIES.forEach(c => { CATEGORY_COLOR_MAP[c.value] = c.color; });
 
 // SR_WEIGHTS now provided by useShowrooms().weightMap — see inside component
 
-// Build ordered cellKeys for keyboard navigation (nhận brands dynamic)
-function buildCellKeysList(brands: BrandWithModels[]): string[] {
+// Build ordered cellKeys for keyboard navigation
+function buildCellKeysList(brands: BrandWithModels[], channels: { name: string; readonly: boolean }[]): string[] {
   const keys: string[] = [];
   for (const brand of brands) {
     for (const model of brand.models) {
       const isAgg = brand.modelData?.find(x => x.name === model)?.is_aggregate;
       if (isAgg) continue;
-      for (const ch of CHANNELS) {
+      for (const ch of channels) {
         if (ch.readonly) continue;
         for (const metric of METRICS) {
           keys.push(`${brand.name}-${model}-${ch.name}-${metric}`);
@@ -56,8 +50,6 @@ function buildCellKeysList(brands: BrandWithModels[]): string[] {
   }
   return keys;
 }
-
-const CELLS_PER_ROW = CHANNELS.length * METRICS.length;
 
 interface CellData {
   [key: string]: number;
@@ -71,6 +63,20 @@ type AlertState = { type: 'warning' | 'success' | 'info', title: string, message
 
 // Deterministic mockup data generation (kênh "Sự kiện" KHÔNG generate ở đây
 // vì được driven 100% từ events[] qua useEffect sync)
+// LƯU Ý: Đây là hàm helper ngoài component nên dùng STATIC channel list
+// Context sẽ ghi đè dữ liệu thực tế sau khi fetch xong
+const STATIC_CHANNELS_FOR_MOCKUP = [
+  { name: 'Google',      category: 'DIGITAL',    color: '#EA4335', readonly: false, isAggregate: false },
+  { name: 'Facebook',    category: 'DIGITAL',    color: '#1877F2', readonly: false, isAggregate: false },
+  { name: 'Khác',        category: 'DIGITAL',    color: '#64748B', readonly: false, isAggregate: false },
+  { name: 'Tổng Digital',category: 'DIGITAL',    color: '#0F172A', readonly: true,  isAggregate: true  },
+  { name: 'Sự kiện',   category: 'SỰ KIỆN',   color: '#10B981', readonly: true,  isAggregate: false },
+  { name: 'CSKH',        category: 'CSKH',       color: '#F59E0B', readonly: false, isAggregate: false },
+  { name: 'Nhận diện', category: 'NHẬN DIỆN', color: '#8B5CF6', readonly: false, isAggregate: false },
+];
+
+type CellNotes = Record<string, string>;
+
 function generateMockData(monthSeed: number, brands?: BrandWithModels[]): CellData {
   // Dùng MASTER_BRANDS làm fallback khi brands chưa load từ DB
   const activeBrands: BrandWithModels[] = brands ?? MASTER_BRANDS.map(b => ({ name: b.name, color: null, models: b.models, modelData: [] }));
@@ -109,7 +115,7 @@ function generateMockData(monthSeed: number, brands?: BrandWithModels[]): CellDa
       if (isAgg) continue;
       const mw = modelW[m] || (1 / b.models.length);
       const mBdgt = baseBudget * bw * mw;
-      for (const c of CHANNELS) {
+      for (const c of STATIC_CHANNELS_FOR_MOCKUP) {
         if (c.name === 'Tổng Digital') continue;
         if (c.name === 'Sự kiện') continue; // Sự kiện do events[] driver
         
@@ -310,6 +316,9 @@ export default function PlanningPage() {
   const { brands } = useBrands();
   // ─── Dynamic showrooms từ DB (thay thế MASTER_SHOWROOMS hard-coded) ──────────
   const { showrooms, weightMap: SR_WEIGHTS, showroomNames: SHOWROOMS } = useShowrooms();
+  const { activeUnitId } = useUnit();
+  // ─── Dynamic channels từ DB (thay thế CHANNELS hard-coded) ──────────────────
+  const { channels: CHANNELS, digitalChannelNames } = useChannels();
 
   const [mounted, setMounted] = useState(false);
   const [eventsLoaded, setEventsLoaded] = useState(false);
@@ -372,6 +381,10 @@ export default function PlanningPage() {
   // Actual entries data
   const [actualDataByMonth, setActualDataByMonth] = useState<Record<number, CellData>>({});
   const [actualStatusByMonth, setActualStatusByMonth] = useState<Record<number, string>>({});
+  // Dirty tracking — true khi user edit actual data chưa được lưu
+  const [isDirtyActual, setIsDirtyActual] = useState(false);
+  // Snapshot để hỗ trợ discard changes
+  const lastSavedActualSnapshot = useRef<CellData | null>(null);
 
   // Mode-aware cell data
   const cellData = pageMode === 'plan'
@@ -404,6 +417,7 @@ export default function PlanningPage() {
         const next = typeof action === 'function' ? action(current) : action;
         return { ...prev, [month]: next };
       });
+      setIsDirtyActual(true);
     }
   }, [month, pageMode]);
 
@@ -420,10 +434,9 @@ export default function PlanningPage() {
       const prevMonth = month === 1 ? 12 : month - 1;
       
       if (cellKey.includes('-Tổng Digital-')) {
-        return (
-          (dataByMonth[prevMonth]?.[cellKey.replace('-Tổng Digital-', '-Google-')] || 0) +
-          (dataByMonth[prevMonth]?.[cellKey.replace('-Tổng Digital-', '-Facebook-')] || 0) +
-          (dataByMonth[prevMonth]?.[cellKey.replace('-Tổng Digital-', '-Khác-')] || 0)
+        // Dynamic: dùng tên kênh digital từ ChannelsContext thay vì cứng
+        return digitalChannelNames.reduce((sum, chName) =>
+          sum + (dataByMonth[prevMonth]?.[cellKey.replace('-Tổng Digital-', `-${chName}-`)] || 0), 0
         );
       }
       
@@ -463,9 +476,10 @@ export default function PlanningPage() {
     };
 
     if (cellKey.includes('-Tổng Digital-')) {
-      return computeBase(cellKey.replace('-Tổng Digital-', '-Google-')) +
-             computeBase(cellKey.replace('-Tổng Digital-', '-Facebook-')) +
-             computeBase(cellKey.replace('-Tổng Digital-', '-Khác-'));
+      // Dynamic: dùng tên kênh digital từ ChannelsContext thay vì cứng
+      return digitalChannelNames.reduce((sum, chName) =>
+        sum + computeBase(cellKey.replace('-Tổng Digital-', `-${chName}-`)), 0
+      );
     }
     
     // Dynamic Model Aggregation
@@ -547,37 +561,32 @@ export default function PlanningPage() {
 
   const loadData = useCallback(async () => {
     const [eventsData, budgetPlans, cplData, actualEntries] = await Promise.all([
-      fetchEventsFromDB(),
-      fetchAllBudgetPlans(),
-      computeHistoricalCPL(),
-      fetchAllActualEntries(year),
+      fetchEventsFromDB(activeUnitId),
+      fetchAllBudgetPlans(activeUnitId),
+      computeHistoricalCPL(year, activeUnitId),
+      fetchAllActualEntries(year, activeUnitId),
     ]);
     if (Object.keys(cplData).length > 0) setHistoricalCPL(cplData);
+    else setHistoricalCPL({});
+    
     setEventsByMonth(eventsData);
 
+    // Load budget plans — reset trước để tránh data từ chi nhánh/năm cũ còn lại
+    const newData: Record<number, CellData> = {};
+    const newNotes: Record<number, CellNotes> = {};
+    const newApproval: Record<number, string> = {};
+
     if (budgetPlans && budgetPlans.length > 0) {
-      setDataByMonth(prev => {
-        const next = { ...prev };
-        budgetPlans.forEach(p => {
-          if (Object.keys(p.payload).length > 0) next[p.month] = p.payload;
-        });
-        return next;
-      });
-      setNotesByMonth(prev => {
-        const next = { ...prev };
-        budgetPlans.forEach(p => {
-          if (Object.keys(p.notes).length > 0) next[p.month] = p.notes;
-        });
-        return next;
-      });
-      setApprovalStatuses(prev => {
-        const next = { ...prev };
-        budgetPlans.forEach(p => {
-          next[p.month] = p.approval_status;
-        });
-        return next;
+      budgetPlans.forEach(p => {
+        if (Object.keys(p.payload).length > 0) newData[p.month] = p.payload;
+        if (Object.keys(p.notes).length > 0) newNotes[p.month] = p.notes;
+        newApproval[p.month] = p.approval_status;
       });
     }
+
+    setDataByMonth(newData);
+    setNotesByMonth(newNotes);
+    setApprovalStatuses(newApproval);
 
     // Load actual entries — reset trước để tránh data từ năm cũ còn lại
     const newActualData: Record<number, CellData> = {};
@@ -590,41 +599,72 @@ export default function PlanningPage() {
     }
     setActualDataByMonth(newActualData);
     setActualStatusByMonth(newActualStatus);
-  }, [year]);
+  }, [year, activeUnitId]);
 
   // Auto-save plan data (debounce 1.5s)
   const lastSavedPayload = useRef<string>('');
   React.useEffect(() => {
     if (!mounted || pageMode !== 'plan') return;
+    if (!activeUnitId || activeUnitId === 'all') return; // Không save khi xem tổng hợp
     const currentPayload = dataByMonth[month];
     const currentNotes = notesByMonth[month] || {};
     if (!currentPayload || Object.keys(currentPayload).length === 0) return;
     const payloadStr = JSON.stringify({ currentPayload, currentNotes, approvalStatus });
     if (payloadStr === lastSavedPayload.current) return;
     const timeout = setTimeout(() => {
-      upsertBudgetPlan(month, currentPayload, currentNotes, approvalStatus).then(success => {
+      upsertBudgetPlan(month, currentPayload, currentNotes, approvalStatus, activeUnitId === 'all' ? undefined : activeUnitId).then(success => {
         if (success) lastSavedPayload.current = payloadStr;
       });
     }, 1500);
     return () => clearTimeout(timeout);
-  }, [dataByMonth, notesByMonth, approvalStatus, month, mounted, pageMode]);
+  }, [dataByMonth, notesByMonth, approvalStatus, month, mounted, pageMode, activeUnitId]);
 
-  // Auto-save actual data (debounce 1.5s)
-  const lastSavedActualPayload = useRef<string>('');
+  // Reset dirty flag khi chuyển tháng
   React.useEffect(() => {
-    if (!mounted || pageMode !== 'actual') return;
-    const currentPayload = actualDataByMonth[month];
-    if (!currentPayload || Object.keys(currentPayload).length === 0) return;
-    const payloadStr = JSON.stringify(currentPayload);
-    if (payloadStr === lastSavedActualPayload.current) return;
-    const actualStatus = actualStatusByMonth[month] || 'draft';
-    const timeout = setTimeout(() => {
-      upsertActualEntry(month, year, currentPayload, {}, actualStatus).then(success => {
-        if (success) lastSavedActualPayload.current = payloadStr;
-      });
-    }, 1500);
-    return () => clearTimeout(timeout);
-  }, [actualDataByMonth, actualStatusByMonth, month, year, mounted, pageMode]);
+    setIsDirtyActual(false);
+    // Lưu snapshot khi load actual data xong
+    lastSavedActualSnapshot.current = actualDataByMonth[month] || null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month]);
+
+  // Handlers lưu/nộp actual (không auto-save — user phải bấm)
+  const handleSaveActual = useCallback(async () => {
+    const payload = actualDataByMonth[month] || {};
+    const ok = await upsertActualEntry(month, year, payload, {}, 'draft', activeUnitId === 'all' ? undefined : activeUnitId);
+    if (ok) {
+      setIsDirtyActual(false);
+      lastSavedActualSnapshot.current = { ...payload };
+      setAlertInfo({ type: 'success', title: 'Lưu thành công', message: `Số thực hiện tháng ${month} đã được lưu nháp.` });
+    } else {
+      setAlertInfo({ type: 'warning', title: 'Lỗi lưu dữ liệu', message: 'Không thể lưu vào hệ thống. Kiểm tra kết nối và thử lại.' });
+    }
+  }, [actualDataByMonth, month, year, activeUnitId]);
+
+  const handleSubmitActual = useCallback(async () => {
+    const payload = actualDataByMonth[month] || {};
+    if (Object.keys(payload).length === 0) {
+      setAlertInfo({ type: 'warning', title: 'Chưa có dữ liệu', message: 'Chưa có số liệu thực hiện để nộp.' });
+      return;
+    }
+    const ok = await upsertActualEntry(month, year, payload, {}, 'submitted', activeUnitId === 'all' ? undefined : activeUnitId);
+    if (ok) {
+      setIsDirtyActual(false);
+      lastSavedActualSnapshot.current = { ...payload };
+      setActualStatusByMonth(prev => ({ ...prev, [month]: 'submitted' }));
+      setAlertInfo({ type: 'success', title: 'Nộp thành công', message: `Số thực hiện tháng ${month} đã được nộp và chốt.` });
+    } else {
+      setAlertInfo({ type: 'warning', title: 'Lỗi nộp dữ liệu', message: 'Không thể nộp. Kiểm tra kết nối và thử lại.' });
+    }
+  }, [actualDataByMonth, month, year, activeUnitId]);
+
+  const handleDiscardActual = useCallback(() => {
+    if (lastSavedActualSnapshot.current !== null) {
+      setActualDataByMonth(prev => ({ ...prev, [month]: { ...lastSavedActualSnapshot.current! } }));
+    } else {
+      setActualDataByMonth(prev => { const n = { ...prev }; delete n[month]; return n; });
+    }
+    setIsDirtyActual(false);
+  }, [month]);
 
   // Load on mount and focus
   React.useEffect(() => {
@@ -702,10 +742,9 @@ export default function PlanningPage() {
 
   const getRawCellValue = useCallback((cellKey: string): number => {
     if (cellKey.includes('-Tổng Digital-')) {
-      return (
-        getRawCellValue(cellKey.replace('-Tổng Digital-', '-Google-')) +
-        getRawCellValue(cellKey.replace('-Tổng Digital-', '-Facebook-')) +
-        getRawCellValue(cellKey.replace('-Tổng Digital-', '-Khác-'))
+      // Dynamic: dùng tên kênh digital từ ChannelsContext thay vì cứng
+      return digitalChannelNames.reduce((sum, chName) =>
+        sum + getRawCellValue(cellKey.replace('-Tổng Digital-', `-${chName}-`)), 0
       );
     }
     
@@ -897,7 +936,9 @@ export default function PlanningPage() {
              const FALLBACK_CPL: Record<string, number> = { Facebook: 0.08, Google: 0.12 };
              const cpl = cName === 'Sự kiện' ? EVENT_CPL : (historicalCPL[cName] ?? FALLBACK_CPL[cName] ?? 0.15);
              const cr1 = (cName === 'Sự kiện') ? EVENT_CR1 : 0.15; // Leads to Deal
-             const cr2 = (cName === 'CSKH' ? 0.5 : EVENT_CR2); // Deal to Contract
+             // CR2: CSKH cao hơn (khách cũ), Sự kiện dùng EVENT_CR2, digital fallback 0.25
+             const FALLBACK_CR2: Record<string, number> = { CSKH: 0.5, 'Sự kiện': EVENT_CR2 };
+             const cr2 = FALLBACK_CR2[cName] ?? 0.25; // Deal to Contract
 
              if (metric === 'Ngân sách') {
                 const khqt = Math.round(num / cpl);
@@ -1141,7 +1182,7 @@ export default function PlanningPage() {
   // Removed summary from here to place below grandTotal
 
   // Get channel color — uses channel-specific color first, falls back to category
-  const getChannelColor = (ch: typeof CHANNELS[number]): string => {
+  const getChannelColor = (ch: Channel): string => {
     return ch.color;
   };
 
@@ -1452,7 +1493,7 @@ export default function PlanningPage() {
            channelsToUpdate = CHANNELS.filter(c => c.category === allocationModal.name && c.name !== 'Tổng Digital').map(c => c.name);
         } else {
            channelsToUpdate = allocationModal.name === 'Tổng Digital' 
-            ? ['Facebook', 'Google', 'Khác'] 
+            ? digitalChannelNames 
             : [allocationModal.name];
         }
 
@@ -1528,59 +1569,6 @@ export default function PlanningPage() {
           setViewMode(mode);
           setCompareMode('none');
         }}
-        filters={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', flexShrink: 0 }}>
-            {/* ── Mode Switcher KẾ HOẠCH / THỰC HIỆN ── */}
-            <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', flexShrink: 0, boxShadow: '0 1px 2px rgba(0,0,0,0.06)' }}>
-              <button
-                onClick={() => setPageMode('plan')}
-                style={{
-                  padding: '3px 14px', height: 28, fontSize: 11, fontWeight: pageMode === 'plan' ? 700 : 500,
-                  background: pageMode === 'plan' ? 'var(--color-primary)' : '#fff',
-                  color: pageMode === 'plan' ? '#fff' : 'var(--color-text-secondary)',
-                  borderTop: `1px solid ${pageMode === 'plan' ? 'var(--color-primary)' : 'var(--color-border-dark)'}`,
-                  borderBottom: `1px solid ${pageMode === 'plan' ? 'var(--color-primary)' : 'var(--color-border-dark)'}`,
-                  borderLeft: `1px solid ${pageMode === 'plan' ? 'var(--color-primary)' : 'var(--color-border-dark)'}`,
-                  borderRight: 'none',
-                  borderRadius: '6px 0 0 6px',
-                  cursor: 'pointer', transition: 'all 0.15s', letterSpacing: '0.03em',
-                }}
-              >
-                KẾ HOẠCH
-              </button>
-              <button
-                onClick={() => setPageMode('actual')}
-                style={{
-                  padding: '3px 14px', height: 28, fontSize: 11, fontWeight: pageMode === 'actual' ? 700 : 500,
-                  background: pageMode === 'actual' ? '#f59e0b' : '#fff',
-                  color: pageMode === 'actual' ? '#fff' : 'var(--color-text-secondary)',
-                  borderTop: `1px solid ${pageMode === 'actual' ? '#f59e0b' : 'var(--color-border-dark)'}`,
-                  borderBottom: `1px solid ${pageMode === 'actual' ? '#f59e0b' : 'var(--color-border-dark)'}`,
-                  borderRight: `1px solid ${pageMode === 'actual' ? '#f59e0b' : 'var(--color-border-dark)'}`,
-                  borderLeft: `1px solid ${pageMode === 'actual' ? '#f59e0b' : 'var(--color-border-dark)'}`,
-                  borderRadius: '0 6px 6px 0',
-                  cursor: 'pointer', transition: 'all 0.15s', letterSpacing: '0.03em',
-                }}
-              >
-                THỰC HIỆN
-              </button>
-            </div>
-
-            {/* Status badge actual mode */}
-            {pageMode === 'actual' && (
-              <span style={{
-                fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
-                background: (actualStatusByMonth[month] || 'draft') === 'submitted' ? '#ecfdf5' : '#fffbeb',
-                color: (actualStatusByMonth[month] || 'draft') === 'submitted' ? '#059669' : '#d97706',
-                border: '1px solid',
-                borderColor: (actualStatusByMonth[month] || 'draft') === 'submitted' ? '#bbf7d0' : '#fde68a',
-                letterSpacing: '0.04em',
-              }}>
-                {(actualStatusByMonth[month] || 'draft') === 'submitted' ? 'ĐÃ NỘP' : 'NHÁP'}
-              </span>
-            )}
-          </div>
-        }
         actions={
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <button className="button-erp-secondary" style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4 }} title="Import Excel">
@@ -1590,61 +1578,65 @@ export default function PlanningPage() {
               <DownloadCloud size={14} /> <span style={{ fontSize: 12 }}>Export</span>
             </button>
             <div style={{ width: 1, height: 16, background: 'var(--color-border)', margin: '0 4px' }}></div>
-            <button
-              className="button-erp-secondary"
-              style={{ color: 'var(--color-brand)', fontWeight: 600, padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4 }}
-              onClick={() => setConfirmInfo({ type: 'save', title: 'Xác nhận Lưu nháp', message: 'Bạn có muốn lưu lại bản nháp hiện tại của kế hoạch ngân sách?' })}
-            >
-              <Save size={13} />
-              <span style={{ fontSize: 12 }}>Lưu nháp</span>
-            </button>
             {pageMode === 'plan' ? (
-              <button
-                className="button-erp-primary"
-                style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4, background: approvalStatus !== 'draft' ? 'var(--color-text-muted)' : undefined, borderColor: approvalStatus !== 'draft' ? 'var(--color-text-muted)' : undefined }}
-                onClick={() => {
-                  if (approvalStatus !== 'draft') {
-                      setAlertInfo({ type: 'info', title: 'Thông báo', message: `Kế hoạch đang ở trạng thái: ${approvalStatus === 'pending' ? 'Chờ duyệt' : 'Đã duyệt'}` });
-                  } else if (budgetCap > 0 && summary.budget > budgetCap) {
-                      setAlertInfo({ type: 'warning', title: 'Vượt giới hạn ngân sách', message: `Tổng ngân sách kế hoạch (${formatNumber(summary.budget)} tr) đã vượt giới hạn cho phép (${formatNumber(budgetCap)} tr). Vui lòng điều chỉnh trước khi gửi duyệt.` });
-                  } else {
-                      setConfirmInfo({ type: 'submit', title: 'Xác nhận Gửi duyệt', message: 'Sau khi gửi duyệt, bạn sẽ không thể chỉnh sửa kế hoạch này cho đến khi có phản hồi từ Quản lý. Bạn có chắc chắn?' });
-                  }
-                }}
-              >
-                <Send size={13} />
-                <span style={{ fontSize: 12 }}>{approvalStatus === 'draft' ? 'Gửi duyệt' : (approvalStatus === 'pending' ? 'Đã gửi duyệt' : 'Hoàn tất')}</span>
-              </button>
-            ) : (
-              <button
-                className="button-erp-primary"
-                style={{
-                  padding: '2px 12px', height: 26, display: 'flex', alignItems: 'center', gap: 4,
-                  background: (actualStatusByMonth[month] || 'draft') === 'submitted' ? '#059669' : '#f59e0b',
-                  borderColor: (actualStatusByMonth[month] || 'draft') === 'submitted' ? '#059669' : '#f59e0b',
-                }}
-                onClick={() => {
-                  const curStatus = actualStatusByMonth[month] || 'draft';
-                  if (curStatus === 'submitted') return;
-                  const payload = actualDataByMonth[month] || {};
-                  if (Object.keys(payload).length === 0) {
-                    setAlertInfo({ type: 'warning', title: 'Chưa có dữ liệu', message: 'Chưa có số liệu thực hiện để nộp.' });
-                    return;
-                  }
-                  upsertActualEntry(month, year, payload, {}, 'submitted').then(ok => {
-                    if (ok) {
-                      setActualStatusByMonth(prev => ({ ...prev, [month]: 'submitted' }));
-                      setAlertInfo({ type: 'success', title: 'Thành công', message: `Đã nộp số thực hiện tháng ${month}.` });
+              <>
+                <button
+                  className="button-erp-secondary"
+                  style={{ color: 'var(--color-brand)', fontWeight: 600, padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4 }}
+                  onClick={() => setConfirmInfo({ type: 'save', title: 'Xác nhận Lưu nháp', message: 'Bạn có muốn lưu lại bản nháp hiện tại của kế hoạch ngân sách?' })}
+                >
+                  <Save size={13} />
+                  <span style={{ fontSize: 12 }}>Lưu nháp</span>
+                </button>
+                <button
+                  className="button-erp-primary"
+                  style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4, background: approvalStatus !== 'draft' ? 'var(--color-text-muted)' : undefined, borderColor: approvalStatus !== 'draft' ? 'var(--color-text-muted)' : undefined }}
+                  onClick={() => {
+                    if (approvalStatus !== 'draft') {
+                        setAlertInfo({ type: 'info', title: 'Thông báo', message: `Kế hoạch đang ở trạng thái: ${approvalStatus === 'pending' ? 'Chờ duyệt' : 'Đã duyệt'}` });
+                    } else if (budgetCap > 0 && summary.budget > budgetCap) {
+                        setAlertInfo({ type: 'warning', title: 'Vượt giới hạn ngân sách', message: `Tổng ngân sách kế hoạch (${formatNumber(summary.budget)} tr) đã vượt giới hạn cho phép (${formatNumber(budgetCap)} tr). Vui lòng điều chỉnh trước khi gửi duyệt.` });
+                    } else {
+                        setConfirmInfo({ type: 'submit', title: 'Xác nhận Gửi duyệt', message: 'Sau khi gửi duyệt, bạn sẽ không thể chỉnh sửa kế hoạch này cho đến khi có phản hồi từ Quản lý. Bạn có chắc chắn?' });
                     }
-                  });
-                }}
-                title="Nộp số thực hiện"
-              >
-                <Send size={13} />
-                <span style={{ fontSize: 12 }}>
-                  {(actualStatusByMonth[month] || 'draft') === 'submitted' ? '✓ Đã nộp' : 'Nộp TH'}
-                </span>
-              </button>
+                  }}
+                >
+                  <Send size={13} />
+                  <span style={{ fontSize: 12 }}>{approvalStatus === 'draft' ? 'Gửi duyệt' : (approvalStatus === 'pending' ? 'Đã gửi duyệt' : 'Hoàn tất')}</span>
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Actual mode: Lưu TH + Nộp TH */}
+                {(actualStatusByMonth[month] || 'draft') !== 'submitted' && (
+                  <button
+                    className="button-erp-secondary"
+                    style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4, opacity: isDirtyActual ? 1 : 0.6 }}
+                    onClick={handleSaveActual}
+                    title="Lưu nháp thực hiện"
+                  >
+                    <Save size={13} />
+                    <span style={{ fontSize: 12 }}>Lưu TH</span>
+                  </button>
+                )}
+                <button
+                  className="button-erp-primary"
+                  style={{
+                    padding: '2px 12px', height: 26, display: 'flex', alignItems: 'center', gap: 4,
+                    background: (actualStatusByMonth[month] || 'draft') === 'submitted' ? '#6b7280' : '#059669',
+                    borderColor: (actualStatusByMonth[month] || 'draft') === 'submitted' ? '#6b7280' : '#059669',
+                    cursor: (actualStatusByMonth[month] || 'draft') === 'submitted' ? 'default' : 'pointer',
+                  }}
+                  onClick={() => {
+                    if ((actualStatusByMonth[month] || 'draft') === 'submitted') return;
+                    setConfirmInfo({ type: 'submit-actual' as never, title: 'Xác nhận Nộp số thực hiện', message: `Sau khi nộp, số thực hiện tháng ${month}/${year} sẽ được chốt và không thể chỉnh sửa. Bạn có chắc chắn?` });
+                  }}
+                  title={(actualStatusByMonth[month] || 'draft') === 'submitted' ? 'Đã nộp số thực hiện' : 'Nộp xác nhận số thực hiện'}
+                >
+                  <CloudUpload size={13} />
+                  <span style={{ fontSize: 12 }}>{(actualStatusByMonth[month] || 'draft') === 'submitted' ? 'Đã chốt' : 'Nộp TH'}</span>
+                </button>
+              </>
             )}
           </div>
         }
@@ -1658,7 +1650,7 @@ export default function PlanningPage() {
         }} />
       )}
 
-      {/* ROW 3: Entity Selection — Đơn vị | Thương hiệu | Dòng xe | So sánh */}
+      {/* ROW 3: Mode Switcher | Entity Selection — Đơn vị | Thương hiệu | Dòng xe | So sánh */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 0,
         padding: '0 12px', height: 34, minHeight: 34,
@@ -1666,6 +1658,49 @@ export default function PlanningPage() {
         background: pageMode === 'actual' ? '#fffbeb' : 'var(--color-surface)',
         flexShrink: 0, flexWrap: 'nowrap',
       }}>
+        {/* ── Mode Switcher KẾ HOẠCH / THỰC HIỆN ── */}
+        <div style={{ display: 'flex', borderRadius: 5, overflow: 'hidden', flexShrink: 0, boxShadow: '0 1px 2px rgba(0,0,0,0.06)', marginRight: 8 }}>
+          <button
+            onClick={() => setPageMode('plan')}
+            style={{
+              padding: '0 12px', height: 24, fontSize: 11, fontWeight: pageMode === 'plan' ? 700 : 500,
+              background: pageMode === 'plan' ? 'var(--color-primary)' : '#fff',
+              color: pageMode === 'plan' ? '#fff' : 'var(--color-text-secondary)',
+              borderTop: `1px solid ${pageMode === 'plan' ? 'var(--color-primary)' : 'var(--color-border-dark)'}`,
+              borderBottom: `1px solid ${pageMode === 'plan' ? 'var(--color-primary)' : 'var(--color-border-dark)'}`,
+              borderLeft: `1px solid ${pageMode === 'plan' ? 'var(--color-primary)' : 'var(--color-border-dark)'}`,
+              borderRight: 'none', borderRadius: '5px 0 0 5px',
+              cursor: 'pointer', transition: 'all 0.15s', letterSpacing: '0.02em',
+            }}
+          >KẾ HOẠCH</button>
+          <button
+            onClick={() => setPageMode('actual')}
+            style={{
+              padding: '0 12px', height: 24, fontSize: 11, fontWeight: pageMode === 'actual' ? 700 : 500,
+              background: pageMode === 'actual' ? '#f59e0b' : '#fff',
+              color: pageMode === 'actual' ? '#fff' : 'var(--color-text-secondary)',
+              borderTop: `1px solid ${pageMode === 'actual' ? '#f59e0b' : 'var(--color-border-dark)'}`,
+              borderBottom: `1px solid ${pageMode === 'actual' ? '#f59e0b' : 'var(--color-border-dark)'}`,
+              borderLeft: `1px solid ${pageMode === 'actual' ? '#f59e0b' : 'var(--color-border-dark)'}`,
+              borderRight: `1px solid ${pageMode === 'actual' ? '#f59e0b' : 'var(--color-border-dark)'}`,
+              borderRadius: '0 5px 5px 0',
+              cursor: 'pointer', transition: 'all 0.15s', letterSpacing: '0.02em',
+            }}
+          >THỰC HIỆN</button>
+        </div>
+
+        {/* Status badge actual mode */}
+        {pageMode === 'actual' && (
+          <Badge
+            variant={(actualStatusByMonth[month] || 'draft') === 'submitted' ? 'success-light' : isDirtyActual ? 'warning-light' : 'secondary'}
+            size="sm"
+            style={{ letterSpacing: '0.04em', fontWeight: 700, marginRight: 8 }}
+          >
+            {(actualStatusByMonth[month] || 'draft') === 'submitted' ? '✓ Đã chốt' : isDirtyActual ? '● Chưa lưu' : '○ Nháp'}
+          </Badge>
+        )}
+
+        <div className="toolbar-sep" style={{ height: 14, margin: '0 8px' }} />
         {/* Nhóm 1: Đơn vị */}
         <FilterDropdown
           label="Đơn vị"
@@ -1720,7 +1755,7 @@ export default function PlanningPage() {
       </div>
 
       {/* ROW 4: Kênh | Metric toggles | Ẩn dòng trống */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface)', flexShrink: 0, flexWrap: 'nowrap', overflowX: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderBottom: '1px solid var(--color-border)', background: pageMode === 'actual' ? '#fffbeb' : 'var(--color-surface)', flexShrink: 0, flexWrap: 'nowrap', overflowX: 'auto' }}>
           {/* Kênh chips */}
           <span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>Kênh:</span>
           <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap' }}>
@@ -3030,6 +3065,10 @@ export default function PlanningPage() {
           from { opacity: 0; transform: translateY(-10px) scale(0.98); }
           to { opacity: 1; transform: translateY(0) scale(1); }
         }
+        @keyframes pulse {
+          0%, 100% { box-shadow: 0 0 0 3px rgba(245,158,11,0.25); }
+          50% { box-shadow: 0 0 0 6px rgba(245,158,11,0.08); }
+        }
         @keyframes scaleInId {
           from { opacity: 0; transform: scale(0.95); }
           to { opacity: 1; transform: scale(1); }
@@ -3077,12 +3116,14 @@ export default function PlanningPage() {
                           pendingDeleteFn();
                           setPendingDeleteFn(null);
                       } else if (confirmInfo.type === 'save') {
-                          upsertBudgetPlan(month, dataByMonth[month], notesByMonth[month] || {}, approvalStatus);
+                          upsertBudgetPlan(month, dataByMonth[month], notesByMonth[month] || {}, approvalStatus, activeUnitId === 'all' ? undefined : activeUnitId);
                           setAlertInfo({ type: 'success', title: 'Lưu bản nháp thành công', message: 'Dữ liệu của bạn đã được ghi nhận an toàn vào hệ thống DB.' });
                       } else if (confirmInfo.type === 'submit') {
-                          upsertBudgetPlan(month, dataByMonth[month], notesByMonth[month] || {}, 'pending');
+                          upsertBudgetPlan(month, dataByMonth[month], notesByMonth[month] || {}, 'pending', activeUnitId === 'all' ? undefined : activeUnitId);
                           setApprovalStatus('pending');
                           setAlertInfo({ type: 'success', title: 'Gửi duyệt thành công', message: 'Kế hoạch đã được bảo vệ và chuyển tới Cấp quản lý.' });
+                      } else if ((confirmInfo.type as string) === 'submit-actual') {
+                          handleSubmitActual();
                       }
                       setConfirmInfo(null);
                    }}
@@ -3113,6 +3154,71 @@ export default function PlanningPage() {
             setEventModal({ open: false, data: null, isNew: false });
           }}
         />
+      )}
+
+      {/* ── FLOATING SAVE BAR — hiện khi actual mode + draft + có thay đổi ── */}
+      {pageMode === 'actual' && isActualSplitMode && isDirtyActual && (
+        <div style={{
+          position: 'sticky', bottom: 0, left: 0, right: 0, zIndex: 200,
+          background: 'linear-gradient(90deg, #fffbeb 0%, #fef3c7 60%, #fffbeb 100%)',
+          borderTop: '2px solid #f59e0b',
+          boxShadow: '0 -4px 16px rgba(245,158,11,0.2)',
+          padding: '8px 16px',
+          display: 'flex', alignItems: 'center', gap: 10,
+          flexShrink: 0,
+          animation: 'slideInId 0.2s ease-out',
+        }}>
+          {/* Left: indicator */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+            <div style={{
+              width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+              background: '#f59e0b',
+              animation: 'pulse 2s infinite',
+            }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#92400e', whiteSpace: 'nowrap' }}>
+              T{month}/{year} — chưa lưu
+            </span>
+            <Badge variant="warning-light" size="xs">● Chưa lưu</Badge>
+          </div>
+
+          {/* Right: action buttons */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+            <button
+              onClick={handleDiscardActual}
+              style={{
+                height: 28, padding: '0 12px', borderRadius: 5,
+                border: '1px solid #fcd34d', background: '#fff',
+                color: '#92400e', fontSize: 12, fontWeight: 500,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+              }}
+            >
+              <X size={12} /> Huỷ
+            </button>
+            <button
+              onClick={handleSaveActual}
+              style={{
+                height: 28, padding: '0 14px', borderRadius: 5,
+                border: '1px solid #f59e0b', background: '#fff7ed',
+                color: '#b45309', fontSize: 12, fontWeight: 600,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+              }}
+            >
+              <Save size={12} /> Lưu TH
+            </button>
+            <button
+              onClick={() => setConfirmInfo({ type: 'submit-actual' as never, title: 'Xác nhận Nộp số thực hiện', message: `Sau khi nộp, số thực hiện tháng ${month}/${year} sẽ được chốt và không thể chỉnh sửa. Bạn có chắc chắn?` })}
+              style={{
+                height: 28, padding: '0 16px', borderRadius: 5,
+                border: 'none', background: '#059669',
+                color: '#fff', fontSize: 12, fontWeight: 700,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+                boxShadow: '0 2px 6px rgba(5,150,105,0.35)',
+              }}
+            >
+              <CloudUpload size={13} /> Nộp TH
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Alert Component */}

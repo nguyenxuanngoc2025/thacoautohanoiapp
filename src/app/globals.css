@@ -1,85 +1,127 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================
+   THACO MKT BUDGET — DESIGN TOKENS
+   ============================================================ */
 :root {
-  /* ===== 1. COLOR SYSTEM (MÀU SẮC) ===== */
-  /* Primary (Màu chủ đạo) */
-  --color-primary: #004b9b; /* Thaco Auto Navy Blue */
+  /* ── Primary ─────────────────────────────────────────────── */
+  --color-primary:       #004b9b;   /* Thaco Auto Navy Blue */
   --color-primary-hover: #003b7a;
-  --color-primary-active: #002d5c;
-  --color-primary-light: #e6f0fa; /* Background nhẹ cho state active */
+  --color-primary-active:#002d5c;
+  --color-primary-light: #e6f0fa;
 
-  /* Secondary (Màu phụ họa - nếu có) */
-  --color-secondary: #0f172a;
+  /* ── Secondary ───────────────────────────────────────────── */
+  --color-secondary:       #0f172a;
   --color-secondary-hover: #1e293b;
 
-  /* Background & Surfaces (Nền) */
-  --color-bg: #f8fafc; /* Nền tổng của web */
-  --color-surface: #ffffff; /* Nền của Card, Panel, Modal */
+  /* ── Background & Surfaces ───────────────────────────────── */
+  --color-bg:      #f1f5f9;
+  --color-surface: #f1f5f9;
   --color-sidebar: var(--color-primary);
-  --color-topbar: #ffffff;
+  --color-topbar:  #f1f5f9;
 
-  /* Text Colors (Chữ) */
-  --color-text-primary: #0f172a;    /* Tiêu đề chính, đậm */
-  --color-text-secondary: #475569;  /* Chữ mờ hơn, đoạn văn */
-  --color-text-muted: #94a3b8;      /* Chữ rất mờ, placeholder, nhãn phụ */
-  
-  /* Sidebar Text */
-  --color-sidebar-text: #e2e8f0;
+  /* ── Text ────────────────────────────────────────────────── */
+  --color-text-primary:   #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted:     #94a3b8;
+
+  /* ── Sidebar text ────────────────────────────────────────── */
+  --color-sidebar-text:  #e2e8f0;
   --color-sidebar-hover: rgba(255, 255, 255, 0.1);
 
-  /* Border Colors (Đường viền) */
+  /* ── Borders ─────────────────────────────────────────────── */
   --color-border-light: #f1f5f9;
-  --color-border: #e2e8f0;
-  --color-border-dark: #cbd5e1;
+  --color-border:       #e2e8f0;
+  --color-border-dark:  #cbd5e1;
 
-  /* Status Colors (Trạng thái) */
-  --color-success: #10b981;
+  /* ── Status ──────────────────────────────────────────────── */
+  --color-success:    #10b981;
   --color-success-bg: #d1fae5;
-  --color-warning: #f59e0b;
+  --color-warning:    #f59e0b;
   --color-warning-bg: #fef3c7;
-  --color-danger: #ef4444;
-  --color-danger-bg: #fee2e2;
-  --color-info: #3b82f6;
+  --color-danger:     #ef4444;
+  --color-danger-bg:  #fee2e2;
+  --color-info:       #3b82f6;
 
-  /* Backward compatibility for previous classes */
-  --color-brand: var(--color-primary);
+  /* ── Aliases (backward compat) ───────────────────────────── */
+  --color-brand:       var(--color-primary);
   --color-brand-hover: var(--color-primary-hover);
-  --color-text: var(--color-text-primary);
+  --color-text:        var(--color-text-primary);
 
-  /* ===== 2. TYPOGRAPHY (FONT CHỮ) ===== */
-  /* Cấp độ tiêu đề (Headings) */
-  --fs-h1: 20px;
-  --fs-h2: 18px;
-  --fs-h3: 16px;
-  --fs-h4: 14px;
-  
-  /* Cấp độ nội dung (Body) */
-  --fs-body: 13px;       /* P chuẩn */
-  --fs-table: 12px;      /* Data grid, List */
-  --fs-label: 11px;      /* Chú thích, badge */
-  --fs-tiny: 10px;       /* Chữ siêu nhỏ */
+  /* ── Typography ──────────────────────────────────────────── */
+  --fs-h1:    20px;
+  --fs-h2:    18px;
+  --fs-h3:    16px;
+  --fs-h4:    14px;
+  --fs-body:  13px;
+  --fs-table: 12px;
+  --fs-label: 11px;
+  --fs-tiny:  10px;
 
-  /* ===== 3. SPACING & DIMENSIONS (KÍCH THƯỚC) ===== */
-  --sidebar-width: 250px;
-  --topbar-height: 48px;
-  --border-radius-sm: 2px;
-  --border-radius-erp: 4px; /* Chuẩn mới bo góc nhẹ cho component */
-  --border-radius-md: 6px;
-  --border-radius-lg: 8px;
+  /* ── Dimensions ──────────────────────────────────────────── */
+  --sidebar-width:     250px;
+  --topbar-height:     48px;
+  --border-radius-sm:  2px;
+  --border-radius-erp: 4px;
+  --border-radius-md:  6px;
+  --border-radius-lg:  8px;
 
-  /* ===== 4. SHADOWS (ĐỔ BÓNG) ===== */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  /* ── Shadows ─────────────────────────────────────────────── */
+  --shadow-sm:       0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md:       0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg:       0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   --shadow-dropdown: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+  /* ── Shadcn/UI required vars ─────────────────────────────── */
+  --background:         oklch(1 0 0);
+  --foreground:         oklch(0.145 0 0);
+  --card:               oklch(1 0 0);
+  --card-foreground:    oklch(0.145 0 0);
+  --popover:            oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary:            oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary:          oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted:              oklch(0.97 0 0);
+  --muted-foreground:   oklch(0.556 0 0);
+  --accent:             oklch(0.97 0 0);
+  --accent-foreground:  oklch(0.205 0 0);
+  --destructive:        oklch(0.577 0.245 27.325);
+  --border:             oklch(0.922 0 0);
+  --input:              oklch(0.922 0 0);
+  --ring:               oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius:  0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground:         oklch(0.145 0 0);
+  --sidebar-primary:            oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent:             oklch(0.97 0 0);
+  --sidebar-accent-foreground:  oklch(0.205 0 0);
+  --sidebar-border:             oklch(0.922 0 0);
+  --sidebar-ring:               oklch(0.708 0 0);
+  --destructive-foreground: var(--color-red-800);
+  --success:             var(--color-emerald-500);
+  --success-foreground:  var(--color-emerald-900);
+  --info:                var(--color-violet-500);
+  --info-foreground:     var(--color-violet-900);
+  --warning:             var(--color-yellow-500);
+  --warning-foreground:  var(--color-yellow-900);
+  --invert:              var(--color-zinc-900);
+  --invert-foreground:   var(--color-zinc-50);
 }
 
-/* ===== RESET ===== */
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+/* ── Reset ─────────────────────────────────────────────────── */
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   background: var(--color-bg);
@@ -90,13 +132,76 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ===== ERP FLAT PANEL ===== */
+/* ── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #c1c8d0; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ============================================================
+   PANEL — Container cơ bản của mọi trang
+   ============================================================ */
 .panel {
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02), 0 1px 2px -1px rgba(0, 0, 0, 0.01);
+  border-radius: var(--border-radius-md);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
-/* ===== TOOLBAR ===== */
+.panel:hover {
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.02);
+  border-color: rgba(226, 232, 240, 0.9);
+}
+
+/* ── Panel Header (Tiêu đề bên trong .panel) ─────────────────
+   Chuẩn: nền #e2e8f0, bo góc trên 6px, có border dưới
+   Kết hợp: .panel-header-title + .panel-header-accent
+   ──────────────────────────────────────────────────────────── */
+.panel-header {
+  padding: 12px 16px;
+  background: #e2e8f0;
+  border-radius: 6px 6px 0 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.panel-header-title {
+  font-weight: 600;
+  font-size: var(--fs-body);
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Thanh dọc màu primary trái tiêu đề */
+.panel-header-accent {
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  background: var(--color-primary);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.panel-body {
+  padding: 12px 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.panel-body-padded {
+  padding: 0 16px 16px 16px;
+  overflow-x: auto;
+}
+
+/* ============================================================
+   TOOLBAR
+   ============================================================ */
 .toolbar {
   padding: 4px 8px;
   display: flex;
@@ -107,13 +212,45 @@ body {
   min-height: 32px;
 }
 
-/* ===== SCROLLBAR ===== */
-::-webkit-scrollbar { width: 7px; height: 7px; }
-::-webkit-scrollbar-track { background: #f1f5f9; }
-::-webkit-scrollbar-thumb { background: #c1c8d0; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+.toolbar-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--color-border-dark);
+  flex-shrink: 0;
+  margin: 0 4px;
+}
 
-/* ===== DATA TABLE ===== */
+/* ============================================================
+   STATUS BAR (thanh trạng thái cuối trang)
+   ============================================================ */
+.status-bar {
+  height: 22px;
+  background: #e2e8f0;
+  border-top: 1px solid var(--color-border-dark);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: var(--fs-label);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.status-bar-item {
+  padding: 0 10px;
+  border-left: 1px solid var(--color-border-dark);
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.status-bar-item:first-child {
+  border-left: none;
+  flex: 1;
+}
+
+/* ============================================================
+   DATA TABLE — Bảng dữ liệu chuẩn ERP
+   ============================================================ */
 .table-scroll-container {
   width: 100%;
   overflow-x: auto;
@@ -145,9 +282,7 @@ body {
   border-top: 1px solid var(--color-border);
 }
 
-.data-table th:first-child {
-  border-left: 1px solid var(--color-border);
-}
+.data-table th:first-child { border-left: 1px solid var(--color-border); }
 
 .data-table td {
   padding: 4px 8px;
@@ -159,64 +294,92 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.data-table td:first-child {
-  border-left: 1px solid var(--color-border-light);
-}
+.data-table td:first-child { border-left: 1px solid var(--color-border-light); }
 
 /* Zebra striping */
-.data-table tbody tr:nth-child(even) td {
-  background-color: #fafbfc;
-}
+.data-table tbody tr:nth-child(even) td { background-color: #fafbfc; }
+.data-table tr:hover td { background: #f0f7ff !important; }
 
-.data-table tr:hover td {
-  background: #f1f5f9 !important;
-}
-
+/* Subtotal row */
 .data-table tr.subtotal td {
-  background: #f8fafc;
+  background: #f0f4f8 !important;
   font-weight: 600;
+  border-top: 1px solid #cbd5e1;
+  border-bottom: 1px solid #cbd5e1;
+  font-size: var(--fs-table);
 }
 
-.data-table tr.grand-total td {
+.data-table tr.subtotal:hover td { background: #e8eef4 !important; }
+
+/* Grand-total / tfoot row */
+.data-table tr.grand-total td,
+.data-table tfoot td {
   background: #f0f9ff;
   font-weight: 700;
   border-top: 2px solid var(--color-brand);
   color: var(--color-brand);
 }
 
-/* ===== ERP BUTTONS ===== */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  height: 28px;
+/* Scroll shadow for frozen columns */
+.table-scroll-container.scrolled .data-table td:nth-child(2),
+.table-scroll-container.scrolled .data-table th:nth-child(2) {
+  box-shadow: 4px 0 8px -2px rgba(0, 0, 0, 0.08);
+  clip-path: inset(0 -8px 0 0);
+}
+
+/* DataGrid (REUI) footer row chuẩn — dòng TỔNG CỘNG */
+.datagrid-footer-row { background: #e2e8f0; color: var(--color-primary); }
+
+.datagrid-footer-row td {
+  border-top: 2px solid var(--color-primary) !important;
+  padding: 10px 8px;
+  font-weight: 700;
   font-size: var(--fs-table);
-  cursor: pointer;
-  border: 1px solid var(--color-border-dark);
-  background: #fff;
-  color: var(--color-text);
-  border-radius: var(--border-radius-erp);
-  transition: all 0.1s;
-  white-space: nowrap;
+  color: var(--color-primary);
 }
 
-.btn:hover {
-  background: #f3f4f6;
-  border-color: #94a3b8;
+/* ============================================================
+   CELL — Inline-edit cell trong Budget Planning table
+   ============================================================ */
+.cell-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  padding: 0 6px;
+  min-height: 28px;
+  cursor: text;
+  text-align: right;
+  font-size: var(--fs-table);
+  transition: background 0.08s ease;
 }
 
-.btn-primary {
-  background: var(--color-brand);
-  color: white;
-  border-color: var(--color-brand);
+.cell-idle:hover { background: #f1f8ff; }
+
+.cell-editing {
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1.5px #0185ba;
+  z-index: 50;
 }
 
-.btn-primary:hover {
-  background: var(--color-brand-hover);
+.cell-input {
+  width: 100%;
+  text-align: right;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: var(--fs-table);
+  font-variant-numeric: tabular-nums;
 }
 
-/* ERP Button Variants — used in toolbar */
+/* Remove number spinners */
+.cell-input::-webkit-outer-spin-button,
+.cell-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.cell-input[type='number'] { -moz-appearance: textfield; }
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
 .button-erp-secondary {
   display: inline-flex;
   align-items: center;
@@ -257,14 +420,32 @@ body {
   white-space: nowrap;
 }
 
-.button-erp-primary:hover {
-  background: var(--color-brand-hover);
+.button-erp-primary:hover { background: var(--color-brand-hover); }
+
+/* Export Excel button (xanh lá, trong panel header) */
+.btn-export {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--color-success);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: opacity 0.15s;
+  white-space: nowrap;
 }
 
-/* ===== PERIOD TABS ===== */
+.btn-export:hover { opacity: 0.85; }
+
+/* ============================================================
+   PERIOD TABS — bộ chọn Tháng/Quý/Năm
+   ============================================================ */
 .period-tabs {
   display: flex;
-  gap: 0;
   border: 1px solid var(--color-border-dark);
   border-radius: var(--border-radius-erp);
   overflow: hidden;
@@ -282,21 +463,13 @@ body {
   white-space: nowrap;
 }
 
-.period-tab:last-child {
-  border-right: none;
-}
+.period-tab:last-child { border-right: none; }
+.period-tab.active { background: var(--color-brand); color: #ffffff; font-weight: 600; }
+.period-tab:not(.active):hover { background: #f1f5f9; }
 
-.period-tab.active {
-  background: var(--color-brand);
-  color: #ffffff;
-  font-weight: 600;
-}
-
-.period-tab:not(.active):hover {
-  background: #f1f5f9;
-}
-
-/* ===== FORM SELECT & INPUT ===== */
+/* ============================================================
+   FORM CONTROLS
+   ============================================================ */
 .form-select,
 .form-input {
   padding: 3px 8px;
@@ -310,13 +483,8 @@ body {
   font-family: inherit;
 }
 
-.form-select {
-  cursor: pointer;
-}
-
-.form-input::placeholder {
-  color: var(--color-text-muted);
-}
+.form-select { cursor: pointer; }
+.form-input::placeholder { color: var(--color-text-muted); }
 
 .form-select:focus,
 .form-input:focus {
@@ -324,107 +492,14 @@ body {
   box-shadow: 0 0 0 1px var(--color-brand);
 }
 
-/* Remove number input spinners for standardized inputs */
+/* Remove number spinners */
 .form-input[type="number"]::-webkit-outer-spin-button,
-.form-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.form-input[type="number"] {
-  -moz-appearance: textfield;
-}
+.form-input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.form-input[type="number"] { -moz-appearance: textfield; }
 
-/* ===== PROGRESS BAR ===== */
-.progress-bar {
-  height: 12px;
-  background: #e2e8f0;
-  position: relative;
-  overflow: hidden;
-}
-
-.progress-bar-fill {
-  height: 100%;
-}
-
-/* ===== BADGE ===== */
-.badge {
-  padding: 0px 4px;
-  font-size: var(--fs-label);
-  font-weight: 500;
-  border: 1px solid transparent;
-  border-radius: var(--border-radius-erp);
-}
-
-.badge-success { color: #166534; border-color: #bbf7d0; background: #f0fdf4; }
-.badge-warning { color: #854d0e; border-color: #fef08a; background: #fefce8; }
-.badge-danger  { color: #991b1b; border-color: #fecaca; background: #fef2f2; }
-
-/* ===== ERP TAB SYSTEM ===== */
-.erp-tabs {
-  display: flex;
-  background: #eceef1;
-  padding: 0 4px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.erp-tab {
-  padding: 5px 12px;
-  font-size: var(--fs-table);
-  color: var(--color-text-secondary);
-  border: 1px solid transparent;
-  border-bottom: none;
-  cursor: pointer;
-  background: transparent;
-}
-
-.erp-tab.active {
-  background: #fff;
-  border-color: var(--color-border);
-  color: var(--color-brand);
-  font-weight: 600;
-  margin-bottom: -1px;
-}
-
-.erp-tab:not(.active):hover {
-  color: var(--color-brand);
-}
-
-/* ===== STATUS BAR ===== */
-.status-bar {
-  height: 22px;
-  background: #e2e8f0;
-  border-top: 1px solid var(--color-border-dark);
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  font-size: var(--fs-label);
-  color: var(--color-text-secondary);
-  gap: 0;
-  flex-shrink: 0;
-}
-
-.status-bar-item {
-  padding: 0 10px;
-  border-left: 1px solid var(--color-border-dark);
-  height: 100%;
-  display: flex;
-  align-items: center;
-}
-
-.status-bar-item:first-child {
-  border-left: none;
-  flex: 1;
-}
-
-.toolbar-sep {
-  width: 1px;
-  height: 14px;
-  background: var(--color-border-dark);
-  flex-shrink: 0;
-  margin: 0 4px;
-}
-
-/* ===== QUICK SUMMARY STRIP ===== */
+/* ============================================================
+   SUMMARY STRIP — Thanh tóm tắt nhỏ (planning page)
+   ============================================================ */
 .summary-strip {
   display: flex;
   flex-wrap: nowrap;
@@ -481,82 +556,690 @@ body {
   flex-shrink: 0;
 }
 
-/* ===== SCROLL SHADOW FOR FROZEN COLUMNS ===== */
-.table-scroll-container.scrolled .data-table td:nth-child(2),
-.table-scroll-container.scrolled .data-table th:nth-child(2) {
-  box-shadow: 4px 0 8px -2px rgba(0,0,0,0.08);
-  clip-path: inset(0 -8px 0 0);
+/* ============================================================
+   KPI HERO CARD — Thẻ ngân sách chủ đạo (nền primary)
+   ============================================================ */
+.kpi-hero {
+  background: var(--color-primary);
+  border-radius: var(--border-radius-md);
+  padding: 14px 16px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #003d82;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-/* ===== CELL WRAPPER STYLES ===== */
-.cell-wrapper {
+.kpi-hero-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.03em;
+}
+
+.kpi-hero-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: white;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.kpi-hero-unit {
+  font-size: 13px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.6);
+  margin-left: 4px;
+}
+
+.kpi-hero-sub { font-size: 11px; color: rgba(255, 255, 255, 0.5); }
+
+.kpi-hero-progress-track {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 99px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.kpi-hero-progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.75);
+  transition: width 0.4s ease;
+}
+
+.kpi-hero-progress-labels {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+
+.kpi-hero-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.kpi-hero-badge-over  { background: rgba(239, 68, 68, 0.2);  color: #fca5a5; }
+.kpi-hero-badge-under { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+
+/* ============================================================
+   CHART LEGEND — Chú thích biểu đồ
+   ============================================================ */
+.chart-legend { display: flex; gap: 12px; font-size: 11px; color: var(--color-text-secondary); }
+.chart-legend-item { display: flex; align-items: center; gap: 4px; }
+
+/* Ký hiệu ô vuông (Thực hiện) */
+.chart-legend-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+
+/* Ký hiệu đường đứt nét vàng (Kế hoạch) */
+.chart-legend-dash { width: 14px; height: 0; border-bottom: 2px dashed #f59e0b; display: inline-block; flex-shrink: 0; }
+
+/* ============================================================
+   EVENT CARD — Thẻ sự kiện sắp tới
+   ============================================================ */
+.event-card {
+  display: flex;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: #f8fafc;
+  border: 1px solid var(--color-border);
+  align-items: center;
+}
+
+.event-card-date {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  background: var(--color-primary);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.event-card-date-day   { font-size: 13px; font-weight: 800; line-height: 1; }
+.event-card-date-month { font-size: 8px;  font-weight: 600; opacity: 0.8; }
+.event-card-title { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event-card-sub   { font-size: 10px; color: var(--color-text-muted); margin-top: 1px; }
+
+.event-badge { font-size: 10px; font-weight: 600; padding: 2px 5px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; }
+.event-badge-urgent { background: #fef2f2; color: #991b1b; }
+.event-badge-soon   { background: #fffbeb; color: #92400e; }
+.event-badge-normal { background: #eff6ff; color: #1e40af; }
+
+/* ============================================================
+   ALERT ROW — Cảnh báo showroom vượt ngân sách
+   ============================================================ */
+.alert-row {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  height: 100%;
-  padding: 0 6px;
-  min-height: 28px;
-  cursor: text;
-  text-align: right;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  font-size: 12px;
+}
+
+.alert-row-icon  { color: #f97316; flex-shrink: 0; }
+.alert-row-name  { flex: 1; font-weight: 500; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alert-row-badge { font-size: 11px; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: #fef2f2; color: #991b1b; white-space: nowrap; }
+
+/* ============================================================
+   CHANNEL LEGEND — Chú thích kênh bên cạnh Pie Chart
+   ============================================================ */
+.channel-legend-item { display: flex; align-items: center; gap: 6px; cursor: pointer; transition: opacity 0.15s; }
+.channel-legend-item:hover { opacity: 0.8; }
+.channel-legend-dot  { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
+.channel-legend-name { font-size: 11px; color: var(--color-text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.channel-legend-pct  { font-size: 11px; font-weight: 600; color: var(--color-text); }
+
+/* ============================================================
+   DASHBOARD LAYOUT HELPERS
+   ============================================================ */
+.dashboard-page   { display: flex; flex-direction: column; height: 100%; gap: 8px; padding: 8px; }
+.dashboard-scroll { display: flex; flex-direction: column; gap: 8px; flex: 1; overflow: auto; }
+.dashboard-kpi-row { display: grid; grid-template-columns: 2fr repeat(4, 1fr); gap: 8px; }
+.dashboard-data-row { display: flex; flex-wrap: wrap; flex: 1; gap: 8px; min-width: 0; }
+.dashboard-table-col { flex: 100 1 500px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.dashboard-side-col  { flex: 1 1 260px; display: flex; flex-direction: column; gap: 8px; min-width: 240px; max-width: 100%; }
+
+/* ============================================================
+   SHADCN THEME BRIDGE
+   ============================================================ */
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: var(--font-sans);
+  --color-sidebar-ring:               var(--sidebar-ring);
+  --color-sidebar-border:             var(--sidebar-border);
+  --color-sidebar-accent-foreground:  var(--sidebar-accent-foreground);
+  --color-sidebar-accent:             var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary:            var(--sidebar-primary);
+  --color-sidebar-foreground:         var(--sidebar-foreground);
+  --color-sidebar:                    var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring:   var(--ring);
+  --color-input:  var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground:    var(--accent-foreground);
+  --color-accent:               var(--accent);
+  --color-muted-foreground:     var(--muted-foreground);
+  --color-muted:                var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary:            var(--secondary);
+  --color-primary-foreground:   var(--primary-foreground);
+  --color-primary:              var(--primary);
+  --color-popover-foreground:   var(--popover-foreground);
+  --color-popover:              var(--popover);
+  --color-card-foreground:      var(--card-foreground);
+  --color-card:                 var(--card);
+  --color-foreground:           var(--foreground);
+  --color-background:           var(--background);
+  --radius-sm:  calc(var(--radius) * 0.6);
+  --radius-md:  calc(var(--radius) * 0.8);
+  --radius-lg:  var(--radius);
+  --radius-xl:  calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-invert-foreground:        var(--invert-foreground);
+  --color-invert:                   var(--invert);
+  --color-warning-foreground:       var(--warning-foreground);
+  --color-warning:                  var(--warning);
+  --color-info-foreground:          var(--info-foreground);
+  --color-info:                     var(--info);
+  --color-success-foreground:       var(--success-foreground);
+  --color-success:                  var(--success);
+  --color-destructive-foreground:   var(--destructive-foreground);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+  --destructive-foreground: var(--color-red-600);
+  --success: var(--color-emerald-500);
+  --success-foreground: var(--color-emerald-600);
+  --info: var(--color-violet-500);
+  --info-foreground: var(--color-violet-600);
+  --warning: var(--color-yellow-500);
+  --warning-foreground: var(--color-yellow-600);
+  --invert: var(--color-zinc-700);
+  --invert-foreground: var(--color-zinc-50);
+}
+
+/* ============================================================
+   CHART PANEL — Khung biểu đồ chuẩn trang Events
+   ============================================================ */
+.chart-panel {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-lg);
+  padding: 16px;
+  overflow: hidden;
+}
+
+.chart-panel-title {
+  font-size: var(--fs-body);
+  font-weight: 700;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text);
+}
+
+.chart-panel-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-empty {
+  color: var(--color-text-muted);
   font-size: var(--fs-table);
-  transition: background 0.08s ease;
+  padding: 20px;
+  text-align: center;
 }
 
-.cell-idle:hover {
-  background: #f1f8ff;
+/* ============================================================
+   KPI CARD — Thẻ KPI trang Events (accent via border-top)
+   ============================================================ */
+.kpi-card-event {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-lg);
+  padding: 16px 18px;
+  flex: 1 1 0;
+  min-width: 170px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: box-shadow 0.15s ease;
+  /* border-top-color override per card via inline style */
+  border-top-width: 3px;
 }
 
-.cell-editing {
-  background: #ffffff;
-  box-shadow: inset 0 0 0 1.5px #0185ba;
-  z-index: 50;
+.kpi-card-event:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+
+.kpi-card-event-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.cell-input {
-  width: 100%;
-  text-align: right;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: var(--fs-table);
-  font-variant-numeric: tabular-nums;
+.kpi-card-event-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--border-radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* background override per card via inline style */
 }
 
-/* Remove number input spinners */
-.cell-input::-webkit-outer-spin-button,
-.cell-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.cell-input[type='number'] {
-  -moz-appearance: textfield;
-}
-
-/* ===== SUBTOTAL ROW ENHANCEMENT ===== */
-.data-table tr.subtotal td {
-  background: #f0f4f8 !important;
+.kpi-card-event-label {
+  font-size: var(--fs-label);
   font-weight: 600;
-  border-top: 1px solid #cbd5e1;
-  border-bottom: 1px solid #cbd5e1;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.kpi-card-event-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--color-text);
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+.kpi-card-event-unit {
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  margin-left: 4px;
+}
+
+.kpi-card-event-sub {
+  font-size: var(--fs-label);
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.kpi-card-event-trend {
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+
+/* ============================================================
+   TIMELINE PANEL — Nhắc tiến độ sự kiện
+   ============================================================ */
+.timeline-panel {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline-header {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #fffbeb, #fef3c7);
+  flex-shrink: 0;
+}
+
+.timeline-header-title {
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: #92400e;
+}
+
+.timeline-header-count {
+  margin-left: auto;
+  font-size: var(--fs-tiny);
+  font-weight: 600;
+  padding: 2px 7px;
+  background: #fbbf24;
+  color: #78350f;
+  border-radius: 10px;
+}
+
+.timeline-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-muted);
   font-size: var(--fs-table);
 }
 
-.data-table tr.subtotal:hover td {
-  background: #e8eef4 !important;
+.timeline-item {
+  padding: 9px 14px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
 }
 
-/* ===== SIDEBAR NAV — ẨN SCROLLBAR, VẪN SCROLL ĐƯỢC ===== */
-/* Chrome, Safari, Edge (Chromium) */
-.sidebar-nav-scroll::-webkit-scrollbar {
-  display: none;
-  width: 0;
-}
-/* Firefox */
-.sidebar-nav-scroll {
-  scrollbar-width: none;
-}
-/* IE/Edge legacy */
-.sidebar-nav-scroll {
-  -ms-overflow-style: none;
+.timeline-item-past   { background: #fef2f2; }
+.timeline-item-urgent { background: #fefce8; }
+
+.timeline-item-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 2px;
+  flex-shrink: 0;
 }
 
+.timeline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  /* background + box-shadow set via inline style (dynamic per item) */
+}
+
+.timeline-line {
+  width: 1px;
+  flex: 1;
+  min-height: 16px;
+  background: #e2e8f0;
+  margin-top: 3px;
+}
+
+.timeline-item-content { flex: 1; min-width: 0; }
+
+.timeline-item-name {
+  font-size: var(--fs-table);
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline-item-meta {
+  font-size: var(--fs-tiny);
+  color: var(--color-text-muted);
+}
+
+.timeline-item-countdown {
+  font-size: var(--fs-tiny);
+  font-weight: 700;
+  /* color set via inline style (dynamic) */
+}
+
+.timeline-item-edit-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 2px;
+}
+
+/* ============================================================
+   TABLE PANEL — Panel bọc bảng dữ liệu sự kiện
+   ============================================================ */
+.table-panel {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.table-panel-header {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.table-panel-title {
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.table-panel-count {
+  font-size: var(--fs-label);
+  color: var(--color-text-muted);
+  margin-left: 2px;
+}
+
+.table-panel-footer {
+  padding: 7px 16px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-shrink: 0;
+  background: #f8fafc;
+  font-size: var(--fs-label);
+  color: var(--color-text-secondary);
+}
+
+.table-panel-footer-spacer { margin-left: auto; }
+
+/* ============================================================
+   MODAL — Overlay + Container dùng chung cho EventFormModal
+   và CloseReportModal
+   ============================================================ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(15,23,42,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-container {
+  background: var(--color-surface);
+  border-radius: var(--border-radius-lg);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  overflow: hidden;
+  border: 1px solid var(--color-border-dark);
+}
+
+.modal-header {
+  background: #f8fafc;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header-green {
+  background: linear-gradient(135deg, #ecfdf5, #dcfce7);
+  padding: 14px 20px;
+  border-bottom: 1px solid #bbf7d0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-title {
+  font-size: var(--fs-body);
+  font-weight: 700;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+}
+
+.modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: 12px 20px;
+  background: #f8fafc;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ============================================================
+   FORM CONTROLS — cho inline-label / underline-input style
+   Dùng trong modal nhập form
+   ============================================================ */
+.form-label-modal {
+  display: block;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.form-input-underline {
+  width: 100%;
+  border: none;
+  border-bottom: 1px dashed #cbd5e1;
+  background: transparent;
+  padding: 4px 0;
+  font-size: var(--fs-body);
+  font-weight: 500;
+  outline: none;
+  color: var(--color-text);
+  font-family: inherit;
+}
+
+.form-field-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* Remove number spinners for underline inputs */
+.form-input-underline[type="number"]::-webkit-outer-spin-button,
+.form-input-underline[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.form-input-underline[type="number"] { -moz-appearance: textfield; }
+
+/* ============================================================
+   STATUS BADGE — Badge trạng thái sự kiện trong table
+   ============================================================ */
+.status-badge {
+  font-size: var(--fs-label);
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: var(--border-radius-sm);
+}
+
+/* ============================================================
+   ACTION BUTTON — Các button thao tác trong table row
+   ============================================================ */
+.action-btn {
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-erp);
+  background: #fff;
+  cursor: pointer;
+  padding: 2px 6px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--fs-label);
+  color: var(--color-text-secondary);
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.action-btn:hover { background: #f1f5f9; }
+
+.action-btn-success {
+  border-color: #bbf7d0;
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.action-btn-success:hover { background: #d1fae5; }
+
+/* ============================================================
+   HEADER STATUS BADGE — Badge trạng thái mini trong PageHeader
+   ============================================================ */
+.header-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  border-radius: var(--border-radius-erp);
+  border: 1px solid;
+}
+
+.header-badge-success { color: #059669; background: #ecfdf5; border-color: #bbf7d0; }
+.header-badge-info    { color: #2563eb; background: #eff6ff; border-color: #bfdbfe; }
+.header-badge-warn    { color: #d97706; background: #fffbeb; border-color: #fde68a; }
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  body { @apply bg-background text-foreground; }
+  html { @apply font-sans; }
+}

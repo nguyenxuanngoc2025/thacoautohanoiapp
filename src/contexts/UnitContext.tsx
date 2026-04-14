@@ -75,16 +75,24 @@ export function UnitProvider({ children }: { children: React.ReactNode }) {
   const defaultUnitId: ActiveUnitId = isSuperAdmin ? 'all' : (profile?.unit_id ?? 'all');
   const [activeUnitId, setActiveUnitIdState] = useState<ActiveUnitId>(defaultUnitId);
 
-  // Khi auth thay đổi (đăng nhập/đăng xuất), reset về default
+  // Khi auth thay đổi (đăng nhập/đăng xuất), khôi phục từ localStorage hoặc reset về default
   useEffect(() => {
     if (!authLoading) {
-      setActiveUnitIdState(isSuperAdmin ? 'all' : (profile?.unit_id ?? 'all'));
+      if (isSuperAdmin) {
+        const saved = localStorage.getItem('thaco_active_unit_id');
+        setActiveUnitIdState(saved || 'all');
+      } else {
+        setActiveUnitIdState(profile?.unit_id ?? 'all');
+      }
     }
   }, [isSuperAdmin, profile?.unit_id, authLoading]);
 
   const setActiveUnitId = (id: ActiveUnitId) => {
     if (!canSwitchUnits) return; // Guard: chỉ super_admin được đổi
     setActiveUnitIdState(id);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('thaco_active_unit_id', id);
+    }
   };
 
   // Danh sách units khả dụng

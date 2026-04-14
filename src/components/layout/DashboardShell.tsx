@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnit } from '@/contexts/UnitContext';
-import TopBar from '@/components/layout/TopBar';
+import { ROLE_LABELS } from '@/types/database';
 import Sidebar from '@/components/layout/Sidebar';
 import StatusBar from '@/components/layout/StatusBar';
 
@@ -43,7 +43,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
   const userRole = profile?.role ?? 'mkt_showroom';
   const userName = profile?.full_name ?? (authUser.email ?? 'Unknown');
-  const userCode = profile?.email?.split('@')[0]?.toUpperCase() ?? '';
+  const userSubtitle = profile?.role ? ROLE_LABELS[profile.role] : 'Unknown Role';
 
   // companyName: ưu tiên activeUnit (khi super_admin chọn Unit cụ thể)
   // → 'all' → hiển thị 'TOÀN HỆ THỐNG'
@@ -60,7 +60,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         <Sidebar
           userRole={userRole}
           userName={userName}
-          userCode={userCode}
+          userCode={userSubtitle}
           companyName={companyName}
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed(prev => !prev)}
@@ -77,7 +77,6 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             transition: 'flex 0.25s cubic-bezier(0.4,0,0.2,1)',
           }}
         >
-          <TopBar userName={userName} />
           <main style={{ flex: 1, overflowY: 'auto', background: 'var(--color-bg)', position: 'relative' }}>
             {children}
           </main>

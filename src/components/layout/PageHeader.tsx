@@ -25,12 +25,6 @@ export default function PageHeader({
   filters,
   actions,
 }: PageHeaderProps) {
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-
-  useEffect(() => {
-    setPortalTarget(document.getElementById('topbar-portal-target'));
-  }, []);
-
   const QUARTERS = [
     { value: 1, label: 'Q1' },
     { value: 2, label: 'Q2' },
@@ -41,8 +35,7 @@ export default function PageHeader({
   const currentQuarter = Math.ceil(month / 3);
 
   const periodControls = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Thời gian:</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <div className="period-tabs">
         {(['month', 'quarter', 'year'] as const).map((mode) => (
         <button
@@ -58,7 +51,6 @@ export default function PageHeader({
       {/* Month quick-select */}
       {viewMode === 'month' && (
         <div style={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-          <span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: 4 }}>Tháng:</span>
           {MONTHS.map((m) => (
             <button
               key={m.value}
@@ -85,7 +77,6 @@ export default function PageHeader({
       {/* Quarter selection */}
       {viewMode === 'quarter' && (
         <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: 4 }}>Quý:</span>
           {QUARTERS.map((q) => (
             <button
               key={q.value}
@@ -140,7 +131,8 @@ export default function PageHeader({
         zIndex: 100,
       }}
     >
-      {portalTarget && createPortal(periodControls, portalTarget)}
+      {/* Render inline instead of topbar portal */}
+      {periodControls}
 
       {/* Filters (Showroom, Brand, etc) — nowrap single line */}
       {filters && (

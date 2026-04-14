@@ -181,7 +181,7 @@ export default function Sidebar({
           // Khi hover-expand, aside giữ width collapsed để layout không nhảy
           width: collapsed ? SIDEBAR_W_COLLAPSED : SIDEBAR_W_OPEN,
           minWidth: collapsed ? SIDEBAR_W_COLLAPSED : SIDEBAR_W_OPEN,
-          height: '100vh',
+          height: '100%',
           position: 'relative',
           flexShrink: 0,
           zIndex: 200,
@@ -380,8 +380,8 @@ function UserPanel({ userName, userCode, isOpen }: { userName: string; userCode:
           overflow: 'hidden', textAlign: 'left',
           transition: 'opacity 0.18s ease, max-width 0.22s ease',
         }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#ffffff' }}>{userCode}</div>
-          <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.5)', marginTop: 1 }}>{userName}</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</div>
+          <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.6)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userCode}</div>
         </div>
       </button>
     </div>

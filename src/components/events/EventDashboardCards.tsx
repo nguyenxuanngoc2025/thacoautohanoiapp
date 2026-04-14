@@ -1,33 +1,42 @@
 import React from 'react';
 import { formatNumber } from '@/lib/utils';
 
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
 export function KPICard({ icon: Icon, label, value, unit, subValue, color, trend }: {
   icon: React.ElementType; label: string; value: string | number; unit?: string;
   subValue?: string; color: string; trend?: 'up' | 'down' | 'flat';
 }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid var(--color-border)', borderRadius: 8, padding: '16px 18px', flex: '1 1 0', minWidth: 170, display: 'flex', flexDirection: 'column', gap: 8, borderTop: `3px solid ${color}`, transition: 'box-shadow 0.15s ease' }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
+    <div
+      className="kpi-card-event"
+      style={{ borderTopColor: color }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ width: 36, height: 36, borderRadius: 8, background: `${color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="kpi-card-event-header">
+        <div className="kpi-card-event-icon" style={{ background: `${color}18` }}>
           <Icon size={18} style={{ color }} />
         </div>
-        {trend && <div style={{ fontSize: 11, fontWeight: 600, color: trend === 'up' ? '#059669' : '#dc2626' }}>{trend === 'up' ? '▲' : '▼'} vs tháng trước</div>}
+        {trend && (
+          <div
+            className="kpi-card-event-trend"
+            style={{ color: trend === 'up' ? '#059669' : '#dc2626' }}
+          >
+            {trend === 'up' ? '▲' : '▼'} vs tháng trước
+          </div>
+        )}
       </div>
       <div>
-        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
-        <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--color-text)', lineHeight: 1.2, marginTop: 2 }}>
+        <div className="kpi-card-event-label">{label}</div>
+        <div className="kpi-card-event-value">
           {typeof value === 'number' ? formatNumber(value) : value}
-          {unit && <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-muted)', marginLeft: 4 }}>{unit}</span>}
+          {unit && <span className="kpi-card-event-unit">{unit}</span>}
         </div>
-        {subValue && <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>{subValue}</div>}
+        {subValue && <div className="kpi-card-event-sub">{subValue}</div>}
       </div>
     </div>
   );
 }
 
+// ─── Mini Bar Chart ───────────────────────────────────────────────────────────
 export function MiniBarChart({ data }: { data: { label: string; value: number; color: string }[] }) {
   const max = Math.max(...data.map(d => d.value), 1);
   return (
@@ -47,9 +56,10 @@ export function MiniBarChart({ data }: { data: { label: string; value: number; c
   );
 }
 
+// ─── Donut Chart ──────────────────────────────────────────────────────────────
 export function DonutChart({ data }: { data: { label: string; value: number; color: string }[] }) {
   const total = data.reduce((s, d) => s + d.value, 0);
-  if (total === 0) return <div style={{ color: 'var(--color-text-muted)', fontSize: 12, padding: 20, textAlign: 'center' }}>Chưa có sự kiện</div>;
+  if (total === 0) return <div className="chart-empty">Chưa có sự kiện</div>;
   const radius = 42; const circ = 2 * Math.PI * radius; let acc = 0;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -59,12 +69,19 @@ export function DonutChart({ data }: { data: { label: string; value: number; col
         <text x="60" y="72" textAnchor="middle" fontSize="10" fill="var(--color-text-muted)">sự kiện</text>
       </svg>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-        {data.map((d, i) => <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}><div style={{ width: 10, height: 10, borderRadius: 2, background: d.color }} /><span style={{ whiteSpace: 'nowrap', color: 'var(--color-text-secondary)' }}>{d.label}</span><span style={{ fontWeight: 700, color: 'var(--color-text)', marginLeft: 4 }}>{d.value}</span></div>)}
+        {data.map((d, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+            <div style={{ width: 10, height: 10, borderRadius: 2, background: d.color }} />
+            <span style={{ whiteSpace: 'nowrap', color: 'var(--color-text-secondary)' }}>{d.label}</span>
+            <span style={{ fontWeight: 700, color: 'var(--color-text)', marginLeft: 4 }}>{d.value}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
+// ─── Monthly Sparkline ────────────────────────────────────────────────────────
 export function MonthlySparkline({ data, color = '#3B82F6' }: { data: number[]; color?: string }) {
   const max = Math.max(...data, 1); const h = 48; const w = 220;
   const pts = data.map((v, i) => ({ x: (i / (data.length - 1)) * w, y: h - (v / max) * (h - 8) - 4 }));

@@ -66,13 +66,19 @@ export async function upsertActualEntry(
  * Trả về Record<channelName, avgCPL> — triệu VND / lead.
  * Kênh không có đủ data → không có entry (caller dùng fallback).
  */
-export async function computeHistoricalCPL(year: number = 2026): Promise<Record<string, number>> {
+export async function computeHistoricalCPL(year: number = 2026, unit_id?: string): Promise<Record<string, number>> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from('thaco_actual_entries')
     .select('month, payload')
     .eq('year', year)
     .order('month');
+  
+  if (unit_id && unit_id !== 'all') {
+    query = query.eq('unit_id', unit_id);
+  }
+
+  const { data, error } = await query;
 
   if (error || !data || data.length === 0) return {};
 
@@ -80,12 +86,13 @@ export async function computeHistoricalCPL(year: number = 2026): Promise<Record<
   const acc: Record<string, { totalBudget: number; totalKHQT: number }> = {};
   for (const ch of CHANNELS) acc[ch] = { totalBudget: 0, totalKHQT: 0 };
 
-  // Deduplicate: nếu cùng tháng có nhiều entries, chỉ lấy entry mới nhất (order by month, Supabase trả cuối cùng)
+  // DB có UNIQUE(year, month) nên mỗi tháng chỉ có 1 row.
+  // Map này đơn giản hóa iteration — không cần dedup thực sự.
   const latestByMonth: Record<number, Record<string, number>> = {};
   for (const entry of data) {
     const payload = entry.payload as Record<string, number> | null;
     if (!payload) continue;
-    latestByMonth[entry.month] = payload; // ghi đè → lấy entry cuối cùng của mỗi tháng
+    latestByMonth[entry.month] = payload;
   }
 
   for (const payload of Object.values(latestByMonth)) {
@@ -113,12 +120,18 @@ export async function computeHistoricalCPL(year: number = 2026): Promise<Record<
   return result;
 }
 
-export async function fetchAllActualEntries(year: number = 2026): Promise<ActualEntryData[]> {
+export async function fetchAllActualEntries(year: number = 2026, unit_id?: string): Promise<ActualEntryData[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from('thaco_actual_entries')
     .select('*')
     .eq('year', year);
+
+  if (unit_id && unit_id !== 'all') {
+    query = query.eq('unit_id', unit_id);
+  }
+
+  const { data, error } = await query;
   if (error) {
     console.error('Error fetching all actual entries:', error);
     return [];
