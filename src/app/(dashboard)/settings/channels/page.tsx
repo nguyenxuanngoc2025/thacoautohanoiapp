@@ -13,6 +13,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Radio, Plus, Edit2, Trash2, ToggleLeft, ToggleRight, Loader2, GripVertical, Check, X, Folder } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useChannels } from '@/contexts/ChannelsContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -363,6 +364,7 @@ function SortableGroupBlock({ group, children, isSuperAdmin, editingGroupId, onE
 
 export default function ChannelsPage() {
   const { isSuperAdmin } = useAuth();
+  const { refreshChannels } = useChannels();
   const supabase = React.useMemo(() => createClient(), []);
   const [groups, setGroups] = useState<ChannelGroupRow[]>([]);
   const [channels, setChannels] = useState<ChannelRow[]>([]);
@@ -406,10 +408,10 @@ export default function ChannelsPage() {
       const oldIndex = prev.findIndex(g => g.id === active.id);
       const newIndex = prev.findIndex(g => g.id === over.id);
       const reordered = arrayMove(prev, oldIndex, newIndex).map((g, i) => ({ ...g, sort_order: i + 1 }));
-      // Persist to DB (fire-and-forget)
+      // Persist to DB then refresh context
       Promise.all(
         reordered.map(g => supabase.from('thaco_master_channel_groups').update({ sort_order: g.sort_order }).eq('id', g.id))
-      );
+      ).then(() => refreshChannels());
       return reordered;
     });
   };
@@ -438,10 +440,12 @@ export default function ChannelsPage() {
         updatedMap[c.id] !== undefined ? { ...c, sort_order: updatedMap[c.id] } : c
       );
 
-      // Persist
-      Object.entries(updatedMap).forEach(([id, so]) => {
-        supabase.from('thaco_master_channels').update({ sort_order: so }).eq('id', id);
-      });
+      // Persist then refresh context
+      Promise.all(
+        Object.entries(updatedMap).map(([id, so]) =>
+          supabase.from('thaco_master_channels').update({ sort_order: so }).eq('id', id)
+        )
+      ).then(() => refreshChannels());
 
       return next;
     });
@@ -459,7 +463,7 @@ export default function ChannelsPage() {
       is_active: true,
     });
     if (error) setError(error.message);
-    else { setShowAddGroup(false); load(); }
+    else { setShowAddGroup(false); load(); refreshChannels(); }
   };
 
   const handleUpdateGroup = async (id: string, form: Partial<ChannelGroupRow>) => {
@@ -467,19 +471,19 @@ export default function ChannelsPage() {
       .update({ name: form.name, updated_at: new Date().toISOString() })
       .eq('id', id);
     if (error) setError(error.message);
-    else { setEditingGroupId(null); load(); }
+    else { setEditingGroupId(null); load(); refreshChannels(); }
   };
 
   const handleToggleGroup = async (group: ChannelGroupRow) => {
     await supabase.from('thaco_master_channel_groups')
       .update({ is_active: !group.is_active, updated_at: new Date().toISOString() }).eq('id', group.id);
-    load();
+    load(); refreshChannels();
   };
 
   const handleDeleteGroup = async (id: string) => {
     if (!confirm('Xóa nhóm kênh này? Các kênh bên trong sẽ tự động chuyển thành "Không thuộc nhóm".')) return;
     await supabase.from('thaco_master_channel_groups').delete().eq('id', id);
-    load();
+    load(); refreshChannels();
   };
 
   // ─── Channel Handlers ─────────────────────────────────────────────────────
@@ -496,7 +500,7 @@ export default function ChannelsPage() {
       is_active: true,
     });
     if (error) setError(error.message);
-    else { setShowAddChannel(false); load(); }
+    else { setShowAddChannel(false); load(); refreshChannels(); }
   };
 
   const handleUpdateChannel = async (id: string, form: Partial<ChannelRow>) => {
@@ -504,19 +508,19 @@ export default function ChannelsPage() {
       .update({ name: form.name, group_id: form.group_id, color: form.color, updated_at: new Date().toISOString() })
       .eq('id', id);
     if (error) setError(error.message);
-    else { setEditingChannelId(null); load(); }
+    else { setEditingChannelId(null); load(); refreshChannels(); }
   };
 
   const handleToggleChannel = async (ch: ChannelRow) => {
     await supabase.from('thaco_master_channels')
       .update({ is_active: !ch.is_active, updated_at: new Date().toISOString() }).eq('id', ch.id);
-    load();
+    load(); refreshChannels();
   };
 
   const handleDeleteChannel = async (id: string) => {
     if (!confirm('Xóa kênh này? Các dữ liệu đã cấu hình với kênh này sẽ bị mất thông tin liên kết.')) return;
     await supabase.from('thaco_master_channels').delete().eq('id', id);
-    load();
+    load(); refreshChannels();
   };
 
   const orphanedChannels = channels.filter(c => !c.group_id);
