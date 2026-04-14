@@ -59,7 +59,7 @@ export function EventsReportTab({
       'Leads TH': ev.leadsActual ?? '',
       'GDTD KH': ev.gdtd ?? '',
       'GDTD TH': ev.gdtdActual ?? '',
-      'Trạng thái': ev.status,
+      'Trạng thái': ev.status as string,
     }));
     exportToExcel([{ name: 'Su_kien', rows }], 'Bao_cao_su_kien');
   }
