@@ -311,268 +311,6 @@ const FilterDropdown = ({
   );
 };
 
-// ─── Excel Paste Modal ────────────────────────────────────────────────────────
-
-interface ExcelPastePreview {
-  applied: number;
-  skipped: number;
-  data: Record<string, number>;
-}
-
-function ExcelPasteModal({ channels, brands, contextBrand, contextModels, onClose, onApply }: {
-  channels: { name: string; readonly: boolean; isAggregate: boolean }[];
-  brands: { name: string; models: string[]; modelData?: { name: string; is_aggregate?: boolean }[] }[];
-  contextBrand: string;
-  contextModels: string[];
-  onClose: () => void;
-  onApply: (data: Record<string, number>) => void;
-}) {
-  const [text, setText] = React.useState('');
-  const [preview, setPreview] = React.useState<ExcelPastePreview | null>(null);
-
-  const editableChannels = channels.filter(c => !c.readonly && !c.isAggregate);
-
-  const METRIC_ALIASES: Record<string, string> = {
-    'ngan sach': 'Ngân sách', 'ns': 'Ngân sách', 'budget': 'Ngân sách', 'ngan': 'Ngân sách',
-    'khqt': 'KHQT', 'leads': 'KHQT', 'quan tam': 'KHQT', 'kh': 'KHQT',
-    'gdtd': 'GDTD', 'deal': 'GDTD', 'giao dich': 'GDTD',
-    'khd': 'KHĐ', 'hop dong': 'KHĐ', 'dat coc': 'KHĐ', 'kh dat': 'KHĐ',
-  };
-
-  const BRAND_ALIASES: string[] = ['thuong hieu', 'brand', 'hang xe', 'nhan hieu'];
-  const MODEL_ALIASES: string[] = ['dong xe', 'model', 'xe', 'ten xe'];
-  const CHANNEL_ALIASES: string[] = ['kenh', 'channel', 'kenh marketing', 'kenh quang cao'];
-
-  function norm(s: string): string {
-    return s.toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ').trim();
-  }
-
-  function parseText(raw: string): ExcelPastePreview {
-    const lines = raw.trim().split(/\r?\n/).filter(l => l.trim());
-    if (lines.length < 2) return { applied: 0, skipped: 0, data: {} };
-
-    const headers = lines[0].split('\t').map(h => h.trim());
-    const normHeaders = headers.map(norm);
-
-    let brandCol = -1, modelCol = -1, channelCol = -1;
-    const metricCols: Record<string, number> = {};
-
-    normHeaders.forEach((h, i) => {
-      if (BRAND_ALIASES.includes(h)) brandCol = i;
-      else if (MODEL_ALIASES.includes(h)) modelCol = i;
-      else if (CHANNEL_ALIASES.includes(h)) channelCol = i;
-      else {
-        const metric = METRIC_ALIASES[h];
-        if (metric && !metricCols[metric]) metricCols[metric] = i;
-      }
-    });
-
-    if (channelCol === -1 && brandCol === -1 && modelCol === -1) {
-      channelCol = 0;
-    }
-
-    const allBrandNames = brands.map(b => b.name);
-    const data: Record<string, number> = {};
-    let applied = 0, skipped = 0;
-
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split('\t').map(c => c.trim());
-      if (cols.every(c => !c)) continue;
-
-      const channelRaw = channelCol >= 0 ? (cols[channelCol] || '') : '';
-      const channelMatch = editableChannels.find(c => norm(c.name) === norm(channelRaw));
-      if (!channelMatch) { skipped++; continue; }
-
-      let resolvedBrands: { brand: string; models: string[] }[] = [];
-
-      if (brandCol >= 0 && cols[brandCol]) {
-        const bRaw = cols[brandCol];
-        const bName = allBrandNames.find(b => norm(b) === norm(bRaw));
-        if (!bName) { skipped++; continue; }
-        const bData = brands.find(b => b.name === bName);
-        const bModels = bData?.models.filter(m => {
-          const isAgg = bData.modelData?.find(md => md.name === m)?.is_aggregate;
-          return !isAgg;
-        }) ?? [];
-
-        if (modelCol >= 0 && cols[modelCol]) {
-          const mRaw = cols[modelCol];
-          const mName = bModels.find(m => norm(m) === norm(mRaw));
-          if (!mName) { skipped++; continue; }
-          resolvedBrands = [{ brand: bName, models: [mName] }];
-        } else {
-          resolvedBrands = [{ brand: bName, models: bModels }];
-        }
-      } else if (contextBrand !== 'all') {
-        const bData = brands.find(b => b.name === contextBrand);
-        const bModels = (contextModels.length > 0 ? contextModels : bData?.models ?? [])
-          .filter(m => {
-            const isAgg = bData?.modelData?.find(md => md.name === m)?.is_aggregate;
-            return !isAgg;
-          });
-        resolvedBrands = [{ brand: contextBrand, models: bModels }];
-      } else {
-        resolvedBrands = allBrandNames.map(bName => {
-          const bData = brands.find(b => b.name === bName)!;
-          const bModels = bData.models.filter(m => {
-            const isAgg = bData.modelData?.find(md => md.name === m)?.is_aggregate;
-            return !isAgg;
-          });
-          return { brand: bName, models: bModels };
-        });
-      }
-
-      for (const { brand, models } of resolvedBrands) {
-        for (const model of models) {
-          for (const [metric, colIdx] of Object.entries(metricCols)) {
-            const rawVal = (cols[colIdx] || '').trim().replace(/\s/g, '').replace(/,/g, '.');
-            const num = parseFloat(rawVal);
-            if (isNaN(num) || num < 0) continue;
-            const cellKey = `${brand}-${model}-${channelMatch.name}-${metric}`;
-            data[cellKey] = metric === 'Ngân sách' ? Math.round(num * 10) / 10 : Math.round(num);
-            applied++;
-          }
-        }
-      }
-    }
-
-    return { applied, skipped, data };
-  }
-
-  const handleTextChange = (val: string) => {
-    setText(val);
-    if (val.trim().includes('\t')) {
-      setPreview(parseText(val));
-    } else {
-      setPreview(null);
-    }
-  };
-
-  return (
-    <div
-      style={{
-        position: 'fixed', inset: 0, zIndex: 9999,
-        background: 'rgba(0,0,0,0.45)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div style={{
-        background: '#fff', borderRadius: 14,
-        width: 680, maxWidth: '95vw', maxHeight: '90vh',
-        display: 'flex', flexDirection: 'column',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
-        overflow: 'hidden',
-      }}>
-        {/* Header */}
-        <div style={{
-          padding: '16px 20px', borderBottom: '1px solid var(--color-border)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: '#fffbeb',
-        }}>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-text)' }}>Nhập số TH từ Excel</div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
-              Copy vùng dữ liệu từ Excel (có hàng tiêu đề) rồi dán vào bên dưới
-            </div>
-          </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
-            <X size={18} color="var(--color-text-muted)" />
-          </button>
-        </div>
-
-        {/* Instructions */}
-        <div style={{ padding: '10px 20px', background: '#f8fafc', borderBottom: '1px solid var(--color-border-light)', fontSize: 12, color: 'var(--color-text-muted)' }}>
-          <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Định dạng cột (có thể bỏ cột Thương hiệu/Dòng xe):</span>
-          {' '}<code style={{ background: '#e2e8f0', padding: '1px 5px', borderRadius: 3 }}>Thương hiệu</code>
-          {' '}<code style={{ background: '#e2e8f0', padding: '1px 5px', borderRadius: 3 }}>Dòng xe</code>
-          {' '}<code style={{ background: '#e2e8f0', padding: '1px 5px', borderRadius: 3 }}>Kênh</code>
-          {' '}<code style={{ background: '#e2e8f0', padding: '1px 5px', borderRadius: 3 }}>Ngân sách</code>
-          {' '}<code style={{ background: '#e2e8f0', padding: '1px 5px', borderRadius: 3 }}>KHQT</code>
-          {' '}<code style={{ background: '#e2e8f0', padding: '1px 5px', borderRadius: 3 }}>GDTD</code>
-          {' '}<code style={{ background: '#e2e8f0', padding: '1px 5px', borderRadius: 3 }}>KHĐ</code>
-          {contextBrand !== 'all' && (
-            <span style={{ marginLeft: 8, color: '#059669', fontWeight: 600 }}>
-              • Đang dùng context: {contextBrand}{contextModels.length === 1 ? ` / ${contextModels[0]}` : ''}
-            </span>
-          )}
-        </div>
-
-        {/* Textarea */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
-          <textarea
-            value={text}
-            onChange={e => handleTextChange(e.target.value)}
-            placeholder={`Kênh\tNgân sách\tKHQT\tGDTD\tKHĐ\nFacebook\t120.5\t1506\t226\t57\nGoogle\t85\t708\t106\t27`}
-            style={{
-              width: '100%', minHeight: 200, padding: '10px 12px',
-              border: '1px solid var(--color-border)', borderRadius: 8,
-              fontSize: 13, fontFamily: 'monospace',
-              resize: 'vertical', outline: 'none', boxSizing: 'border-box',
-            }}
-            autoFocus
-          />
-        </div>
-
-        {/* Preview */}
-        {preview && (
-          <div style={{
-            padding: '10px 20px',
-            borderTop: '1px solid var(--color-border-light)',
-            background: preview.applied > 0 ? '#f0fdf4' : '#fef2f2',
-            display: 'flex', alignItems: 'center', gap: 12,
-          }}>
-            <CheckCircle2 size={16} color={preview.applied > 0 ? '#16a34a' : '#dc2626'} />
-            <span style={{ fontSize: 13, color: preview.applied > 0 ? '#15803d' : '#dc2626', fontWeight: 600 }}>
-              {preview.applied > 0 ? `${preview.applied} giá trị nhận diện được` : 'Không nhận diện được dữ liệu'}
-            </span>
-            {preview.skipped > 0 && (
-              <span style={{ fontSize: 12, color: '#92400e' }}>
-                ({preview.skipped} dòng bỏ qua)
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Footer */}
-        <div style={{
-          padding: '12px 20px', borderTop: '1px solid var(--color-border)',
-          display: 'flex', gap: 8, justifyContent: 'flex-end',
-        }}>
-          <button
-            onClick={onClose}
-            style={{
-              padding: '7px 16px', borderRadius: 7, border: '1px solid var(--color-border)',
-              background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            }}
-          >
-            Hủy
-          </button>
-          <button
-            onClick={() => {
-              if (preview && preview.applied > 0) {
-                onApply(preview.data);
-                onClose();
-              }
-            }}
-            disabled={!preview || preview.applied === 0}
-            style={{
-              padding: '7px 20px', borderRadius: 7, border: 'none',
-              background: preview && preview.applied > 0 ? '#f59e0b' : '#e2e8f0',
-              color: preview && preview.applied > 0 ? '#fff' : '#94a3b8',
-              fontSize: 13, fontWeight: 700,
-              cursor: preview && preview.applied > 0 ? 'pointer' : 'not-allowed',
-            }}
-          >
-            Áp dụng {preview && preview.applied > 0 ? `(${preview.applied})` : ''}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function PlanningPage() {
   // ─── Dynamic brands từ DB (thay thế DEMO_BRANDS tĩnh) ───────────────────────
@@ -604,7 +342,6 @@ export default function PlanningPage() {
   const [editValue, setEditValue] = useState<string>('');
   const [editingNoteCell, setEditingNoteCell] = useState<string | null>(null);
   const [undoStack, setUndoStack] = useState<CellData[]>([]);
-  const [showPasteModal, setShowPasteModal] = useState(false);
 
   // Spreadsheet Selection State
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
@@ -1871,28 +1608,17 @@ export default function PlanningPage() {
               </>
             ) : (
               <>
-                {/* Actual mode: Nhập từ Excel + Lưu TH + Nộp TH */}
+                {/* Actual mode: Lưu TH + Nộp TH */}
                 {(actualStatusByMonth[month] || 'draft') !== 'submitted' && (
-                  <>
-                    <button
-                      className="button-erp-secondary"
-                      style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4, color: '#d97706', borderColor: '#fcd34d' }}
-                      onClick={() => setShowPasteModal(true)}
-                      title="Nhập số TH từ Excel (paste)"
-                    >
-                      <UploadCloud size={13} />
-                      <span style={{ fontSize: 12 }}>Nhập Excel</span>
-                    </button>
-                    <button
-                      className="button-erp-secondary"
-                      style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4, opacity: isDirtyActual ? 1 : 0.6 }}
-                      onClick={handleSaveActual}
-                      title="Lưu nháp thực hiện"
-                    >
-                      <Save size={13} />
-                      <span style={{ fontSize: 12 }}>Lưu TH</span>
-                    </button>
-                  </>
+                  <button
+                    className="button-erp-secondary"
+                    style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4, opacity: isDirtyActual ? 1 : 0.6 }}
+                    onClick={handleSaveActual}
+                    title="Lưu nháp thực hiện"
+                  >
+                    <Save size={13} />
+                    <span style={{ fontSize: 12 }}>Lưu TH</span>
+                  </button>
                 )}
                 <button
                   className="button-erp-primary"
@@ -3431,21 +3157,6 @@ export default function PlanningPage() {
         />
       )}
 
-      {showPasteModal && (
-        <ExcelPasteModal
-          channels={CHANNELS}
-          brands={brands}
-          contextBrand={selectedBrand}
-          contextModels={selectedModels}
-          onClose={() => setShowPasteModal(false)}
-          onApply={(pasteData) => {
-            setCellData(prev => {
-              setUndoStack(us => [...us.slice(-19), prev]);
-              return { ...prev, ...pasteData };
-            });
-          }}
-        />
-      )}
 
       {/* ── FLOATING SAVE BAR — hiện khi actual mode + draft + có thay đổi ── */}
       {pageMode === 'actual' && isActualSplitMode && isDirtyActual && (
