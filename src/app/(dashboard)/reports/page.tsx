@@ -6,6 +6,7 @@ import { fetchAllBudgetPlans } from '@/lib/budget-data';
 import { fetchAllActualEntries } from '@/lib/actual-data';
 import { fetchEventsFromDB, type EventsByMonth } from '@/lib/events-data';
 import { useBrands } from '@/contexts/BrandsContext';
+import { useShowrooms } from '@/contexts/ShowroomsContext';
 import PageHeader from '@/components/layout/PageHeader';
 import { ReportTabBar, type ReportTabId } from '@/components/reports/ReportTabBar';
 import { ReportFilters, type ReportFilterState } from '@/components/reports/ReportFilters';
@@ -13,13 +14,16 @@ import { BudgetSummaryTab } from '@/components/reports/tabs/BudgetSummaryTab';
 import { PlanVsActualTab } from '@/components/reports/tabs/PlanVsActualTab';
 import { ChannelEfficiencyTab } from '@/components/reports/tabs/ChannelEfficiencyTab';
 import { EventsReportTab } from '@/components/reports/tabs/EventsReportTab';
-import { extractShowrooms, mergePayloads, type MonthlyPayloads } from '@/lib/report-data';
+import { mergePayloads, getMonthsForPeriod, type MonthlyPayloads } from '@/lib/report-data';
 
 export default function ReportsPage() {
   const { brands } = useBrands();
+  const { showrooms: showroomItems } = useShowrooms();
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<ReportTabId>('budget-summary');
+  const [activeTab, setActiveTab] = useState<ReportTabId>('plan-vs-actual');
+
+  const [compareMode, setCompareMode] = useState<'none' | 'prev' | 'prev_year'>('none');
 
   // Shared filter state
   const [filters, setFilters] = useState<ReportFilterState>({
@@ -30,6 +34,7 @@ export default function ReportsPage() {
   // Raw data
   const [plansByMonth, setPlansByMonth] = useState<MonthlyPayloads>({});
   const [actualsByMonth, setActualsByMonth] = useState<MonthlyPayloads>({});
+  const [prevYearActualsByMonth, setPrevYearActualsByMonth] = useState<MonthlyPayloads>({});
   const [eventsByMonth, setEventsByMonth] = useState<EventsByMonth>({});
 
   const loadData = useCallback(async () => {
@@ -54,11 +59,47 @@ export default function ReportsPage() {
 
   useEffect(() => { loadData().then(() => setMounted(true)); }, [loadData]);
 
-  // Extract showrooms from all plan data for filter dropdown
-  const showrooms = useMemo(() => {
-    const allMonths = Array.from({ length: 12 }, (_, i) => i + 1);
-    return extractShowrooms(mergePayloads(plansByMonth, allMonths));
-  }, [plansByMonth]);
+  // Lazy fetch prev year actuals khi cần so sánh cùng kỳ năm trước
+  useEffect(() => {
+    if (compareMode !== 'prev_year') return;
+    fetchAllActualEntries(filters.year - 1).then(actuals => {
+      const am: MonthlyPayloads = {};
+      actuals.forEach(a => { am[a.month] = a.payload || {}; });
+      setPrevYearActualsByMonth(am);
+    });
+  }, [compareMode, filters.year]);
+
+  // Showroom names for filter dropdown (from context, not parsed from payload)
+  const showrooms = useMemo(() => showroomItems.map(s => s.name), [showroomItems]);
+
+  const { cmpPlansByMonth, cmpActualsByMonth, cmpMonths } = useMemo(() => {
+    if (compareMode === 'none') {
+      return { cmpPlansByMonth: {} as MonthlyPayloads, cmpActualsByMonth: {} as MonthlyPayloads, cmpMonths: [] as number[] };
+    }
+    if (compareMode === 'prev') {
+      const prevM  = filters.month === 1 ? 12 : filters.month - 1;
+      const months = getMonthsForPeriod(filters.viewMode, prevM);
+      return { cmpPlansByMonth: plansByMonth, cmpActualsByMonth: actualsByMonth, cmpMonths: months };
+    }
+    // prev_year: same month(s) but from prev year data
+    const months = getMonthsForPeriod(filters.viewMode, filters.month);
+    return { cmpPlansByMonth: plansByMonth, cmpActualsByMonth: prevYearActualsByMonth, cmpMonths: months };
+  }, [compareMode, filters, plansByMonth, actualsByMonth, prevYearActualsByMonth]);
+
+  const compareLabel = useMemo(() => {
+    if (compareMode === 'none') return '';
+    if (compareMode === 'prev') {
+      const prevM = filters.month === 1 ? 12 : filters.month - 1;
+      const prevY = filters.month === 1 ? filters.year - 1 : filters.year;
+      if (filters.viewMode === 'month')   return `T${prevM}/${prevY}`;
+      if (filters.viewMode === 'quarter') return `Q${Math.max(1, Math.ceil(filters.month / 3) - 1)}/${filters.year}`;
+      return `${filters.year - 1}`;
+    }
+    // prev_year
+    if (filters.viewMode === 'month')   return `T${filters.month}/${filters.year - 1}`;
+    if (filters.viewMode === 'quarter') return `Q${Math.ceil(filters.month / 3)}/${filters.year - 1}`;
+    return `${filters.year - 1}`;
+  }, [compareMode, filters]);
 
   const brandNames = useMemo(() => brands.map(b => b.name), [brands]);
 
@@ -115,11 +156,46 @@ export default function ReportsPage() {
           />
         </div>
 
+        {/* Comparison toolbar — plan-vs-actual tab only */}
+        {activeTab === 'plan-vs-actual' && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0',
+            borderBottom: '1px solid var(--color-border-light)', marginBottom: 12,
+            flexWrap: 'wrap',
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-muted)' }}>So sánh với:</span>
+            {(['none', 'prev', 'prev_year'] as const).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setCompareMode(mode)}
+                style={{
+                  padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  border: `1px solid ${compareMode === mode ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                  background: compareMode === mode ? 'var(--color-primary)' : '#fff',
+                  color: compareMode === mode ? '#fff' : 'var(--color-text)',
+                }}
+              >
+                {mode === 'none' ? 'Không' : mode === 'prev' ? 'Kỳ liền trước' : 'Cùng kỳ năm trước'}
+              </button>
+            ))}
+            {compareMode !== 'none' && compareLabel && (
+              <span style={{ fontSize: 11, color: '#7c3aed', background: '#f5f3ff', padding: '2px 8px', borderRadius: 4 }}>
+                So với: {compareLabel}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Tab content */}
         {!loading && (
           <>
             {activeTab === 'budget-summary' && (
-              <BudgetSummaryTab plansByMonth={plansByMonth} />
+              <BudgetSummaryTab
+                plansByMonth={plansByMonth}
+                actualsByMonth={actualsByMonth}
+                brands={brands}
+                showroomItems={showroomItems.map(s => ({ name: s.name, weight: s.weight }))}
+              />
             )}
             {activeTab === 'plan-vs-actual' && (
               <PlanVsActualTab
@@ -127,6 +203,12 @@ export default function ReportsPage() {
                 actualsByMonth={actualsByMonth}
                 viewMode={filters.viewMode}
                 month={filters.month}
+                cmpPlansByMonth={cmpPlansByMonth}
+                cmpActualsByMonth={cmpActualsByMonth}
+                cmpMonths={cmpMonths}
+                compareLabel={compareLabel}
+                showroomItems={showroomItems.map(s => ({ name: s.name, weight: s.weight }))}
+                brands={brands}
               />
             )}
             {activeTab === 'channel-efficiency' && (
