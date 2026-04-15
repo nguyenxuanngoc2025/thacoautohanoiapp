@@ -431,6 +431,59 @@ export default function PlanningPage() {
   const getRawHistoricalValue = useCallback((cellKey: string, mode: string): number | null => {
     if (mode === 'none') return null;
 
+    // So sánh với Kế hoạch tháng hiện tại → % đạt
+    if (mode === 'vs_plan') {
+      const planData = dataByMonth[month] || {};
+      if (cellKey.includes('-Tổng Digital-')) {
+        return digitalChannelNames.reduce((sum, chName) =>
+          sum + (planData[cellKey.replace('-Tổng Digital-', `-${chName}-`)] || 0), 0
+        );
+      }
+      for (const b of brands) {
+        if (!b.modelData) continue;
+        for (const m of b.modelData) {
+          if (m.is_aggregate && m.aggregate_group) {
+            const prefix = `${b.name}-${m.name}-`;
+            if (cellKey.startsWith(prefix)) {
+              const suffix = cellKey.slice(prefix.length - 1);
+              const targetModels = b.modelData
+                .filter(sub => sub.aggregate_group === m.aggregate_group && !sub.is_aggregate)
+                .map(sub => sub.name);
+              return targetModels.reduce((sum, mName) => sum + (planData[`${b.name}-${mName}${suffix}`] || 0), 0);
+            }
+          }
+        }
+      }
+      return planData[cellKey] || 0;
+    }
+
+    // So sánh TH với TH tháng trước
+    if (mode === 'prev_actual') {
+      const prevMonth = month === 1 ? 12 : month - 1;
+      const prevActual = actualDataByMonth[prevMonth] || {};
+      if (cellKey.includes('-Tổng Digital-')) {
+        return digitalChannelNames.reduce((sum, chName) =>
+          sum + (prevActual[cellKey.replace('-Tổng Digital-', `-${chName}-`)] || 0), 0
+        );
+      }
+      for (const b of brands) {
+        if (!b.modelData) continue;
+        for (const m of b.modelData) {
+          if (m.is_aggregate && m.aggregate_group) {
+            const prefix = `${b.name}-${m.name}-`;
+            if (cellKey.startsWith(prefix)) {
+              const suffix = cellKey.slice(prefix.length - 1);
+              const targetModels = b.modelData
+                .filter(sub => sub.aggregate_group === m.aggregate_group && !sub.is_aggregate)
+                .map(sub => sub.name);
+              return targetModels.reduce((sum, mName) => sum + (prevActual[`${b.name}-${mName}${suffix}`] || 0), 0);
+            }
+          }
+        }
+      }
+      return prevActual[cellKey] || 0;
+    }
+
     if (mode === 'prev_month' || mode === 'prev_period') {
       const prevMonth = month === 1 ? 12 : month - 1;
       
@@ -501,7 +554,7 @@ export default function PlanningPage() {
     }
 
     return computeBase(cellKey);
-  }, [dataByMonth, month, cellData, brands]);
+  }, [dataByMonth, actualDataByMonth, month, cellData, brands, digitalChannelNames]);
 
   const getHistoricalValue = useCallback((cellKey: string, mode: string): number | null => {
     const raw = getRawHistoricalValue(cellKey, mode);
@@ -526,12 +579,32 @@ export default function PlanningPage() {
         </span>
       );
     }
+
+    // Mode vs_plan: hiện % đạt (TH/KH) thay vì delta
+    if (compareMode === 'vs_plan') {
+      const pct = histVal > 0 ? Math.round((val / histVal) * 100) : (val > 0 ? 100 : 0);
+      const pctColor = pct >= 100 ? '#10b981' : pct >= 80 ? '#f59e0b' : '#ef4444';
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', lineHeight: 1.2, gap: 2, height: '100%', opacity: isEditing ? 0 : 1 }}>
+          <span style={{ color: val > 0 ? 'var(--color-text)' : 'transparent', fontWeight: val > 0 ? 600 : 400 }}>
+            {val > 0 ? formatNumber(val) : ''}
+          </span>
+          <span style={{ fontSize: 10, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 3, letterSpacing: '-0.02em' }}>
+            KH:{histVal > 0 ? formatNumber(histVal) : '0'}
+            <span style={{ color: pctColor, fontSize: 9, fontWeight: 700, background: `${pctColor}18`, padding: '0 3px', borderRadius: 2 }}>
+              {pct}%
+            </span>
+          </span>
+        </div>
+      );
+    }
+
     const delta = calculateDelta(val, histVal);
     const isPositive = delta! > 0;
     const isNegative = delta! < 0;
     const deltaColor = isPositive ? '#10b981' : isNegative ? '#ef4444' : 'var(--color-text-muted)';
     const deltaIcon = isPositive ? '▲' : isNegative ? '▼' : '';
-    
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', lineHeight: 1.2, gap: 2, height: '100%', opacity: isEditing ? 0 : 1 }}>
         <span style={{ color: val > 0 ? 'var(--color-text)' : 'transparent', fontWeight: val > 0 ? 600 : 400 }}>
@@ -1662,7 +1735,7 @@ export default function PlanningPage() {
         {/* ── Mode Switcher KẾ HOẠCH / THỰC HIỆN ── */}
         <div style={{ display: 'flex', borderRadius: 5, overflow: 'hidden', flexShrink: 0, boxShadow: '0 1px 2px rgba(0,0,0,0.06)', marginRight: 8 }}>
           <button
-            onClick={() => setPageMode('plan')}
+            onClick={() => { setPageMode('plan'); setCompareMode('none'); }}
             style={{
               padding: '0 12px', height: 24, fontSize: 11, fontWeight: pageMode === 'plan' ? 700 : 500,
               background: pageMode === 'plan' ? 'var(--color-primary)' : '#fff',
@@ -1675,7 +1748,7 @@ export default function PlanningPage() {
             }}
           >KẾ HOẠCH</button>
           <button
-            onClick={() => setPageMode('actual')}
+            onClick={() => { setPageMode('actual'); setCompareMode('none'); }}
             style={{
               padding: '0 12px', height: 24, fontSize: 11, fontWeight: pageMode === 'actual' ? 700 : 500,
               background: pageMode === 'actual' ? '#f59e0b' : '#fff',
@@ -1737,7 +1810,15 @@ export default function PlanningPage() {
         <FilterDropdown
           label="So sánh"
           value={compareMode}
-          options={[
+          options={pageMode === 'actual' ? [
+            { value: 'none', label: '— Không so sánh —' },
+            { value: 'vs_plan', label: `So với KH T${month}/${year} (% đạt)` },
+            ...(viewMode === 'month' ? [
+              { value: 'prev_actual', label: `TH tháng trước (T${month === 1 ? 12 : month - 1}/${month === 1 ? year - 1 : year})` },
+            ] : viewMode === 'quarter' ? [
+              { value: 'prev_actual', label: `TH quý trước (Q${Math.ceil(month/3) === 1 ? 4 : Math.ceil(month/3) - 1}/${Math.ceil(month/3) === 1 ? year - 1 : year})` },
+            ] : [])
+          ] : [
             { value: 'none', label: '— Không so sánh —' },
             ...(viewMode === 'month' ? [
               { value: 'prev_period', label: `Tháng trước (T${month === 1 ? 12 : month - 1}/${month === 1 ? year - 1 : year})` },
