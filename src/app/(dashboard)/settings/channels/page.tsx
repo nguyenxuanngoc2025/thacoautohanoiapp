@@ -475,8 +475,9 @@ export default function ChannelsPage() {
   };
 
   const handleToggleGroup = async (group: ChannelGroupRow) => {
-    await supabase.from('thaco_master_channel_groups')
+    const { error } = await supabase.from('thaco_master_channel_groups')
       .update({ is_active: !group.is_active, updated_at: new Date().toISOString() }).eq('id', group.id);
+    if (error) { setError(`Không thể cập nhật nhóm: ${error.message}`); return; }
     load(); refreshChannels();
   };
 
@@ -512,8 +513,9 @@ export default function ChannelsPage() {
   };
 
   const handleToggleChannel = async (ch: ChannelRow) => {
-    await supabase.from('thaco_master_channels')
+    const { error } = await supabase.from('thaco_master_channels')
       .update({ is_active: !ch.is_active, updated_at: new Date().toISOString() }).eq('id', ch.id);
+    if (error) { setError(`Không thể cập nhật kênh "${ch.name}": ${error.message}`); return; }
     load(); refreshChannels();
   };
 
