@@ -4,162 +4,339 @@ import { formatNumber } from '@/lib/utils';
 import { ExportButton } from '../ExportButton';
 import { exportToExcel } from '@/lib/report-export';
 import {
-  REPORT_CHANNELS, REPORT_METRICS,
-  sumByChannelMetric, extractShowrooms,
-  type MonthlyPayloads, type ReportMetric,
+  REPORT_CHANNELS,
+  sumByChannelMetric, sumByBrandMetric, sumByModelMetric,
+  type MonthlyPayloads,
 } from '@/lib/report-data';
+import type { BrandWithModels } from '@/lib/brands-data';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const ALL_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 
-const CHANNEL_COLORS: Record<string, string> = {
-  Facebook: '#1877F2', Google: '#EA4335', Khác: '#64748B',
-  CSKH: '#F59E0B', 'Nhận diện': '#8B5CF6', 'Sự kiện': '#10B981',
+type MetricOption = 'Ngân sách' | 'KHQT' | 'GDTD' | 'KHĐ' | 'CPL';
+const METRICS: MetricOption[] = ['Ngân sách', 'KHQT', 'GDTD', 'KHĐ', 'CPL'];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function totalAllChannels(payload: Record<string, number>, metric: string): number {
+  return (REPORT_CHANNELS as readonly string[]).reduce(
+    (s, c) => s + sumByChannelMetric(payload, c, metric), 0
+  );
+}
+
+function calcPct(actual: number, plan: number): number | null {
+  if (plan <= 0) return null;
+  return Math.round((actual / plan) * 1000) / 10;
+}
+
+function fmtNum(v: number, isNS: boolean): string {
+  if (v === 0) return '—';
+  return formatNumber(isNS ? +(v.toFixed(1)) : Math.round(v));
+}
+
+function pctColor(pct: number | null): string {
+  if (pct === null) return '#94a3b8';
+  if (pct >= 100) return '#16a34a';
+  if (pct >= 80)  return '#d97706';
+  return '#dc2626';
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const CELL: React.CSSProperties = {
+  padding: '4px 6px',
+  fontSize: 'var(--fs-table)',
+  borderBottom: '1px solid var(--color-border-light)',
+  textAlign: 'center',
+  whiteSpace: 'nowrap',
+  verticalAlign: 'top',
+};
+const LABEL_CELL: React.CSSProperties = {
+  ...CELL,
+  textAlign: 'left',
+  position: 'sticky',
+  left: 0,
+  zIndex: 1,
+};
+const TH_STYLE: React.CSSProperties = {
+  ...CELL,
+  fontWeight: 700,
+  background: '#f8fafc',
+  borderBottom: '1px solid var(--color-border)',
+  color: 'var(--color-text)',
 };
 
-export function BudgetSummaryTab({ plansByMonth }: { plansByMonth: MonthlyPayloads }) {
-  const [metric, setMetric] = useState<ReportMetric>('Ngân sách');
-  const [pivotMode, setPivotMode] = useState<'channel' | 'showroom'>('channel');
+// ─── DataCell ─────────────────────────────────────────────────────────────────
 
-  const showrooms = useMemo(() => {
-    const merged: Record<string, number> = {};
-    for (const p of Object.values(plansByMonth)) {
-      for (const [k, v] of Object.entries(p)) merged[k] = (merged[k] ?? 0) + v;
+function DataCell({ thVal, khVal, isCPL, isNS }: {
+  thVal: number; khVal: number; isCPL: boolean; isNS: boolean;
+}) {
+  if (isCPL) {
+    return (
+      <td style={CELL}>
+        <div style={{ fontWeight: thVal > 0 ? 600 : 400, color: thVal > 0 ? 'var(--color-text)' : '#cbd5e1', fontSize: 12 }}>
+          {thVal > 0 ? formatNumber(+(thVal).toFixed(2)) : '—'}
+        </div>
+      </td>
+    );
+  }
+  const pct = calcPct(thVal, khVal);
+  return (
+    <td style={CELL}>
+      <div style={{ fontWeight: thVal > 0 ? 600 : 400, color: thVal > 0 ? 'var(--color-text)' : '#cbd5e1', fontSize: 12 }}>
+        {fmtNum(thVal, isNS)}
+      </div>
+      {khVal > 0 && (
+        <div style={{ fontSize: 10, color: '#94a3b8' }}>{fmtNum(khVal, isNS)}</div>
+      )}
+      {pct !== null && (
+        <div style={{ fontSize: 10, color: pctColor(pct), fontWeight: pct < 80 ? 700 : 600 }}>{pct}%</div>
+      )}
+    </td>
+  );
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export function BudgetSummaryTab({
+  plansByMonth,
+  actualsByMonth,
+  brands,
+  showroomItems,
+}: {
+  plansByMonth: MonthlyPayloads;
+  actualsByMonth: MonthlyPayloads;
+  brands: BrandWithModels[];
+  showroomItems: { name: string; weight: number }[];
+}) {
+  const [metric, setMetric]           = useState<MetricOption>('Ngân sách');
+  const [expandedBrands, setExpandedBrands] = useState<Set<string>>(new Set());
+
+  const isCPL = metric === 'CPL';
+  const isNS  = metric === 'Ngân sách';
+
+  function toggleBrand(brand: string) {
+    setExpandedBrands(prev => {
+      const next = new Set(prev);
+      next.has(brand) ? next.delete(brand) : next.add(brand);
+      return next;
+    });
+  }
+
+  // ── Get TH value for a row+month ────────────────────────────────────────────
+
+  function getThVal(
+    month: number,
+    getter: (payload: Record<string, number>, m: string) => number
+  ): number {
+    const payload = actualsByMonth[month] ?? {};
+    if (isCPL) {
+      const ns   = getter(payload, 'Ngân sách');
+      const khqt = getter(payload, 'KHQT');
+      return khqt > 0 ? +(ns / khqt).toFixed(2) : 0;
     }
-    return extractShowrooms(merged);
-  }, [plansByMonth]);
-
-  const rowKeys = pivotMode === 'channel' ? [...REPORT_CHANNELS] : showrooms;
-
-  function getCellValue(rowKey: string, month: number): number {
-    const p = plansByMonth[month] ?? {};
-    if (pivotMode === 'channel') {
-      return sumByChannelMetric(p, rowKey, metric);
-    } else {
-      return REPORT_CHANNELS.reduce((acc, ch) => acc + sumByChannelMetric(p, ch, metric, rowKey), 0);
-    }
+    return getter(payload, metric);
   }
 
-  function getRowTotal(rowKey: string): number {
-    return ALL_MONTHS.reduce((acc, m) => acc + getCellValue(rowKey, m), 0);
+  function getKhVal(
+    month: number,
+    getter: (payload: Record<string, number>, m: string) => number
+  ): number {
+    if (isCPL) return 0;
+    return getter(plansByMonth[month] ?? {}, metric);
   }
 
-  function getColTotal(month: number): number {
-    return rowKeys.reduce((acc, k) => acc + getCellValue(k, month), 0);
+  function getYearTH(getter: (p: Record<string, number>, m: string) => number): number {
+    if (isCPL) return 0;
+    return ALL_MONTHS.reduce((s, m) => s + getter(actualsByMonth[m] ?? {}, metric), 0);
   }
 
-  const grandTotal = rowKeys.reduce((acc, k) => acc + getRowTotal(k), 0);
-  const unit = metric === 'Ngân sách' ? '(tr đ)' : '';
+  function getYearKH(getter: (p: Record<string, number>, m: string) => number): number {
+    if (isCPL) return 0;
+    return ALL_MONTHS.reduce((s, m) => s + getter(plansByMonth[m] ?? {}, metric), 0);
+  }
+
+  // ── Render one table row ────────────────────────────────────────────────────
+
+  function renderRow(
+    label: string,
+    isTotal: boolean,
+    getter: (payload: Record<string, number>, m: string) => number,
+    indent = 0,
+    color?: string | null,
+    extraLabelContent?: React.ReactNode,
+  ) {
+    const bg = isTotal ? '#eef2f8' : undefined;
+    const thTotal = getYearTH(getter);
+    const khTotal = getYearKH(getter);
+    const pctTotal = isCPL ? null : calcPct(thTotal, khTotal);
+    return (
+      <tr key={label} style={{ background: bg }}>
+        <td style={{ ...LABEL_CELL, background: bg ?? '#fff', paddingLeft: 8 + indent * 16, fontWeight: isTotal ? 700 : 400, color: color ?? 'var(--color-text)' }}>
+          {extraLabelContent}{label}
+        </td>
+        {ALL_MONTHS.map(m => (
+          <DataCell
+            key={m}
+            thVal={getThVal(m, getter)}
+            khVal={getKhVal(m, getter)}
+            isCPL={isCPL}
+            isNS={isNS}
+          />
+        ))}
+        {/* Year total */}
+        <td style={{ ...CELL, fontWeight: 700, color: 'var(--color-primary)' }}>
+          {isCPL ? '—' : (
+            <>
+              <div style={{ fontSize: 12 }}>{fmtNum(thTotal, isNS)}</div>
+              {khTotal > 0 && <div style={{ fontSize: 10, color: '#94a3b8' }}>{fmtNum(khTotal, isNS)}</div>}
+              {pctTotal !== null && (
+                <div style={{ fontSize: 10, color: pctColor(pctTotal), fontWeight: 600 }}>{pctTotal}%</div>
+              )}
+            </>
+          )}
+        </td>
+      </tr>
+    );
+  }
+
+  // ── Section wrapper ──────────────────────────────────────────────────────────
+
+  function TableSection({ title, children }: { title: string; children: React.ReactNode }) {
+    return (
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <div style={{ width: 4, height: 18, background: 'var(--color-primary)', borderRadius: 2 }} />
+          <span style={{ fontWeight: 700, fontSize: 'var(--fs-body)', color: 'var(--color-text)' }}>{title}</span>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc' }}>
+                <th style={{ ...TH_STYLE, textAlign: 'left', minWidth: 160, position: 'sticky', left: 0, zIndex: 2 }}>
+                  {title.replace('Theo ', '')}
+                </th>
+                {ALL_MONTHS.map(m => (
+                  <th key={m} style={{ ...TH_STYLE, minWidth: 72 }}>T{m}</th>
+                ))}
+                <th style={{ ...TH_STYLE, minWidth: 90, color: 'var(--color-primary)' }}>Cả năm</th>
+              </tr>
+            </thead>
+            <tbody>{children}</tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Channel rows ─────────────────────────────────────────────────────────────
+
+  const channelRows = useMemo(() => (
+    <>
+      {(REPORT_CHANNELS as readonly string[]).map(ch =>
+        renderRow(ch, false, (p, m) => sumByChannelMetric(p, ch, m))
+      )}
+      {renderRow('Tổng cộng', true, totalAllChannels)}
+    </>
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [plansByMonth, actualsByMonth, metric]);
+
+  // ── Brand rows ───────────────────────────────────────────────────────────────
+
+  const brandRows = useMemo(() => {
+    const rows: React.ReactNode[] = [];
+    brands.forEach(brand => {
+      const isExpanded = expandedBrands.has(brand.name);
+      const expandIcon = brand.models.length > 0 ? (
+        <span
+          style={{ marginRight: 6, fontSize: 10, cursor: 'pointer', userSelect: 'none' }}
+          onClick={() => toggleBrand(brand.name)}
+        >
+          {isExpanded ? '▼' : '▶'}
+        </span>
+      ) : null;
+      rows.push(renderRow(brand.name, false, (p, m) => sumByBrandMetric(p, brand.name, m), 0, brand.color, expandIcon));
+      if (isExpanded) {
+        brand.models.forEach(model => {
+          rows.push(renderRow(model, false, (p, m) => sumByModelMetric(p, brand.name, model, m), 1));
+        });
+      }
+    });
+    rows.push(renderRow('Tổng cộng', true, totalAllChannels));
+    return rows;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plansByMonth, actualsByMonth, metric, brands, expandedBrands]);
+
+  // ── Showroom rows ────────────────────────────────────────────────────────────
+
+  const showroomRows = useMemo(() => (
+    <>
+      {showroomItems.map(sr =>
+        renderRow(sr.name, false, (p, m) => {
+          const total = totalAllChannels(p, m);
+          return isCPL ? total : total * sr.weight;
+        })
+      )}
+      {renderRow('Tổng cộng', true, totalAllChannels)}
+    </>
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [plansByMonth, actualsByMonth, metric, showroomItems]);
+
+  // ── Export ───────────────────────────────────────────────────────────────────
 
   function handleExport() {
-    const rows = rowKeys.map((k) => {
-      const row: Record<string, string | number> = { 'Kênh/Showroom': k };
-      ALL_MONTHS.forEach(m => { row[`T${m}`] = getCellValue(k, m); });
-      row['Tổng'] = getRowTotal(k);
-      return row;
+    const makeRows = (
+      labels: string[],
+      getterFn: (label: string) => (p: Record<string, number>, m: string) => number,
+    ) => labels.map(label => {
+      const g = getterFn(label);
+      const r: Record<string, string | number> = { Nhóm: label };
+      ALL_MONTHS.forEach(mon => {
+        r[`T${mon}_TH`] = isCPL ? 0 : g(actualsByMonth[mon] ?? {}, metric);
+        r[`T${mon}_KH`] = isCPL ? 0 : g(plansByMonth[mon] ?? {}, metric);
+      });
+      return r;
     });
-    const totalRow: Record<string, string | number> = { 'Kênh/Showroom': 'TỔNG' };
-    ALL_MONTHS.forEach(m => { totalRow[`T${m}`] = getColTotal(m); });
-    totalRow['Tổng'] = grandTotal;
-    rows.push(totalRow);
-    exportToExcel([{ name: 'Tong_hop_NS', rows }], `Bao_cao_TH_NS_${metric}`);
+    exportToExcel([
+      { name: 'Kenh', rows: makeRows(
+        [...(REPORT_CHANNELS as readonly string[]), 'Tổng'],
+        label => label === 'Tổng' ? (p, m) => totalAllChannels(p, m) : (p, m) => sumByChannelMetric(p, label, m)
+      )},
+      { name: 'ThuongHieu', rows: makeRows(
+        [...brands.map(b => b.name), 'Tổng'],
+        label => label === 'Tổng' ? (p, m) => totalAllChannels(p, m) : (p, m) => sumByBrandMetric(p, label, m)
+      )},
+    ], `Xu_huong_12_thang_${metric}`);
   }
 
-  const CELL: React.CSSProperties = {
-    padding: '6px 10px', textAlign: 'right',
-    fontSize: 'var(--fs-table)', borderBottom: '1px solid var(--color-border-light)',
-    whiteSpace: 'nowrap',
-  };
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', gap: 2, borderRadius: 5, overflow: 'hidden', border: '1px solid var(--color-border)' }}>
-          {REPORT_METRICS.map((m) => (
-            <button key={m} onClick={() => setMetric(m)}
-              style={{
-                padding: '4px 10px', border: 'none', cursor: 'pointer',
-                fontSize: 'var(--fs-body)',
-                background: metric === m ? 'var(--color-primary)' : '#fff',
-                color: metric === m ? '#fff' : 'var(--color-text-muted)',
-                fontWeight: metric === m ? 700 : 400,
-              }}>
-              {m}
-            </button>
+      {/* Toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', borderRadius: 5, overflow: 'hidden', border: '1px solid var(--color-border)' }}>
+          {METRICS.map(m => (
+            <button key={m} onClick={() => setMetric(m)} style={{
+              padding: '4px 10px', border: 'none', cursor: 'pointer',
+              fontSize: 'var(--fs-body)',
+              background: metric === m ? 'var(--color-primary)' : '#fff',
+              color: metric === m ? '#fff' : 'var(--color-text-muted)',
+              fontWeight: metric === m ? 700 : 400,
+            }}>{m}</button>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 2, borderRadius: 5, overflow: 'hidden', border: '1px solid var(--color-border)' }}>
-          {(['channel', 'showroom'] as const).map((mode) => (
-            <button key={mode} onClick={() => setPivotMode(mode)}
-              style={{
-                padding: '4px 10px', border: 'none', cursor: 'pointer',
-                fontSize: 'var(--fs-body)',
-                background: pivotMode === mode ? '#334155' : '#fff',
-                color: pivotMode === mode ? '#fff' : 'var(--color-text-muted)',
-                fontWeight: pivotMode === mode ? 600 : 400,
-              }}>
-              {mode === 'channel' ? 'Theo kênh' : 'Theo showroom'}
-            </button>
-          ))}
-        </div>
+        <span style={{ fontSize: 11, color: '#64748b' }}>
+          {isCPL ? 'CPL = Ngân sách ÷ KHQT (tr/lead) — không có KH' : 'Mỗi ô: TH / KH / %TH'}
+        </span>
         <div style={{ flex: 1 }} />
         <ExportButton onExport={handleExport} />
       </div>
 
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
-          <thead>
-            <tr style={{ background: '#f8fafc' }}>
-              <th style={{ ...CELL, textAlign: 'left', fontWeight: 700, minWidth: 130, color: 'var(--color-text)', position: 'sticky', left: 0, background: '#f8fafc', zIndex: 1 }}>
-                {pivotMode === 'channel' ? 'Kênh' : 'Showroom'} {unit}
-              </th>
-              {ALL_MONTHS.map((m) => (
-                <th key={m} style={{ ...CELL, fontWeight: 700, color: 'var(--color-text)', minWidth: 72 }}>T{m}</th>
-              ))}
-              <th style={{ ...CELL, fontWeight: 700, color: 'var(--color-primary)', minWidth: 80 }}>Tổng</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rowKeys.map((rowKey) => {
-              const rowTotal = getRowTotal(rowKey);
-              const color = pivotMode === 'channel' ? (CHANNEL_COLORS[rowKey] ?? 'var(--color-text)') : 'var(--color-text)';
-              return (
-                <tr key={rowKey}
-                  onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.background = '#f8fafc'}
-                  onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.background = ''}
-                >
-                  <td style={{ ...CELL, textAlign: 'left', fontWeight: 600, color, position: 'sticky', left: 0, background: '#fff' }}>
-                    {rowKey}
-                  </td>
-                  {ALL_MONTHS.map((m) => {
-                    const val = getCellValue(rowKey, m);
-                    return (
-                      <td key={m} style={{ ...CELL, color: val > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
-                        {val > 0 ? formatNumber(metric === 'Ngân sách' ? val.toFixed(1) : Math.round(val)) : '—'}
-                      </td>
-                    );
-                  })}
-                  <td style={{ ...CELL, fontWeight: 700, color: 'var(--color-primary)' }}>
-                    {formatNumber(metric === 'Ngân sách' ? rowTotal.toFixed(1) : Math.round(rowTotal))}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot>
-            <tr style={{ background: '#f0f4f8', fontWeight: 700 }}>
-              <td style={{ ...CELL, textAlign: 'left', position: 'sticky', left: 0, background: '#f0f4f8' }}>TỔNG</td>
-              {ALL_MONTHS.map((m) => (
-                <td key={m} style={{ ...CELL, color: 'var(--color-text)' }}>
-                  {formatNumber(metric === 'Ngân sách' ? getColTotal(m).toFixed(1) : Math.round(getColTotal(m)))}
-                </td>
-              ))}
-              <td style={{ ...CELL, color: 'var(--color-primary)', fontSize: 13 }}>
-                {formatNumber(metric === 'Ngân sách' ? grandTotal.toFixed(1) : Math.round(grandTotal))}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+      <TableSection title="Theo kênh Marketing">{channelRows}</TableSection>
+      <TableSection title="Theo thương hiệu">{brandRows}</TableSection>
+      <TableSection title="Theo Showroom">{showroomRows}</TableSection>
     </div>
   );
 }
