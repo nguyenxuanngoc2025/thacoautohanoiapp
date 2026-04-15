@@ -52,7 +52,7 @@ function deltaArrow(curr: number | null, prev: number | null, higherIsBetter = t
   const color = good ? '#16a34a' : '#dc2626';
   const pct   = Math.abs(Math.round((curr - prev) / Math.abs(prev) * 100));
   return (
-    <span style={{ fontSize: 10, color, marginLeft: 3 }}>
+    <span style={{ fontSize: 'var(--fs-label)', color, marginLeft: 3 }}>
       {up ? '↑' : '↓'}{pct}%
     </span>
   );
@@ -140,7 +140,7 @@ export function PlanVsActualTab({
             <th style={{ ...TH_BASE, minWidth: 70 }}>KHQT</th>
             <th style={{ ...TH_BASE, minWidth: 80 }}>
               CPL (tr/lead)
-              {hasCompare && <><br /><span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>vs {compareLabel}</span></>}
+              {hasCompare && <><br /><span style={{ fontSize: 'var(--fs-label)', color: '#94a3b8', fontWeight: 400 }}>vs {compareLabel}</span></>}
             </th>
             <th style={{ ...TH_BASE, minWidth: 70 }}>CR1%</th>
             <th style={{ ...TH_BASE, minWidth: 70 }}>CR2%</th>
@@ -166,7 +166,7 @@ export function PlanVsActualTab({
             const cols = ['KH', 'TH', '%TH'];
             if (hasCompare) cols.push(`TH(${compareLabel})`, '±%');
             return cols.map(c => (
-              <th key={`${m}-${c}`} style={{ ...TH_BASE, minWidth: 60, fontWeight: 600, fontSize: 11 }}>{c}</th>
+              <th key={`${m}-${c}`} style={{ ...TH_BASE, minWidth: 60, fontWeight: 600, fontSize: 'var(--fs-label)' }}>{c}</th>
             ));
           })}
         </tr>
@@ -314,7 +314,7 @@ export function PlanVsActualTab({
       const isExpanded = expandedBrands.has(brand.name);
       const expandIcon = brand.models.length > 0 ? (
         <span
-          style={{ marginRight: 6, fontSize: 10, cursor: 'pointer', userSelect: 'none' }}
+          style={{ marginRight: 6, fontSize: 'var(--fs-label)', cursor: 'pointer', userSelect: 'none' }}
           onClick={() => toggleBrand(brand.name)}
         >
           {isExpanded ? '▼' : '▶'}
@@ -402,7 +402,7 @@ export function PlanVsActualTab({
           {modeBtn('efficiency', 'HIỆU QUẢ')}
         </div>
         {reportMode === 'efficiency' && (
-          <span style={{ fontSize: 11, color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: 4 }}>
+          <span style={{ fontSize: 'var(--fs-label)', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: 4 }}>
             CPL = NS ÷ KHQT · CR1 = GDTD÷KHQT · CR2 = KHĐ÷GDTD
           </span>
         )}

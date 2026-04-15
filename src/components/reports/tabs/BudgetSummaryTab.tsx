@@ -75,7 +75,7 @@ function DataCell({ thVal, khVal, isCPL, isNS }: {
   if (isCPL) {
     return (
       <td style={CELL}>
-        <div style={{ fontWeight: thVal > 0 ? 600 : 400, color: thVal > 0 ? 'var(--color-text)' : '#cbd5e1', fontSize: 12 }}>
+        <div style={{ fontWeight: thVal > 0 ? 600 : 400, color: thVal > 0 ? 'var(--color-text)' : '#cbd5e1', fontSize: 'var(--fs-table)' }}>
           {thVal > 0 ? formatNumber(+(thVal).toFixed(2)) : '—'}
         </div>
       </td>
@@ -84,14 +84,14 @@ function DataCell({ thVal, khVal, isCPL, isNS }: {
   const pct = calcPct(thVal, khVal);
   return (
     <td style={CELL}>
-      <div style={{ fontWeight: thVal > 0 ? 600 : 400, color: thVal > 0 ? 'var(--color-text)' : '#cbd5e1', fontSize: 12 }}>
+      <div style={{ fontWeight: thVal > 0 ? 600 : 400, color: thVal > 0 ? 'var(--color-text)' : '#cbd5e1', fontSize: 'var(--fs-table)' }}>
         {fmtNum(thVal, isNS)}
       </div>
       {khVal > 0 && (
-        <div style={{ fontSize: 10, color: '#94a3b8' }}>{fmtNum(khVal, isNS)}</div>
+        <div style={{ fontSize: 'var(--fs-label)', color: '#94a3b8' }}>{fmtNum(khVal, isNS)}</div>
       )}
       {pct !== null && (
-        <div style={{ fontSize: 10, color: pctColor(pct), fontWeight: pct < 80 ? 700 : 600 }}>{pct}%</div>
+        <div style={{ fontSize: 'var(--fs-label)', color: pctColor(pct), fontWeight: pct < 80 ? 700 : 600 }}>{pct}%</div>
       )}
     </td>
   );
@@ -189,10 +189,10 @@ export function BudgetSummaryTab({
         <td style={{ ...CELL, fontWeight: 700, color: 'var(--color-primary)' }}>
           {isCPL ? '—' : (
             <>
-              <div style={{ fontSize: 12 }}>{fmtNum(thTotal, isNS)}</div>
-              {khTotal > 0 && <div style={{ fontSize: 10, color: '#94a3b8' }}>{fmtNum(khTotal, isNS)}</div>}
+              <div style={{ fontSize: 'var(--fs-table)' }}>{fmtNum(thTotal, isNS)}</div>
+              {khTotal > 0 && <div style={{ fontSize: 'var(--fs-label)', color: '#94a3b8' }}>{fmtNum(khTotal, isNS)}</div>}
               {pctTotal !== null && (
-                <div style={{ fontSize: 10, color: pctColor(pctTotal), fontWeight: 600 }}>{pctTotal}%</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: pctColor(pctTotal), fontWeight: 600 }}>{pctTotal}%</div>
               )}
             </>
           )}
@@ -250,7 +250,7 @@ export function BudgetSummaryTab({
       const isExpanded = expandedBrands.has(brand.name);
       const expandIcon = brand.models.length > 0 ? (
         <span
-          style={{ marginRight: 6, fontSize: 10, cursor: 'pointer', userSelect: 'none' }}
+          style={{ marginRight: 6, fontSize: 'var(--fs-label)', cursor: 'pointer', userSelect: 'none' }}
           onClick={() => toggleBrand(brand.name)}
         >
           {isExpanded ? '▼' : '▶'}
@@ -327,7 +327,7 @@ export function BudgetSummaryTab({
             }}>{m}</button>
           ))}
         </div>
-        <span style={{ fontSize: 11, color: '#64748b' }}>
+        <span style={{ fontSize: 'var(--fs-label)', color: '#64748b' }}>
           {isCPL ? 'CPL = Ngân sách ÷ KHQT (tr/lead) — không có KH' : 'Mỗi ô: TH / KH / %TH'}
         </span>
         <div style={{ flex: 1 }} />
