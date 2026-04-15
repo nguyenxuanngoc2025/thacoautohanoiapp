@@ -86,6 +86,40 @@ export function monthsInQuarter(q: number): number[] {
   return [start, start + 1, start + 2];
 }
 
+/** Tổng theo thương hiệu + metric (sum tất cả model + channel) */
+export function sumByBrandMetric(
+  payload: PayloadMap,
+  brand: string,
+  metric: string
+): number {
+  let total = 0;
+  for (const [k, v] of Object.entries(payload)) {
+    const parts = k.split('-');
+    if (parts.length < 3) continue;
+    if (parts[0] === brand && parts[parts.length - 1] === metric) total += v;
+  }
+  return total;
+}
+
+/** Tổng theo model cụ thể + metric (sum tất cả channel) */
+export function sumByModelMetric(
+  payload: PayloadMap,
+  brand: string,
+  model: string,
+  metric: string
+): number {
+  const prefix = `${brand}-${model}`;
+  let total = 0;
+  for (const [k, v] of Object.entries(payload)) {
+    const parts = k.split('-');
+    if (parts.length < 3) continue;
+    const m  = parts[parts.length - 1];
+    const sr = parts.slice(0, parts.length - 2).join('-');
+    if (sr === prefix && m === metric) total += v;
+  }
+  return total;
+}
+
 /** Months in a period */
 export function getMonthsForPeriod(
   viewMode: 'month' | 'quarter' | 'year',
