@@ -2052,18 +2052,15 @@ export default function PlanningPage() {
                 </th>
                 {(() => {
                   const renderedCategories = new Set<string>();
-                  return CHANNELS.map((ch) => {
-                    // Skip hidden categories
-                    if (hiddenChannels.has(ch.category)) return null;
-
+                  return visibleChannels.map((ch) => {
                     // Only render each category once
                     if (renderedCategories.has(ch.category)) return null;
                     renderedCategories.add(ch.category);
-                    
+
                     const catColor = CATEGORY_COLOR_MAP[ch.category] || ch.color;
-                    
+
                     // Count number of visible channels in this category
-                    let visibleChannelsInCat = CHANNELS.filter(c => c.category === ch.category);
+                    let visibleChannelsInCat = visibleChannels.filter(c => c.category === ch.category);
                     if (ch.category === 'DIGITAL') {
                       if (digitalCollapsed) {
                         visibleChannelsInCat = visibleChannelsInCat.filter(c => c.name === 'Tổng Digital');
