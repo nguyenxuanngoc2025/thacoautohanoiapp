@@ -1,29 +1,12 @@
 /**
  * use-data.ts — SWR hooks cho global data cache
  *
- * Kiến trúc Bottom-Up (Phase 1):
- * - Single SR view: useBudgetPlansByShowroom / useActualEntriesByShowroom / useEventsByShowroom
- *   → Key include showroom_code → cache tách riêng từng SR → switch SR không thả cache
- * - Aggregate view: useAggregateBudgetPlans / useAggregateActualEntries
- *   → Chỉ lấy records status ∈ (submitted, approved) → rồi caller sum
- * - Legacy hooks (useBudgetPlans, useActualEntries, useEventsData) giữ cho dashboard/reports
- *   (các trang này vẫn đọc full để sum toàn unit).
+ * Foundation Rebuild (2026-04-22): Chỉ còn các hooks dựa trên normalized
+ * thaco_budget_entries + Supabase views. Legacy hooks (useBudgetPlans,
+ * useActualEntries, v.v.) đã bị xóa cùng budget-data.ts / actual-data.ts.
  */
 
 import useSWR, { mutate as globalMutate, mutate as swrMutate } from 'swr';
-import {
-  fetchAllBudgetPlans,
-  fetchBudgetPlansByShowroom,
-  fetchAggregateBudgetPlans,
-  type BudgetPlanData,
-} from './budget-data';
-import {
-  fetchAllActualEntries,
-  fetchActualEntriesByShowroom,
-  fetchAggregateActualEntries,
-  computeHistoricalCPL,
-  type ActualEntryData,
-} from './actual-data';
 import {
   fetchEventsFromDB,
   fetchEventsByShowroom,
@@ -35,6 +18,8 @@ import {
   fetchViewBudgetByBrand,
   fetchViewKpiByShowroom,
   fetchBudgetEntriesByShowroom,
+  fetchBudgetEntriesByUnit,
+  fetchBudgetEntriesByShowroomIds,
 } from '@/lib/db/budget-entries';
 import type {
   ViewBudgetByShowroom,
@@ -52,80 +37,13 @@ const BASE_OPTS = {
   keepPreviousData: true,
 } as const;
 
-// CPL cache dài hơn (ít thay đổi)
-const CPL_OPTS = { ...BASE_OPTS, dedupingInterval: 300_000, keepPreviousData: true } as const;
-
 // ─────────────────────────────────────────────────────────────────────────────
-// LEGACY HOOKS — giữ cho dashboard / reports (các trang không phải planning)
-// DEPRECATED (Foundation Rebuild 2026-04-22): useBudgetPlans / useActualEntries read from
-// thaco_budget_plans / thaco_actual_entries (JSONB). Prefer useViewBudgetByShowroom /
-// useViewBudgetByBrand / useBudgetEntriesByShowroom which read from normalized
-// thaco_budget_entries + Supabase views. Remove when dashboard/reports are migrated.
+// EVENTS HOOKS
 // ─────────────────────────────────────────────────────────────────────────────
-
-export function useBudgetPlans(unitId?: string, year: number = 2026) {
-  const key = ['budget_plans', unitId ?? 'all', year];
-  return useSWR<BudgetPlanData[]>(key, () => fetchAllBudgetPlans(unitId, year), BASE_OPTS);
-}
-
-export function useActualEntries(year: number, unitId?: string) {
-  const key = ['actual_entries', year, unitId ?? 'all'];
-  return useSWR<ActualEntryData[]>(key, () => fetchAllActualEntries(year, unitId), BASE_OPTS);
-}
 
 export function useEventsData(unitId?: string) {
   const key = ['events', unitId ?? 'all'];
   return useSWR<EventsByMonth>(key, () => fetchEventsFromDB(unitId), BASE_OPTS);
-}
-
-export function useHistoricalCPL(year: number, unitId?: string, showroomCode?: string) {
-  const key = ['historical_cpl', year, unitId ?? 'all', showroomCode ?? 'ALL'];
-  return useSWR<Record<string, number>>(
-    key,
-    () => computeHistoricalCPL(year, unitId, showroomCode),
-    CPL_OPTS,
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PHASE 1 — PER-SHOWROOM HOOKS (dùng cho /planning)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Budget plans của 1 showroom cụ thể — dùng khi user đứng ở 1 SR.
- * Khi showroomCode đổi (switch SR), SWR dùng cache riêng → không re-fetch.
- */
-export function useBudgetPlansByShowroom(
-  showroomCode: string | null | undefined,
-  year: number = 2026,
-  unitId?: string,
-) {
-  const key = showroomCode
-    ? (['budget_plans_sr', unitId ?? 'all', showroomCode, year] as const)
-    : null;
-  return useSWR<BudgetPlanData[]>(
-    key,
-    () => fetchBudgetPlansByShowroom(showroomCode as string, year, unitId),
-    BASE_OPTS,
-  );
-}
-
-/**
- * Actual entries của 1 showroom cụ thể.
- */
-export function useActualEntriesByShowroom(
-  showroomCode: string | null | undefined,
-  year: number,
-  unitId?: string,
-) {
-  const key = showroomCode
-    ? (['actual_entries_sr', unitId ?? 'all', showroomCode, year] as const)
-    : null;
-  return useSWR<ActualEntryData[]>(
-    key,
-    () => fetchActualEntriesByShowroom(showroomCode as string, year, unitId),
-    BASE_OPTS,
-  );
 }
 
 /**
@@ -146,87 +64,8 @@ export function useEventsByShowroom(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AGGREGATE HOOKS — xem "Tất cả SR" (read-only sum submitted/approved)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Aggregate budget plans — chỉ records đã submitted/approved.
- * @param showroomCodes [] = tất cả SR trong unit (admin view)
- * @param enabled false = tạm không fetch (ví dụ chưa chọn view mode)
- */
-export function useAggregateBudgetPlans(
-  showroomCodes: string[],
-  year: number = 2026,
-  unitId?: string,
-  enabled: boolean = true,
-) {
-  const codesKey = [...showroomCodes].sort().join(',') || 'all';
-  const key = enabled
-    ? (['budget_plans_agg', unitId ?? 'all', codesKey, year] as const)
-    : null;
-  return useSWR<BudgetPlanData[]>(
-    key,
-    () => fetchAggregateBudgetPlans(showroomCodes, year, unitId),
-    BASE_OPTS,
-  );
-}
-
-export function useAggregateActualEntries(
-  showroomCodes: string[],
-  year: number,
-  unitId?: string,
-  enabled: boolean = true,
-) {
-  const codesKey = [...showroomCodes].sort().join(',') || 'all';
-  const key = enabled
-    ? (['actual_entries_agg', unitId ?? 'all', codesKey, year] as const)
-    : null;
-  return useSWR<ActualEntryData[]>(
-    key,
-    () => fetchAggregateActualEntries(showroomCodes, year, unitId),
-    BASE_OPTS,
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // INVALIDATION HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
-
-export const invalidateBudgetPlans = (unitId?: string, year: number = 2026) =>
-  globalMutate(['budget_plans', unitId ?? 'all', year]);
-
-export const invalidateBudgetPlansByShowroom = (
-  showroomCode: string,
-  year: number = 2026,
-  unitId?: string,
-) => {
-  // Invalidate cả per-SR hook và aggregate (ảnh hưởng chéo)
-  globalMutate(['budget_plans_sr', unitId ?? 'all', showroomCode, year]);
-  globalMutate(
-    (key) => Array.isArray(key) && key[0] === 'budget_plans_agg' && key[1] === (unitId ?? 'all') && key[3] === year,
-    undefined,
-    { revalidate: true },
-  );
-  // Cũng invalidate legacy hook
-  globalMutate(['budget_plans', unitId ?? 'all', year]);
-};
-
-export const invalidateActualEntries = (year: number, unitId?: string) =>
-  globalMutate(['actual_entries', year, unitId ?? 'all']);
-
-export const invalidateActualEntriesByShowroom = (
-  showroomCode: string,
-  year: number,
-  unitId?: string,
-) => {
-  globalMutate(['actual_entries_sr', unitId ?? 'all', showroomCode, year]);
-  globalMutate(
-    (key) => Array.isArray(key) && key[0] === 'actual_entries_agg' && key[1] === (unitId ?? 'all') && key[3] === year,
-    undefined,
-    { revalidate: true },
-  );
-  globalMutate(['actual_entries', year, unitId ?? 'all']);
-};
 
 export const invalidateEventsData = (unitId?: string) =>
   globalMutate(['events', unitId ?? 'all']);
@@ -235,9 +74,6 @@ export const invalidateEventsByShowroom = (showroomCode: string, unitId?: string
   globalMutate(['events_sr', unitId ?? 'all', showroomCode]);
   globalMutate(['events', unitId ?? 'all']);
 };
-
-export const invalidateHistoricalCPL = (year: number, unitId?: string, showroomCode?: string) =>
-  globalMutate(['historical_cpl', year, unitId ?? 'all', showroomCode ?? 'ALL']);
 
 // ─── Foundation Rebuild: New View-Based Hooks ─────────────────────────────────
 
@@ -281,7 +117,35 @@ export function useBudgetEntriesByShowroom(
   return useSWR<BudgetEntryRow[]>(
     showroomId ? ['budget_entries', showroomId, year, month] : null,
     () => fetchBudgetEntriesByShowroom(showroomId!, year, month),
-    { revalidateOnFocus: false }
+    { revalidateOnFocus: true, dedupingInterval: 5_000 }
+  );
+}
+
+export function useBudgetEntriesByUnit(
+  unitId: string | null,
+  year: number,
+  month: number
+) {
+  return useSWR<BudgetEntryRow[]>(
+    unitId ? ['budget_entries_unit', unitId, year, month] : null,
+    () => fetchBudgetEntriesByUnit(unitId!, year, month),
+    { revalidateOnFocus: true, dedupingInterval: 5_000 }
+  );
+}
+
+// Fetch entries cho nhiều showrooms cùng lúc (aggregate view)
+// Không phụ thuộc unit_id trong entries — dùng showroom_id[] thay thế
+export function useBudgetEntriesByShowroomIds(
+  showroomIds: string[] | null,
+  year: number,
+  month: number
+) {
+  // Stable key: sort để tránh cache miss khi thứ tự thay đổi
+  const idsKey = showroomIds ? [...showroomIds].sort().join(',') : null;
+  return useSWR<BudgetEntryRow[]>(
+    idsKey ? ['budget_entries_srs', idsKey, year, month] : null,
+    () => fetchBudgetEntriesByShowroomIds(showroomIds!, year, month),
+    { revalidateOnFocus: true, dedupingInterval: 5_000 }
   );
 }
 
@@ -292,4 +156,10 @@ export function invalidateBudgetCaches(unitId: string, showroomId: string, year:
   swrMutate(['v_budget_by_channel', unitId, year]);
   swrMutate(['v_budget_by_brand', unitId, year]);
   swrMutate(['budget_entries', showroomId, year, month]);
+  // Invalidate aggregate cache (key bao gồm showroom_id này)
+  swrMutate(
+    (key) => Array.isArray(key) && key[0] === 'budget_entries_srs' && typeof key[1] === 'string' && key[1].includes(showroomId),
+    undefined,
+    { revalidate: true },
+  );
 }
