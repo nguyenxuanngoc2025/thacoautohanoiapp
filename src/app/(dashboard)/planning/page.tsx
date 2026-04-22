@@ -611,47 +611,7 @@ export default function PlanningPage() {
       return dataByMonth[prevMonth]?.[cellKey] || 0;
     }
 
-    const computeBase = (key: string) => {
-      const isBudget = key.endsWith('-Ngân sách');
-      let hash = 0;
-      for (let i = 0; i < key.length; i++) hash = Math.imul(31, hash) + key.charCodeAt(i) | 0;
-      const seededRand = (Math.abs(hash) % 100) / 100;
-      if (seededRand < 0.3) return 0;
-      
-      const currentVal = cellData[key] || 0;
-      if (currentVal > 0) {
-          return isBudget 
-             ? Math.round(currentVal * (0.8 + (seededRand * 0.35)) * 10) / 10
-             : Math.max(1, Math.round(currentVal * (0.8 + (seededRand * 0.35))));
-      }
-      return 0; 
-    };
-
-    if (cellKey.includes('-Tổng Digital-')) {
-      // Dynamic: dùng tên kênh digital từ ChannelsContext thay vì cứng
-      return digitalChannelNames.reduce((sum, chName) =>
-        sum + computeBase(cellKey.replace('-Tổng Digital-', `-${chName}-`)), 0
-      );
-    }
-    
-    // Dynamic Model Aggregation
-    for (const b of brands) {
-      if (!b.modelData) continue;
-      for (const m of b.modelData) {
-        if (m.is_aggregate && m.aggregate_group) {
-          const prefix = `${b.name}-${m.name}-`;
-          if (cellKey.startsWith(prefix)) {
-            const suffix = cellKey.slice(prefix.length - 1);
-            const targetModels = b.modelData
-              .filter(sub => sub.aggregate_group === m.aggregate_group && !sub.is_aggregate)
-              .map(sub => sub.name);
-            return targetModels.reduce((sum, mName) => sum + computeBase(`${b.name}-${mName}${suffix}`), 0);
-          }
-        }
-      }
-    }
-
-    return computeBase(cellKey);
+    return null;
   }, [dataByMonth, actualDataByMonth, month, cellData, brands, digitalChannelNames]);
 
   // Bottom-Up: no weight scaling; data is already per-SR
@@ -1926,11 +1886,9 @@ export default function PlanningPage() {
           ] : [
             { value: 'none', label: '— Không so sánh —' },
             ...(viewMode === 'month' ? [
-              { value: 'prev_period', label: `Tháng trước (T${month === 1 ? 12 : month - 1}/${month === 1 ? year - 1 : year})` },
-              { value: 'prev_year', label: `Cùng kỳ năm trước (T${month}/${year - 1})` }
+              { value: 'prev_period', label: `Tháng trước (T${month === 1 ? 12 : month - 1}/${month === 1 ? year - 1 : year})` }
             ] : viewMode === 'quarter' ? [
-              { value: 'prev_period', label: `Quý trước (Q${Math.ceil(month/3) === 1 ? 4 : Math.ceil(month/3) - 1})` },
-              { value: 'prev_year', label: `Cùng kỳ năm trước` }
+              { value: 'prev_period', label: `Quý trước (Q${Math.ceil(month/3) === 1 ? 4 : Math.ceil(month/3) - 1})` }
             ] : [
               { value: 'prev_period', label: `Năm trước (${year - 1})` }
             ])
