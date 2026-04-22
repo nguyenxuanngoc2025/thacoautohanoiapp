@@ -1783,28 +1783,6 @@ export default function PlanningPage() {
           width={110}
           placeholder="— Không so sánh —"
         />
-        {/* Refresh button */}
-        <button
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          title="Làm mới dữ liệu (F5)"
-          style={{
-            display: 'flex', alignItems: 'center', gap: 4,
-            padding: '3px 8px', fontSize: 11, fontWeight: 600,
-            border: '1px solid var(--color-border)', borderRadius: 4,
-            background: 'var(--color-surface)', color: 'var(--color-text-secondary)',
-            cursor: isRefreshing ? 'default' : 'pointer',
-            opacity: isRefreshing ? 0.65 : 1,
-            transition: 'opacity 0.2s',
-            flexShrink: 0,
-          }}
-        >
-          <RefreshCw
-            size={11}
-            style={{ animation: isRefreshing ? 'spin 0.8s linear infinite' : 'none' }}
-          />
-          {isRefreshing ? 'Đang tải...' : 'Làm mới'}
-        </button>
       </div>
 
       {/* ROW 4: Kênh | Metric toggles | Ẩn dòng trống */}
@@ -1951,14 +1929,25 @@ export default function PlanningPage() {
           >
             <DownloadCloud size={14} /> <span style={{ fontSize: 12 }}>Export</span>
           </button>
-
-          {/* Xem tổng hợp (chỉ đọc) — hiện khi đang ở aggregate view */}
-          {pageMode === 'plan' && isAggregateView && (
-            <>
-              <div className="toolbar-sep" style={{ height: 14, flexShrink: 0 }} />
-              <span style={{ fontSize: 11, color: '#64748b', padding: '0 4px', whiteSpace: 'nowrap', flexShrink: 0, fontStyle: 'italic' }}>Xem tổng hợp (chỉ đọc)</span>
-            </>
-          )}
+          <div className="toolbar-sep" style={{ height: 14, flexShrink: 0 }} />
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            title="Làm mới dữ liệu (F5)"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '3px 8px', fontSize: 11, fontWeight: 600,
+              border: '1px solid var(--color-border)', borderRadius: 4,
+              background: 'var(--color-surface)', color: 'var(--color-text-secondary)',
+              cursor: isRefreshing ? 'default' : 'pointer',
+              opacity: isRefreshing ? 0.65 : 1,
+              transition: 'opacity 0.2s',
+              flexShrink: 0,
+            }}
+          >
+            <RefreshCw size={11} style={{ animation: isRefreshing ? 'spin 0.8s linear infinite' : 'none' }} />
+            {isRefreshing ? 'Đang tải...' : 'Làm mới'}
+          </button>
 
         </div>
 
