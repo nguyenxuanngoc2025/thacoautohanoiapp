@@ -1830,10 +1830,8 @@ export default function PlanningPage() {
           isMulti={true}
           placeholder="— Tất cả —"
         />
-        {/* Spacer */}
-        <div style={{ flex: 1 }} />
         <div className="toolbar-sep" style={{ height: 14 }} />
-        {/* Nhóm 4: So sánh — đẩy sang phải */}
+        {/* Nhóm 4: So sánh */}
         <FilterDropdown
           label="So sánh"
           value={compareMode}
@@ -2772,11 +2770,11 @@ export default function PlanningPage() {
                                     <span style={{ color: v > 0 ? 'var(--color-text)' : 'var(--color-text-muted)', fontWeight: v > 0 ? 600 : 400 }}>{v > 0 ? formatNumber(v) : '—'}</span>
                                     <span style={{ fontSize: 10, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
                                       KH:{h > 0 ? formatNumber(h) : '0'}
-                                      {h > 0 && <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px', borderRadius: 2, background: (v/h>=1?'#10b98118':v/h>=0.8?'#f59e0b18':'#ef444418'), color: v/h>=1?'#10b981':v/h>=0.8?'#f59e0b':'#ef4444' }}>{Math.round(v/h*100)}%</span>}
+                                      {(v > 0 || h > 0) && (() => { const pct = h > 0 ? Math.round(v/h*100) : (v > 0 ? 100 : 0); return <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px', borderRadius: 2, background: pct>=100?'#10b98118':pct>=80?'#f59e0b18':'#ef444418', color: pct>=100?'#10b981':pct>=80?'#f59e0b':'#ef4444' }}>{pct}%</span>; })()}
                                     </span>
                                   </div>
                                 ) : (() => {
-                                  const delta = h > 0 ? Math.round(((v - h) / h) * 100) : null;
+                                  const delta = h > 0 ? Math.round(((v - h) / h) * 100) : (v > 0 ? 100 : null);
                                   const dc = delta !== null ? (delta > 0 ? '#10b981' : delta < 0 ? '#ef4444' : 'var(--color-text-muted)') : 'var(--color-text-muted)';
                                   return (
                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
@@ -2802,11 +2800,11 @@ export default function PlanningPage() {
                                 <span>{totalNS > 0 ? formatNumber(totalNS) : '—'}</span>
                                 <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
                                   KH:{histTotalNS > 0 ? formatNumber(histTotalNS) : '0'}
-                                  {histTotalNS > 0 && <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px', borderRadius: 2, background: (totalNS/histTotalNS>=1?'#10b98118':totalNS/histTotalNS>=0.8?'#f59e0b18':'#ef444418'), color: totalNS/histTotalNS>=1?'#10b981':totalNS/histTotalNS>=0.8?'#f59e0b':'#ef4444' }}>{Math.round(totalNS/histTotalNS*100)}%</span>}
+                                  {(totalNS > 0 || histTotalNS > 0) && (() => { const pct = histTotalNS > 0 ? Math.round(totalNS/histTotalNS*100) : (totalNS > 0 ? 100 : 0); return <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px', borderRadius: 2, background: pct>=100?'#10b98118':pct>=80?'#f59e0b18':'#ef444418', color: pct>=100?'#10b981':pct>=80?'#f59e0b':'#ef4444' }}>{pct}%</span>; })()}
                                 </span>
                               </div>
                             ) : (() => {
-                              const d = histTotalNS > 0 ? Math.round(((totalNS - histTotalNS) / histTotalNS) * 100) : null;
+                              const d = histTotalNS > 0 ? Math.round(((totalNS - histTotalNS) / histTotalNS) * 100) : (totalNS > 0 ? 100 : null);
                               return (
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
                                   <span>{totalNS > 0 ? formatNumber(totalNS) : '—'}</span>
@@ -2826,11 +2824,11 @@ export default function PlanningPage() {
                                 <span>{totalKHQT > 0 ? formatNumber(totalKHQT) : '—'}</span>
                                 <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
                                   KH:{histTotalKHQT > 0 ? formatNumber(histTotalKHQT) : '0'}
-                                  {histTotalKHQT > 0 && <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px', borderRadius: 2, background: (totalKHQT/histTotalKHQT>=1?'#10b98118':totalKHQT/histTotalKHQT>=0.8?'#f59e0b18':'#ef444418'), color: totalKHQT/histTotalKHQT>=1?'#10b981':totalKHQT/histTotalKHQT>=0.8?'#f59e0b':'#ef4444' }}>{Math.round(totalKHQT/histTotalKHQT*100)}%</span>}
+                                  {(totalKHQT > 0 || histTotalKHQT > 0) && (() => { const pct = histTotalKHQT > 0 ? Math.round(totalKHQT/histTotalKHQT*100) : (totalKHQT > 0 ? 100 : 0); return <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px', borderRadius: 2, background: pct>=100?'#10b98118':pct>=80?'#f59e0b18':'#ef444418', color: pct>=100?'#10b981':pct>=80?'#f59e0b':'#ef4444' }}>{pct}%</span>; })()}
                                 </span>
                               </div>
                             ) : (() => {
-                              const d = histTotalKHQT > 0 ? Math.round(((totalKHQT - histTotalKHQT) / histTotalKHQT) * 100) : null;
+                              const d = histTotalKHQT > 0 ? Math.round(((totalKHQT - histTotalKHQT) / histTotalKHQT) * 100) : (totalKHQT > 0 ? 100 : null);
                               return (
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
                                   <span>{totalKHQT > 0 ? formatNumber(totalKHQT) : '—'}</span>
@@ -2850,11 +2848,11 @@ export default function PlanningPage() {
                                 <span>{totalGDTD > 0 ? formatNumber(totalGDTD) : '—'}</span>
                                 <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
                                   KH:{histTotalGDTD > 0 ? formatNumber(histTotalGDTD) : '0'}
-                                  {histTotalGDTD > 0 && <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px', borderRadius: 2, background: (totalGDTD/histTotalGDTD>=1?'#10b98118':totalGDTD/histTotalGDTD>=0.8?'#f59e0b18':'#ef444418'), color: totalGDTD/histTotalGDTD>=1?'#10b981':totalGDTD/histTotalGDTD>=0.8?'#f59e0b':'#ef4444' }}>{Math.round(totalGDTD/histTotalGDTD*100)}%</span>}
+                                  {(totalGDTD > 0 || histTotalGDTD > 0) && (() => { const pct = histTotalGDTD > 0 ? Math.round(totalGDTD/histTotalGDTD*100) : (totalGDTD > 0 ? 100 : 0); return <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px', borderRadius: 2, background: pct>=100?'#10b98118':pct>=80?'#f59e0b18':'#ef444418', color: pct>=100?'#10b981':pct>=80?'#f59e0b':'#ef4444' }}>{pct}%</span>; })()}
                                 </span>
                               </div>
                             ) : (() => {
-                              const d = histTotalGDTD > 0 ? Math.round(((totalGDTD - histTotalGDTD) / histTotalGDTD) * 100) : null;
+                              const d = histTotalGDTD > 0 ? Math.round(((totalGDTD - histTotalGDTD) / histTotalGDTD) * 100) : (totalGDTD > 0 ? 100 : null);
                               return (
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
                                   <span>{totalGDTD > 0 ? formatNumber(totalGDTD) : '—'}</span>
@@ -2874,11 +2872,11 @@ export default function PlanningPage() {
                                 <span>{totalKHD > 0 ? formatNumber(totalKHD) : '—'}</span>
                                 <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
                                   KH:{histTotalKHD > 0 ? formatNumber(histTotalKHD) : '0'}
-                                  {histTotalKHD > 0 && <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px', borderRadius: 2, background: (totalKHD/histTotalKHD>=1?'#10b98118':totalKHD/histTotalKHD>=0.8?'#f59e0b18':'#ef444418'), color: totalKHD/histTotalKHD>=1?'#10b981':totalKHD/histTotalKHD>=0.8?'#f59e0b':'#ef4444' }}>{Math.round(totalKHD/histTotalKHD*100)}%</span>}
+                                  {(totalKHD > 0 || histTotalKHD > 0) && (() => { const pct = histTotalKHD > 0 ? Math.round(totalKHD/histTotalKHD*100) : (totalKHD > 0 ? 100 : 0); return <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px', borderRadius: 2, background: pct>=100?'#10b98118':pct>=80?'#f59e0b18':'#ef444418', color: pct>=100?'#10b981':pct>=80?'#f59e0b':'#ef4444' }}>{pct}%</span>; })()}
                                 </span>
                               </div>
                             ) : (() => {
-                              const d = histTotalKHD > 0 ? Math.round(((totalKHD - histTotalKHD) / histTotalKHD) * 100) : null;
+                              const d = histTotalKHD > 0 ? Math.round(((totalKHD - histTotalKHD) / histTotalKHD) * 100) : (totalKHD > 0 ? 100 : null);
                               return (
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
                                   <span>{totalKHD > 0 ? formatNumber(totalKHD) : '—'}</span>
