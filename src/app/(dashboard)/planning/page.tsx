@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { mutate as globalMutate } from 'swr';
 import PageHeader from '@/components/layout/PageHeader';
 import { formatNumber, cn } from '@/lib/utils';
 import { CHANNEL_CATEGORIES } from '@/lib/constants';
-import { DownloadCloud, UploadCloud, Save, Send, Wallet, Users, FileSignature, BarChart3, Wand2, Zap, X, CheckCircle2, AlertTriangle, Edit2, Trash2, ArrowUpRight, CalendarDays, Keyboard, ChevronDown, CloudUpload, Lock } from 'lucide-react';
+import { DownloadCloud, UploadCloud, Save, Send, Wallet, Users, FileSignature, BarChart3, Wand2, Zap, X, CheckCircle2, AlertTriangle, Edit2, Trash2, ArrowUpRight, CalendarDays, Keyboard, ChevronDown, CloudUpload, Lock, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/reui/badge';
 import { type EventItem, EVENT_CPL, EVENT_CR1, EVENT_CR2 } from '@/lib/events-data';
 import { useBudgetEntriesByShowroom, useBudgetEntriesByShowroomIds, useEventsData, invalidateBudgetCaches } from '@/lib/use-data';
@@ -497,6 +498,18 @@ export default function PlanningPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveRole, selectedShowroomId, year, month]);
 
+  // ─── Refresh dữ liệu ───────────────────────────────────────────────────────
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    // Revalidate all budget entry caches (single showroom + aggregate)
+    globalMutate(
+      (key: unknown) => Array.isArray(key) && (key[0] === 'budget_entries' || key[0] === 'budget_entries_unit' || key[0] === 'budget_entries_srs'),
+      undefined,
+      { revalidate: true }
+    );
+    setTimeout(() => setIsRefreshing(false), 1200);
+  }, []);
+
   // ─── Gửi kế hoạch ─────────────────────────────────────────────────────────
   const handleSubmitPlan = useCallback(async () => {
     if (!selectedShowroomId || !activeUnitId) return;
@@ -672,6 +685,7 @@ export default function PlanningPage() {
   };
 
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   // Collapsed brand rows: Set of brand names
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
   // Hidden channel categories (chip filter): Set of category names
@@ -1845,6 +1859,28 @@ export default function PlanningPage() {
           width={110}
           placeholder="— Không so sánh —"
         />
+        {/* Refresh button */}
+        <button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          title="Làm mới dữ liệu (F5)"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            padding: '3px 8px', fontSize: 11, fontWeight: 600,
+            border: '1px solid var(--color-border)', borderRadius: 4,
+            background: 'var(--color-surface)', color: 'var(--color-text-secondary)',
+            cursor: isRefreshing ? 'default' : 'pointer',
+            opacity: isRefreshing ? 0.65 : 1,
+            transition: 'opacity 0.2s',
+            flexShrink: 0,
+          }}
+        >
+          <RefreshCw
+            size={11}
+            style={{ animation: isRefreshing ? 'spin 0.8s linear infinite' : 'none' }}
+          />
+          {isRefreshing ? 'Đang tải...' : 'Làm mới'}
+        </button>
       </div>
 
       {/* ROW 4: Kênh | Metric toggles | Ẩn dòng trống */}
@@ -2650,6 +2686,28 @@ export default function PlanningPage() {
                     const srData = (pageMode === 'plan' ? showroomDataByMonth : showroomActualDataByMonth)[month]?.[srObj.id] || {};
                     const bg = si % 2 === 0 ? '#ffffff' : '#fafafa';
 
+                    // Historical data for comparison (null when compareMode === 'none')
+                    const _prevMonth = month === 1 ? 12 : month - 1;
+                    const histSrData: Record<string, number> = compareMode === 'none' ? {} : (() => {
+                      if (compareMode === 'vs_plan') return showroomDataByMonth[month]?.[srObj.id] || {};
+                      if (compareMode === 'prev_actual') return showroomActualDataByMonth[_prevMonth]?.[srObj.id] || {};
+                      if (compareMode === 'prev_period') return showroomDataByMonth[_prevMonth]?.[srObj.id] || {};
+                      return {};
+                    })();
+
+                    const getHistChMetricSum = (chName: string, metric: string) => {
+                      let s = 0;
+                      const suffix = `-${chName}-${metric}`;
+                      for (const [k, v] of Object.entries(histSrData)) {
+                        if (k.endsWith(suffix)) s += (v as number) || 0;
+                      }
+                      return s;
+                    };
+                    const getHistChanSum = (ch: typeof visibleChannels[0], metric: string) =>
+                      ch.isAggregate
+                        ? digitalChannelNames.reduce((s, dcName) => s + getHistChMetricSum(dcName, metric), 0)
+                        : getHistChMetricSum(ch.name, metric);
+
                     // Tổng theo channel+metric từ legacy keys (brand-model-channel-metric)
                     const getChMetricSum = (chName: string, metric: string) => {
                       let sum = 0;
@@ -2674,11 +2732,22 @@ export default function PlanningPage() {
                       totalKHD  += getChanSum(ch, 'KHĐ');
                     });
 
+                    // Historical totals for comparison summary columns
+                    let histTotalNS = 0, histTotalKHQT = 0, histTotalGDTD = 0, histTotalKHD = 0;
+                    if (compareMode !== 'none') {
+                      visibleChannels.filter(ch => !ch.isAggregate).forEach(ch => {
+                        histTotalNS   += getHistChanSum(ch, 'Ngân sách');
+                        histTotalKHQT += getHistChanSum(ch, 'KHQT');
+                        histTotalGDTD += getHistChanSum(ch, 'GDTD');
+                        histTotalKHD  += getHistChanSum(ch, 'KHĐ');
+                      });
+                    }
+
                     // Áp dụng filter ẩn dòng trống — nhất quán với bảng brand
                     if (hideZeroRows && totalNS === 0 && totalKHQT === 0 && totalGDTD === 0 && totalKHD === 0) return null;
 
                     return (
-                      <tr key={srObj.id} style={{ background: bg, height: 26 }}>
+                      <tr key={srObj.id} style={{ background: bg, height: compareMode !== 'none' ? 44 : 26 }}>
                         {/* Showroom name — span cả 2 sticky cols để thẳng hàng */}
                         <td
                           colSpan={2}
@@ -2689,28 +2758,138 @@ export default function PlanningPage() {
                         {/* Data cells — cùng visibleChannels × visibleMetrics như bảng trên */}
                         {visibleChannels.map(ch => visibleMetrics.map(m => {
                           const v = getChanSum(ch, m);
+                          const h = compareMode !== 'none' ? getHistChanSum(ch, m) : null;
+                          const cellBg = ch.readonly ? (si % 2 === 0 ? '#fafafa' : '#f5f5f5') : undefined;
                           return (
                             <td
                               key={`sr-${srObj.id}-${ch.name}-${m}`}
                               colSpan={isActualSplitMode ? 2 : 1}
-                              style={{ padding: '2px 6px', textAlign: 'right', borderBottom: '1px solid var(--color-border)', background: ch.readonly ? (si % 2 === 0 ? '#fafafa' : '#f5f5f5') : undefined, color: v > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}
+                              style={{ padding: '2px 6px', textAlign: 'right', verticalAlign: 'middle', borderBottom: '1px solid var(--color-border)', background: cellBg }}
                             >
-                              {v > 0 ? formatNumber(v) : '—'}
+                              {h !== null ? (
+                                compareMode === 'vs_plan' ? (
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
+                                    <span style={{ color: v > 0 ? 'var(--color-text)' : 'var(--color-text-muted)', fontWeight: v > 0 ? 600 : 400 }}>{v > 0 ? formatNumber(v) : '—'}</span>
+                                    <span style={{ fontSize: 10, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                      KH:{h > 0 ? formatNumber(h) : '0'}
+                                      {h > 0 && <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px', borderRadius: 2, background: (v/h>=1?'#10b98118':v/h>=0.8?'#f59e0b18':'#ef444418'), color: v/h>=1?'#10b981':v/h>=0.8?'#f59e0b':'#ef4444' }}>{Math.round(v/h*100)}%</span>}
+                                    </span>
+                                  </div>
+                                ) : (() => {
+                                  const delta = h > 0 ? Math.round(((v - h) / h) * 100) : null;
+                                  const dc = delta !== null ? (delta > 0 ? '#10b981' : delta < 0 ? '#ef4444' : 'var(--color-text-muted)') : 'var(--color-text-muted)';
+                                  return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
+                                      <span style={{ color: v > 0 ? 'var(--color-text)' : 'var(--color-text-muted)', fontWeight: v > 0 ? 600 : 400 }}>{v > 0 ? formatNumber(v) : '—'}</span>
+                                      <span style={{ fontSize: 10, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                        {h > 0 ? formatNumber(h) : '0'}
+                                        {delta !== null && delta !== 0 && <span style={{ color: dc, fontWeight: 700, fontSize: 9 }}>{delta > 0 ? '▲' : '▼'}{Math.abs(delta)}%</span>}
+                                      </span>
+                                    </div>
+                                  );
+                                })()
+                              ) : (
+                                <span style={{ color: v > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>{v > 0 ? formatNumber(v) : '—'}</span>
+                              )}
                             </td>
                           );
                         }))}
                         {/* Summary cols — khớp với TỔNG CỘNG của bảng trên */}
-                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', fontWeight: 700, background: '#f1f5f9', borderBottom: '1px solid var(--color-border)', borderLeft: '2px solid var(--color-border-dark)', color: totalNS > 0 ? 'var(--color-brand)' : 'var(--color-text-muted)' }}>
-                          {totalNS > 0 ? formatNumber(totalNS) : '—'}
+                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', verticalAlign: 'middle', fontWeight: 700, background: '#f1f5f9', borderBottom: '1px solid var(--color-border)', borderLeft: '2px solid var(--color-border-dark)', color: totalNS > 0 ? 'var(--color-brand)' : 'var(--color-text-muted)' }}>
+                          {compareMode !== 'none' ? (
+                            compareMode === 'vs_plan' ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
+                                <span>{totalNS > 0 ? formatNumber(totalNS) : '—'}</span>
+                                <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                  KH:{histTotalNS > 0 ? formatNumber(histTotalNS) : '0'}
+                                  {histTotalNS > 0 && <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px', borderRadius: 2, background: (totalNS/histTotalNS>=1?'#10b98118':totalNS/histTotalNS>=0.8?'#f59e0b18':'#ef444418'), color: totalNS/histTotalNS>=1?'#10b981':totalNS/histTotalNS>=0.8?'#f59e0b':'#ef4444' }}>{Math.round(totalNS/histTotalNS*100)}%</span>}
+                                </span>
+                              </div>
+                            ) : (() => {
+                              const d = histTotalNS > 0 ? Math.round(((totalNS - histTotalNS) / histTotalNS) * 100) : null;
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
+                                  <span>{totalNS > 0 ? formatNumber(totalNS) : '—'}</span>
+                                  <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                    {histTotalNS > 0 ? formatNumber(histTotalNS) : '0'}
+                                    {d !== null && d !== 0 && <span style={{ color: d>0?'#10b981':'#ef4444', fontWeight: 700, fontSize: 9 }}>{d>0?'▲':'▼'}{Math.abs(d)}%</span>}
+                                  </span>
+                                </div>
+                              );
+                            })()
+                          ) : (totalNS > 0 ? formatNumber(totalNS) : '—')}
                         </td>
-                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', fontWeight: 600, background: '#f8fafc', borderBottom: '1px solid var(--color-border)', borderLeft: '1px solid var(--color-border-dark)', color: totalKHQT > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
-                          {totalKHQT > 0 ? formatNumber(totalKHQT) : '—'}
+                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', verticalAlign: 'middle', fontWeight: 600, background: '#f8fafc', borderBottom: '1px solid var(--color-border)', borderLeft: '1px solid var(--color-border-dark)', color: totalKHQT > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
+                          {compareMode !== 'none' ? (
+                            compareMode === 'vs_plan' ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
+                                <span>{totalKHQT > 0 ? formatNumber(totalKHQT) : '—'}</span>
+                                <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                  KH:{histTotalKHQT > 0 ? formatNumber(histTotalKHQT) : '0'}
+                                  {histTotalKHQT > 0 && <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px', borderRadius: 2, background: (totalKHQT/histTotalKHQT>=1?'#10b98118':totalKHQT/histTotalKHQT>=0.8?'#f59e0b18':'#ef444418'), color: totalKHQT/histTotalKHQT>=1?'#10b981':totalKHQT/histTotalKHQT>=0.8?'#f59e0b':'#ef4444' }}>{Math.round(totalKHQT/histTotalKHQT*100)}%</span>}
+                                </span>
+                              </div>
+                            ) : (() => {
+                              const d = histTotalKHQT > 0 ? Math.round(((totalKHQT - histTotalKHQT) / histTotalKHQT) * 100) : null;
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
+                                  <span>{totalKHQT > 0 ? formatNumber(totalKHQT) : '—'}</span>
+                                  <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                    {histTotalKHQT > 0 ? formatNumber(histTotalKHQT) : '0'}
+                                    {d !== null && d !== 0 && <span style={{ color: d>0?'#10b981':'#ef4444', fontWeight: 700, fontSize: 9 }}>{d>0?'▲':'▼'}{Math.abs(d)}%</span>}
+                                  </span>
+                                </div>
+                              );
+                            })()
+                          ) : (totalKHQT > 0 ? formatNumber(totalKHQT) : '—')}
                         </td>
-                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', fontWeight: 600, background: '#f8fafc', borderBottom: '1px solid var(--color-border)', borderLeft: '1px solid var(--color-border-dark)', color: totalGDTD > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
-                          {totalGDTD > 0 ? formatNumber(totalGDTD) : '—'}
+                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', verticalAlign: 'middle', fontWeight: 600, background: '#f8fafc', borderBottom: '1px solid var(--color-border)', borderLeft: '1px solid var(--color-border-dark)', color: totalGDTD > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
+                          {compareMode !== 'none' ? (
+                            compareMode === 'vs_plan' ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
+                                <span>{totalGDTD > 0 ? formatNumber(totalGDTD) : '—'}</span>
+                                <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                  KH:{histTotalGDTD > 0 ? formatNumber(histTotalGDTD) : '0'}
+                                  {histTotalGDTD > 0 && <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px', borderRadius: 2, background: (totalGDTD/histTotalGDTD>=1?'#10b98118':totalGDTD/histTotalGDTD>=0.8?'#f59e0b18':'#ef444418'), color: totalGDTD/histTotalGDTD>=1?'#10b981':totalGDTD/histTotalGDTD>=0.8?'#f59e0b':'#ef4444' }}>{Math.round(totalGDTD/histTotalGDTD*100)}%</span>}
+                                </span>
+                              </div>
+                            ) : (() => {
+                              const d = histTotalGDTD > 0 ? Math.round(((totalGDTD - histTotalGDTD) / histTotalGDTD) * 100) : null;
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
+                                  <span>{totalGDTD > 0 ? formatNumber(totalGDTD) : '—'}</span>
+                                  <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                    {histTotalGDTD > 0 ? formatNumber(histTotalGDTD) : '0'}
+                                    {d !== null && d !== 0 && <span style={{ color: d>0?'#10b981':'#ef4444', fontWeight: 700, fontSize: 9 }}>{d>0?'▲':'▼'}{Math.abs(d)}%</span>}
+                                  </span>
+                                </div>
+                              );
+                            })()
+                          ) : (totalGDTD > 0 ? formatNumber(totalGDTD) : '—')}
                         </td>
-                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', fontWeight: 600, background: '#f8fafc', borderBottom: '1px solid var(--color-border)', borderLeft: '1px solid var(--color-border-dark)', color: totalKHD > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
-                          {totalKHD > 0 ? formatNumber(totalKHD) : '—'}
+                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', verticalAlign: 'middle', fontWeight: 600, background: '#f8fafc', borderBottom: '1px solid var(--color-border)', borderLeft: '1px solid var(--color-border-dark)', color: totalKHD > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
+                          {compareMode !== 'none' ? (
+                            compareMode === 'vs_plan' ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
+                                <span>{totalKHD > 0 ? formatNumber(totalKHD) : '—'}</span>
+                                <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                  KH:{histTotalKHD > 0 ? formatNumber(histTotalKHD) : '0'}
+                                  {histTotalKHD > 0 && <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px', borderRadius: 2, background: (totalKHD/histTotalKHD>=1?'#10b98118':totalKHD/histTotalKHD>=0.8?'#f59e0b18':'#ef444418'), color: totalKHD/histTotalKHD>=1?'#10b981':totalKHD/histTotalKHD>=0.8?'#f59e0b':'#ef4444' }}>{Math.round(totalKHD/histTotalKHD*100)}%</span>}
+                                </span>
+                              </div>
+                            ) : (() => {
+                              const d = histTotalKHD > 0 ? Math.round(((totalKHD - histTotalKHD) / histTotalKHD) * 100) : null;
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
+                                  <span>{totalKHD > 0 ? formatNumber(totalKHD) : '—'}</span>
+                                  <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                    {histTotalKHD > 0 ? formatNumber(histTotalKHD) : '0'}
+                                    {d !== null && d !== 0 && <span style={{ color: d>0?'#10b981':'#ef4444', fontWeight: 700, fontSize: 9 }}>{d>0?'▲':'▼'}{Math.abs(d)}%</span>}
+                                  </span>
+                                </div>
+                              );
+                            })()
+                          ) : (totalKHD > 0 ? formatNumber(totalKHD) : '—')}
                         </td>
                       </tr>
                     );
