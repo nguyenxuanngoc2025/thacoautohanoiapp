@@ -815,11 +815,11 @@ export default function PlanningPage() {
 
     if (payloadStr === savedRef.current) return;
 
-    setSaveStatus('editing');
     const srUnitId = showrooms.find(s => s.name === selectedShowroom)?.unit_id ?? '';
     const unitIdForSave = (activeUnitId && activeUnitId !== 'all') ? activeUnitId : srUnitId;
     if (!unitIdForSave) { setSaveStatus('error'); return; }
 
+    // Debounce 1500ms — giống Google Sheets: chờ idle sau lần commit cuối mới save
     const timeout = setTimeout(() => {
       setSaveStatus('saving');
       const entries = legacyCellDataToEntries(
@@ -836,7 +836,7 @@ export default function PlanningPage() {
           invalidateBudgetCaches(unitIdForSave, selectedShowroomId, year, month);
         })
         .catch(() => setSaveStatus('error'));
-    }, 400);
+    }, 1500);
     return () => clearTimeout(timeout);
   }, [dataByMonth, actualDataByMonth, month, mounted, pageMode, activeUnitId, selectedShowroom, selectedShowroomId, year, retrySaveTrigger, CHANNELS]);
 
