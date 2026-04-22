@@ -498,19 +498,12 @@ export default function PlanningPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveRole, selectedShowroomId, year, month]);
 
-  // ─── Refresh dữ liệu ───────────────────────────────────────────────────────
+  // ─── Refresh dữ liệu — tương đương F5 ────────────────────────────────────
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
-    // Cho phép DB data ghi đè local state (xóa pending flag + reset saved payloads)
-    hasPendingEdits.current = false;
-    lastSavedPayload.current = '';
-    lastSavedActualPayload.current = '';
-    globalMutate(
-      (key: unknown) => Array.isArray(key) && (key[0] === 'budget_entries' || key[0] === 'budget_entries_unit' || key[0] === 'budget_entries_srs'),
-      undefined,
-      { revalidate: true }
-    );
-    setTimeout(() => setIsRefreshing(false), 1500);
+    // Hard reload: đảm bảo toàn bộ state React và cache được reset sạch,
+    // giống F5 nhưng giữ nguyên URL (không mất params).
+    window.location.reload();
   }, []);
 
   // ─── Gửi kế hoạch ─────────────────────────────────────────────────────────
