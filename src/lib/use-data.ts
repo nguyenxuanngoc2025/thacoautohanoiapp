@@ -57,6 +57,10 @@ const CPL_OPTS = { ...BASE_OPTS, dedupingInterval: 300_000, keepPreviousData: tr
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LEGACY HOOKS — giữ cho dashboard / reports (các trang không phải planning)
+// DEPRECATED (Foundation Rebuild 2026-04-22): useBudgetPlans / useActualEntries read from
+// thaco_budget_plans / thaco_actual_entries (JSONB). Prefer useViewBudgetByShowroom /
+// useViewBudgetByBrand / useBudgetEntriesByShowroom which read from normalized
+// thaco_budget_entries + Supabase views. Remove when dashboard/reports are migrated.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function useBudgetPlans(unitId?: string, year: number = 2026) {
