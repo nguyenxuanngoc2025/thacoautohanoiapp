@@ -119,12 +119,15 @@ export default function DashboardReuiPage() {
   [eventsRaw]);
 
   // mounted when view + actuals + events are all ready for first render
+  // When unitIdForViews is null (super_admin "all" mode), views are skipped — treat as ready
   useEffect(() => {
-    if (viewByShowroom !== undefined && viewByBrand !== undefined && viewByChannel !== undefined
-        && actualsRaw !== undefined && eventsRaw !== undefined) {
+    const viewsReady = unitIdForViews === null
+      ? true
+      : viewByShowroom !== undefined && viewByBrand !== undefined && viewByChannel !== undefined;
+    if (viewsReady && actualsRaw !== undefined && eventsRaw !== undefined) {
       setMounted(true);
     }
-  }, [viewByShowroom, viewByBrand, viewByChannel, actualsRaw, eventsRaw]);
+  }, [viewByShowroom, viewByBrand, viewByChannel, actualsRaw, eventsRaw, unitIdForViews]);
 
   // ── Derived data (identical logic to original dashboard) ──────────────────
   const monthsInView = useMemo(() => {

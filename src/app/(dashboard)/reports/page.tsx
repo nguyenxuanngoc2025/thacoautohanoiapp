@@ -155,7 +155,11 @@ export default function ReportsPage() {
 
   const eventsByMonth = useMemo<EventsByMonth>(() => eventsRaw ?? {}, [eventsRaw]);
 
-  const loading = viewBrandRows === undefined || viewChannelRows === undefined || eventsRaw === undefined;
+  // When unitIdForViews is null (super_admin "all" mode), views are skipped — treat as ready
+  const viewsReady = unitIdForViews === null
+    ? true
+    : viewBrandRows !== undefined && viewChannelRows !== undefined;
+  const loading = !viewsReady || eventsRaw === undefined;
 
   useEffect(() => {
     if (!loading) setMounted(true);
