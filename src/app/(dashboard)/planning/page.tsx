@@ -4,10 +4,10 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import PageHeader from '@/components/layout/PageHeader';
 import { formatNumber, cn } from '@/lib/utils';
 import { CHANNEL_CATEGORIES } from '@/lib/constants';
-import { DownloadCloud, UploadCloud, Save, Send, Wallet, Users, FileSignature, BarChart3, Wand2, Zap, X, CheckCircle2, AlertTriangle, Edit2, Trash2, ArrowUpRight, CalendarDays, Keyboard, ChevronDown, CloudUpload } from 'lucide-react';
+import { DownloadCloud, UploadCloud, Save, Send, Wallet, Users, FileSignature, BarChart3, Wand2, Zap, X, CheckCircle2, AlertTriangle, Edit2, Trash2, ArrowUpRight, CalendarDays, Keyboard, ChevronDown, CloudUpload, Lock } from 'lucide-react';
 import { Badge } from '@/components/reui/badge';
 import { type EventItem, EVENT_CPL, EVENT_CR1, EVENT_CR2 } from '@/lib/events-data';
-import { useBudgetEntriesByShowroom, invalidateBudgetCaches } from '@/lib/use-data';
+import { useBudgetEntriesByShowroom, useBudgetEntriesByShowroomIds, useEventsData, invalidateBudgetCaches } from '@/lib/use-data';
 import { upsertBudgetEntries, cellDataToEntries, makeCellKey } from '@/lib/db/budget-entries';
 import type { BudgetEntryRow } from '@/types/database';
 import { useBrands } from '@/contexts/BrandsContext';
@@ -15,6 +15,7 @@ import { useShowrooms } from '@/contexts/ShowroomsContext';
 import { useUnit } from '@/contexts/UnitContext';
 import { useChannels } from '@/contexts/ChannelsContext';
 import type { Channel } from '@/contexts/ChannelsContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 
 // CHANNELS được cung cấp động bởi ChannelsContext — xem useChannels() bên dưới
@@ -114,48 +115,6 @@ type AlertState = { type: 'warning' | 'success' | 'info', title: string, message
 type CellNotes = Record<string, string>;
 
 // Module-level cache removed — data is now managed by SWR via useBudgetEntriesByShowroom
-
-const CellNoteEditor = ({ initialValue, onSave, onCancel, onDelete }: { initialValue: string, onSave: (val: string) => void, onCancel: () => void, onDelete: () => void }) => {
-  const [val, setVal] = useState(initialValue);
-  const isEditingExisting = !!initialValue;
-  
-  return (
-    <div 
-      style={{ position: 'absolute', top: -40, right: -10, zIndex: 200, display: 'flex', flexWrap: 'nowrap', gap: 4, background: '#fff', padding: 6, borderRadius: 'var(--border-radius-lg)', border: '1px solid var(--color-border-dark)', boxShadow: 'var(--shadow-dropdown)' }}
-      onMouseDown={(e) => e.stopPropagation()}
-    >
-      <input 
-        type="text"
-        className="form-input"
-        autoFocus
-        placeholder="Nhập ghi chú..."
-        value={val}
-        onChange={(e) => setVal(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-             if (val.trim() === '') onDelete();
-             else onSave(val);
-          }
-          if (e.key === 'Escape') onCancel();
-        }}
-        style={{ width: 300 }}
-      />
-      <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-        <button onClick={() => val.trim() === '' ? onDelete() : onSave(val)} title="Lưu" style={{ color: '#059669', background: '#ecfdf5', borderRadius: 4, border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}>
-          <CheckCircle2 size={16} />
-        </button>
-        {isEditingExisting && (
-          <button onClick={onDelete} title="Xóa ghi chú này" style={{ color: '#dc2626', background: '#fef2f2', borderRadius: 4, border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}>
-            <Trash2 size={16} />
-          </button>
-        )}
-        <button onClick={onCancel} title="Hủy bỏ" style={{ color: '#64748b', background: '#f8fafc', borderRadius: 4, border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}>
-          <X size={16} />
-        </button>
-      </div>
-    </div>
-  );
-};
 
 const FilterDropdown = ({
   label,
@@ -286,6 +245,7 @@ export default function PlanningPage() {
   const { showrooms, showroomNames: SHOWROOMS } = useShowrooms();
   const { activeUnitId } = useUnit();
   const { channels: CHANNELS, digitalChannelNames } = useChannels();
+  const { isLoading: authIsLoading, profile, effectiveRole, accessibleShowroomCodes } = useAuth();
 
   const [mounted, setMounted] = useState(false);
   const [year, setYear] = useState(2026);
@@ -298,9 +258,13 @@ export default function PlanningPage() {
   }, [selectedShowroom, showrooms]);
 
   // UUID of selected showroom — needed for thaco_budget_entries queries
+  // Guard: chỉ dùng real UUID (không dùng fallback-N từ STATIC_FALLBACK của ShowroomsContext)
   const selectedShowroomId = useMemo(() => {
     if (selectedShowroom === 'all') return null;
-    return showrooms.find(s => s.name === selectedShowroom)?.id ?? null;
+    const id = showrooms.find(s => s.name === selectedShowroom)?.id ?? null;
+    // Validate UUID format — reject fallback-N IDs from static fallback data
+    if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return null;
+    return id;
   }, [selectedShowroom, showrooms]);
 
   // Brands hiển thị — lọc theo brands của showroom đang chọn (nếu có)
@@ -315,7 +279,6 @@ export default function PlanningPage() {
   const [compareMode, setCompareMode] = useState('none');
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
-  const [editingNoteCell, setEditingNoteCell] = useState<string | null>(null);
   const [undoStack, setUndoStack] = useState<CellData[]>([]);
 
   // Spreadsheet Selection State
@@ -328,9 +291,6 @@ export default function PlanningPage() {
     if (selectedBrand === 'all') return Array.from(new Set(brands.flatMap(b => b.models)));
     return brands.find(b => b.name === selectedBrand)?.models || [];
   }, [selectedBrand, brands]);
-
-  // Group 3: State for Notes
-  const [notesByMonth, setNotesByMonth] = useState<Record<number, Record<string, string>>>({});
 
   // ─── Source of Truth: per-showroom data from DB ────────────────────────
   const [showroomDataByMonth, setShowroomDataByMonth] = useState<Record<number, Record<string, CellData>>>({});
@@ -387,6 +347,13 @@ export default function PlanningPage() {
     return approvalMapByMonthSR[month]?.[selectedShowroomCode] || 'draft';
   }, [approvalMapByMonthSR, month, selectedShowroomCode]);
 
+  // ─── Plan submission + lock status ────────────────────────────────────────
+  const [submitStatus, setSubmitStatus] = useState<'draft' | 'sent'>('draft');
+  const [periodLocked, setPeriodLocked] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  // Track "GĐ SR đã xem" — chỉ ghi nhận 1 lần mỗi lần chọn SR trong session
+  const viewedRef = useRef<Set<string>>(new Set());
+
   // Auto-save status indicator: idle | editing | saving | saved | error
   const [saveStatus, setSaveStatus] = useState<'idle' | 'editing' | 'saving' | 'saved' | 'error'>('idle');
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
@@ -400,13 +367,36 @@ export default function PlanningPage() {
   // Snapshot để hỗ trợ discard changes
   const lastSavedActualSnapshot = useRef<CellData | null>(null);
 
-  // Mode-aware cell data
-  const cellData = pageMode === 'plan'
-    ? (dataByMonth[month] || {})
-    : (actualDataByMonth[month] || {});
+  // Mode-aware cell data — aggregate theo viewMode
+  const cellData = useMemo(() => {
+    const sourceMap = pageMode === 'plan' ? dataByMonth : actualDataByMonth;
+    if (viewMode === 'month') return sourceMap[month] || {};
+    const months = viewMode === 'quarter'
+      ? [month, month + 1, month + 2].filter(m => m >= 1 && m <= 12)
+      : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    const result: CellData = {};
+    for (const m of months) {
+      for (const [k, v] of Object.entries(sourceMap[m] || {})) {
+        result[k] = (result[k] || 0) + ((v as number) || 0);
+      }
+    }
+    return result;
+  }, [pageMode, viewMode, month, dataByMonth, actualDataByMonth]);
 
-  // Plan data luôn available để hiện ghost value trong actual mode
-  const planCellData = dataByMonth[month] || {};
+  // Plan data aggregate (dùng cho ghost value trong actual mode)
+  const planCellData = useMemo(() => {
+    if (viewMode === 'month') return dataByMonth[month] || {};
+    const months = viewMode === 'quarter'
+      ? [month, month + 1, month + 2].filter(m => m >= 1 && m <= 12)
+      : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    const result: CellData = {};
+    for (const m of months) {
+      for (const [k, v] of Object.entries(dataByMonth[m] || {})) {
+        result[k] = (result[k] || 0) + ((v as number) || 0);
+      }
+    }
+    return result;
+  }, [viewMode, month, dataByMonth]);
 
   // ─── Edit lock guard (mode-aware) ────────────────────────────────────────
   // Bottom-Up Phase 1: aggregate view (all SRs) is always read-only
@@ -414,14 +404,19 @@ export default function PlanningPage() {
 
   // Plan mode: locked khi showroom = 'all' HOẶC kế hoạch không ở draft / submitted / approved
   // Actual mode: locked khi entry đã submitted
-  const isDataLocked = isAggregateView;
+  // Thêm: khóa khi kỳ đã bị khóa bởi admin, hoặc role chỉ xem
+  const isDataLocked = isAggregateView || viewMode !== 'month' || periodLocked
+    || effectiveRole === 'gd_showroom' || effectiveRole === 'bld' || effectiveRole === 'finance';
 
   // Actual split mode: draft months show Plan | Actual 2-column layout
   const actualEntryStatus = selectedShowroomCode ? (actualStatusMapByMonthSR[month]?.[selectedShowroomCode] || 'draft') : 'draft';
-  const isActualSplitMode = pageMode === 'actual' && actualEntryStatus === 'draft';
+  const isActualSplitMode = pageMode === 'actual' && actualEntryStatus === 'draft' && viewMode === 'month';
 
   const setCellData = useCallback((action: React.SetStateAction<CellData>) => {
     if (!selectedShowroomId) return; // Guard: can't edit in aggregate view
+    hasPendingEdits.current = true;
+    // Reset trạng thái Gửi về draft khi user chỉnh sửa lại
+    setSubmitStatus(prev => prev === 'sent' ? 'draft' : prev);
     if (pageMode === 'plan') {
       setShowroomDataByMonth(cache => {
         const current = cache[month]?.[selectedShowroomId] || {};
@@ -443,6 +438,93 @@ export default function PlanningPage() {
       setIsDirtyActual(true);
     }
   }, [month, pageMode, selectedShowroomId]);
+
+  // ─── Auto-select showroom cho gd_showroom + mkt_showroom khi trang mở ───────
+  useEffect(() => {
+    if (
+      (effectiveRole === 'gd_showroom' || effectiveRole === 'mkt_showroom') &&
+      accessibleShowroomCodes.length > 0 &&
+      selectedShowroom === 'all' &&
+      showrooms.length > 0
+    ) {
+      const code = accessibleShowroomCodes[0];
+      const sr = showrooms.find(s =>
+        s.code?.toUpperCase() === code?.toUpperCase()
+      );
+      if (sr) setSelectedShowroom(sr.name);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveRole, accessibleShowroomCodes, showrooms]);
+
+  // ─── Fetch plan submission + lock status ───────────────────────────────────
+  useEffect(() => {
+    if (!selectedShowroomId || !activeUnitId) {
+      setSubmitStatus('draft');
+      setPeriodLocked(false);
+      return;
+    }
+    const entry_type = pageMode === 'plan' ? 'plan' : 'actual';
+    fetch(
+      `/api/planning/status?showroom_id=${selectedShowroomId}&unit_id=${activeUnitId}&year=${year}&month=${month}&entry_type=${entry_type}`
+    )
+      .then(r => r.json())
+      .then(data => {
+        setSubmitStatus(data.submission || 'draft');
+        setPeriodLocked(data.locked || false);
+      })
+      .catch(() => {});
+  }, [selectedShowroomId, activeUnitId, year, month, pageMode]);
+
+  // ─── Ghi nhận GĐ SR đã xem ────────────────────────────────────────────────
+  useEffect(() => {
+    if (effectiveRole !== 'gd_showroom') return;
+    if (!selectedShowroomId || !selectedShowroom || selectedShowroom === 'all') return;
+    const viewKey = `${selectedShowroomId}-${year}-${month}`;
+    if (viewedRef.current.has(viewKey)) return;
+    viewedRef.current.add(viewKey);
+    fetch('/api/planning/viewed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        showroom_id: selectedShowroomId,
+        unit_id: activeUnitId,
+        year,
+        month,
+        showroom_name: selectedShowroom,
+        viewer_name: profile?.full_name || profile?.email || '',
+      }),
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveRole, selectedShowroomId, year, month]);
+
+  // ─── Gửi kế hoạch ─────────────────────────────────────────────────────────
+  const handleSubmitPlan = useCallback(async () => {
+    if (!selectedShowroomId || !activeUnitId) return;
+    setSubmitLoading(true);
+    try {
+      const entry_type = pageMode === 'plan' ? 'plan' : 'actual';
+      const res = await fetch('/api/planning/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          showroom_id: selectedShowroomId,
+          unit_id: activeUnitId,
+          year,
+          month,
+          entry_type,
+          showroom_name: selectedShowroom,
+          sender_name: profile?.full_name || profile?.email || '',
+        }),
+      });
+      if (res.ok) {
+        setSubmitStatus('sent');
+        const typeLabel = entry_type === 'plan' ? 'KH' : 'TH';
+        setAlertInfo({ type: 'success', title: 'Đã gửi', message: `Kế hoạch ${typeLabel} tháng ${month}/${year} đã được gửi thành công.` });
+      }
+    } finally {
+      setSubmitLoading(false);
+    }
+  }, [selectedShowroomId, activeUnitId, year, month, pageMode, selectedShowroom, profile]);
 
   const getRawHistoricalValue = useCallback((cellKey: string, mode: string): number | null => {
     if (mode === 'none') return null;
@@ -655,13 +737,38 @@ export default function PlanningPage() {
     isLoading: isEntriesLoading,
   } = useBudgetEntriesByShowroom(selectedShowroomId, year, month);
 
+  // ─── SWR: Aggregate view — load ALL showrooms for unit ───────────────────
+  // Dùng showroom_id[] thay vì unit_id để tránh mismatch khi unit_id chưa load
+  // Chỉ fetch khi showrooms đã có real data (không dùng STATIC_FALLBACK)
+  const aggShowroomIds = useMemo(() => {
+    if (selectedShowroom !== 'all') return null;
+    const realSRs = showrooms.filter(s => !s.id.startsWith('fallback'));
+    return realSRs.length > 0 ? realSRs.map(s => s.id) : null;
+  }, [selectedShowroom, showrooms]);
+
+  const { data: unitBudgetEntryRows } = useBudgetEntriesByShowroomIds(aggShowroomIds, year, month);
+
+  // unitIdForAggFetch: dùng cho events fetch (cần unit_id, không có showroom_id[])
+  const unitIdForAggFetch = useMemo(() => {
+    if (activeUnitId && activeUnitId !== 'all') return activeUnitId;
+    const realSr = showrooms.find(s => s.unit_id && !s.id.startsWith('fallback'));
+    return realSr?.unit_id ?? null;
+  }, [activeUnitId, showrooms]);
+
+  // ─── SWR: Events ──────────────────────────────────────────────────────────
+  const { data: eventsFromDB } = useEventsData(unitIdForAggFetch ?? undefined);
+
   // isDataLoading: true until first fetch completes for selected showroom
   const isDataLoading = isEntriesLoading && selectedShowroom !== 'all';
 
   // Sync SWR data → showroomDataByMonth and showroomActualDataByMonth state
   const justLoadedFromDB = useRef(false);
+  // Guard: không overwrite state khi user đang có edits chưa được lưu
+  const hasPendingEdits = useRef(false);
   useEffect(() => {
     if (!selectedShowroomId || !budgetEntryRows) return;
+    // Nếu user đang có edits chưa lưu, bỏ qua SWR revalidation để tránh mất data
+    if (hasPendingEdits.current) return;
     const planLegacy = entriesToLegacyCellData(budgetEntryRows, CHANNELS, 'plan');
     const actualLegacy = entriesToLegacyCellData(budgetEntryRows, CHANNELS, 'actual');
     setShowroomDataByMonth(prev => ({
@@ -674,6 +781,38 @@ export default function PlanningPage() {
     }));
     justLoadedFromDB.current = true;
   }, [budgetEntryRows, selectedShowroomId, month, CHANNELS]);
+
+  // ─── Sync unit-level entries → showroomDataByMonth (aggregate view) ───────
+  useEffect(() => {
+    if (!unitBudgetEntryRows || selectedShowroom !== 'all') return;
+    const byShowroom: Record<string, BudgetEntryRow[]> = {};
+    for (const row of unitBudgetEntryRows) {
+      if (!byShowroom[row.showroom_id]) byShowroom[row.showroom_id] = [];
+      byShowroom[row.showroom_id].push(row);
+    }
+    setShowroomDataByMonth(prev => ({
+      ...prev,
+      [month]: Object.fromEntries(
+        Object.entries(byShowroom).map(([srId, rows]) =>
+          [srId, entriesToLegacyCellData(rows, CHANNELS, 'plan')]
+        )
+      )
+    }));
+    setShowroomActualDataByMonth(prev => ({
+      ...prev,
+      [month]: Object.fromEntries(
+        Object.entries(byShowroom).map(([srId, rows]) =>
+          [srId, entriesToLegacyCellData(rows, CHANNELS, 'actual')]
+        )
+      )
+    }));
+  }, [unitBudgetEntryRows, selectedShowroom, month, CHANNELS]);
+
+  // ─── Sync events from DB → eventsByMonth ──────────────────────────────────
+  useEffect(() => {
+    if (!eventsFromDB) return;
+    setEventsByMonth(eventsFromDB);
+  }, [eventsFromDB]);
 
   // Set mounted once data arrives (or immediately if no showroom selected)
   useEffect(() => {
@@ -700,7 +839,9 @@ export default function PlanningPage() {
     if (payloadStr === lastSavedPayload.current) return;
 
     setSaveStatus('editing');
-    const unitIdForSave = activeUnitId && activeUnitId !== 'all' ? activeUnitId : '';
+    // Khi super_admin ở mode 'all', dùng unit_id của showroom đang chọn
+    const srUnitId = showrooms.find(s => s.name === selectedShowroom)?.unit_id ?? '';
+    const unitIdForSave = (activeUnitId && activeUnitId !== 'all') ? activeUnitId : srUnitId;
     if (!unitIdForSave) { setSaveStatus('error'); return; }
 
     const timeout = setTimeout(() => {
@@ -709,6 +850,7 @@ export default function PlanningPage() {
       upsertBudgetEntries(entries)
         .then(() => {
           lastSavedPayload.current = payloadStr;
+          hasPendingEdits.current = false;
           setSaveStatus('saved');
           setLastSavedAt(new Date());
           invalidateBudgetCaches(unitIdForSave, selectedShowroomId, year, month);
@@ -726,6 +868,11 @@ export default function PlanningPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month]);
 
+  // Reset hasPendingEdits khi chuyển showroom — cho phép DB load mới nhất
+  React.useEffect(() => {
+    hasPendingEdits.current = false;
+  }, [selectedShowroomId]);
+
   // ─── Auto-save ACTUAL data (debounce 400ms) ──────────────────────────────
   const lastSavedActualPayload = useRef<string>('');
   React.useEffect(() => {
@@ -739,7 +886,9 @@ export default function PlanningPage() {
     if (payloadStr === lastSavedActualPayload.current) return;
 
     setSaveStatus('editing');
-    const unitIdForSave = activeUnitId && activeUnitId !== 'all' ? activeUnitId : '';
+    // Khi super_admin ở mode 'all', dùng unit_id của showroom đang chọn
+    const srUnitId = showrooms.find(s => s.name === selectedShowroom)?.unit_id ?? '';
+    const unitIdForSave = (activeUnitId && activeUnitId !== 'all') ? activeUnitId : srUnitId;
     if (!unitIdForSave) { setSaveStatus('error'); return; }
 
     const timeout = setTimeout(() => {
@@ -748,6 +897,7 @@ export default function PlanningPage() {
       upsertBudgetEntries(entries)
         .then(() => {
           lastSavedActualPayload.current = payloadStr;
+          hasPendingEdits.current = false;
           setSaveStatus('saved');
           setLastSavedAt(new Date());
           setIsDirtyActual(false);
@@ -756,6 +906,7 @@ export default function PlanningPage() {
         .catch(() => setSaveStatus('error'));
     }, 400);
     return () => clearTimeout(timeout);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actualDataByMonth, month, mounted, pageMode, activeUnitId, selectedShowroom, selectedShowroomId, year, retrySaveTrigger, CHANNELS]);
 
   // Mặc định thu gọn tất cả brands khi brands load lần đầu
@@ -889,7 +1040,7 @@ export default function PlanningPage() {
         });
       }
     }); return grid;
-  }, [brands, selectedBrand, selectedModels, collapsedBrands, visibleChannels, visibleMetrics, hideZeroRows, cellData]);
+  }, [visibleBrands, selectedBrand, selectedModels, collapsedBrands, visibleChannels, visibleMetrics, hideZeroRows, cellData]);
   
   const ALL_CELL_KEYS = useMemo(() => VISIBLE_GRID_KEYS.flat(), [VISIBLE_GRID_KEYS]);
 
@@ -998,7 +1149,7 @@ export default function PlanningPage() {
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (isDataLocked) {
-          setAlertInfo({ type: 'warning', title: 'Không hợp lệ', message: 'Dữ liệu không thể xoá trong trạng thái hiện tại.' });
+          setAlertInfo({ type: 'warning', title: 'Chỉ xem tổng hợp', message: 'Vui lòng chọn một showroom cụ thể (không phải "Tất cả") để chỉnh sửa dữ liệu.' });
           return;
         }
         e.preventDefault();
@@ -1044,7 +1195,7 @@ export default function PlanningPage() {
          }
          else if (e.key === 'v' || e.key === 'V') {
              if (isDataLocked) {
-               setAlertInfo({ type: 'warning', title: 'Không hợp lệ', message: 'Dữ liệu không thể dán trong trạng thái hiện tại.' });
+               setAlertInfo({ type: 'warning', title: 'Chỉ xem tổng hợp', message: 'Vui lòng chọn một showroom cụ thể (không phải "Tất cả") để chỉnh sửa dữ liệu.' });
                return;
              }
              e.preventDefault();
@@ -1129,7 +1280,7 @@ export default function PlanningPage() {
       }
       else if (e.key === 'Enter' || e.key === 'F2') {
          if (isDataLocked) {
-           setAlertInfo({ type: 'warning', title: 'Không hợp lệ', message: 'Dữ liệu đang bị khoá chỉnh sửa.' });
+           setAlertInfo({ type: 'warning', title: 'Chỉ xem tổng hợp', message: 'Vui lòng chọn một showroom cụ thể (không phải "Tất cả") để chỉnh sửa dữ liệu.' });
            return;
          }
          e.preventDefault();
@@ -1539,9 +1690,6 @@ export default function PlanningPage() {
         }}
         actions={
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <button className="button-erp-secondary" style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4 }} title="Import Excel">
-              <UploadCloud size={14} /> <span style={{ fontSize: 12 }}>Import</span>
-            </button>
             <button
               className="button-erp-secondary"
               style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4 }}
@@ -1554,7 +1702,7 @@ export default function PlanningPage() {
                   const channelHeaders = CHANNELS.filter(c => !hiddenChannels.has(c.category)).map(c => c.name);
                   const headerRow1 = ['Thương hiệu', 'Model', ...channelHeaders.flatMap(ch => metricList.map(() => ch))];
                   const headerRow2 = ['', '', ...channelHeaders.flatMap(() => metricList)];
-                  // Build data rows
+                  // Build data rows — Brand table
                   const dataRows: (string | number)[][] = [];
                   for (const brand of visibleBrands) {
                     const modelList = brand.models.filter(m => selectedModels.length === 0 || selectedModels.includes(m));
@@ -1567,6 +1715,35 @@ export default function PlanningPage() {
                         }
                       }
                       dataRows.push(row);
+                    }
+                  }
+                  // Showroom table section
+                  const exportSRs = isAggregateView
+                    ? showrooms.filter(s => !s.id.startsWith('fallback'))
+                    : showrooms.filter(s => s.name === selectedShowroom);
+                  if (exportSRs.length > 0) {
+                    dataRows.push([]); // blank separator
+                    dataRows.push(['CHI TIẾT THEO SHOWROOM', ...channelHeaders.flatMap(() => metricList.map(() => ''))]);
+                    for (const srObj of exportSRs) {
+                      const srData = (pageMode === 'plan' ? showroomDataByMonth : showroomActualDataByMonth)[month]?.[srObj.id] || {};
+                      const getChSum = (chName: string, metric: string) => {
+                        let s = 0;
+                        const suffix = `-${chName}-${metric}`;
+                        for (const [k, v] of Object.entries(srData)) { if (k.endsWith(suffix)) s += (v as number) || 0; }
+                        return s;
+                      };
+                      const srRow: (string | number)[] = [srObj.name, ''];
+                      for (const ch of channelHeaders) {
+                        for (const metric of metricList) {
+                          const ch_ = CHANNELS.find(c => c.name === ch);
+                          if (ch_?.isAggregate) {
+                            srRow.push(digitalChannelNames.reduce((acc, dcName) => acc + getChSum(dcName, metric), 0));
+                          } else {
+                            srRow.push(getChSum(ch, metric));
+                          }
+                        }
+                      }
+                      dataRows.push(srRow);
                     }
                   }
                   const res = await fetch('/api/export/planning', {
@@ -1588,9 +1765,43 @@ export default function PlanningPage() {
               <DownloadCloud size={14} /> <span style={{ fontSize: 12 }}>Export</span>
             </button>
             <div style={{ width: 1, height: 16, background: 'var(--color-border)', margin: '0 4px' }}></div>
+            {/* Lock badge */}
+            {!isAggregateView && periodLocked && (
+              <span style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                fontSize: 11, color: '#dc2626', fontWeight: 600,
+                padding: '2px 8px', borderRadius: 4,
+                border: '1px solid #fca5a5', background: '#fff1f2',
+              }}>
+                <Lock size={11} /> Đã khóa T{month}
+              </span>
+            )}
+            {/* Gửi button — mkt_showroom (nhập kế hoạch) + super_admin (dev/kiểm tra) */}
+            {!isAggregateView && !periodLocked && viewMode === 'month'
+              && (effectiveRole === 'mkt_showroom' || effectiveRole === 'mkt_brand' || effectiveRole === 'super_admin')
+              && (
+              <button
+                className={submitStatus === 'sent' ? 'button-erp-secondary' : 'button-erp-primary'}
+                style={{
+                  padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4,
+                  ...(submitStatus === 'sent' ? { border: '1px solid #16a34a', color: '#16a34a', background: '#f0fdf4' } : {}),
+                }}
+                onClick={handleSubmitPlan}
+                disabled={submitLoading || saveStatus === 'saving' || saveStatus === 'editing'}
+                title={submitStatus === 'sent' ? `Đã gửi kế hoạch tháng ${month}` : 'Gửi kế hoạch cho PT Marketing'}
+              >
+                <Send size={13} />
+                <span style={{ fontSize: 12 }}>
+                  {submitLoading ? 'Đang gửi...' : submitStatus === 'sent' ? `Đã gửi T${month}` : 'Gửi'}
+                </span>
+              </button>
+            )}
             {!isAggregateView && (
               <>
                 {/* Save status indicator */}
+                {saveStatus === 'editing' && (
+                  <span style={{ fontSize: 11, color: '#d97706', fontWeight: 500 }}>● Chưa lưu...</span>
+                )}
                 {saveStatus === 'saving' && (
                   <span style={{ fontSize: 11, color: '#64748b' }}>Đang lưu...</span>
                 )}
@@ -1820,15 +2031,6 @@ export default function PlanningPage() {
 
 
         {/* Spreadsheet Data Grid */}
-        {/* Subtle top progress bar — chỉ hiện khi cold start (chưa có cache) */}
-        {isDataLoading && (
-          <div style={{ height: 2, background: '#e2e8f0', overflow: 'hidden', flexShrink: 0 }}>
-            <div style={{
-              height: '100%', width: '40%', background: 'linear-gradient(90deg, #004B9B, #0ea5e9)',
-              animation: 'progressSlide 1.2s ease-in-out infinite',
-            }} />
-          </div>
-        )}
         <div
           ref={scrollRef}
           className={cn("table-scroll-container", isScrolled && "scrolled")}
@@ -1924,7 +2126,7 @@ export default function PlanningPage() {
                         style={{
                           position: 'sticky', top: 0, zIndex: 35,
                           textAlign: 'center',
-                          background: '#f8fafc',
+                          background: '#eef2f7',
                           borderBottom: '1px solid var(--color-border-dark)',
                           borderTop: `3px solid ${catColor}`,
                           padding: '4px 8px'
@@ -1949,7 +2151,7 @@ export default function PlanningPage() {
                             onClick={() => {
                                if (pageMode === 'actual') return;
                                if (isDataLocked) {
-                                 setAlertInfo({ type: 'warning', title: 'Không hợp lệ', message: 'Dữ liệu đang bị khóa chỉnh sửa.' });
+                                 setAlertInfo({ type: 'warning', title: 'Chỉ xem tổng hợp', message: 'Vui lòng chọn một showroom cụ thể (không phải "Tất cả") để phân bổ ngân sách.' });
                                } else {
                                  setAllocationModal({ open: true, type: 'category', name: ch.category });
                                }
@@ -1969,7 +2171,7 @@ export default function PlanningPage() {
                   rowSpan={hasTier2 ? 2 : 1}
                   style={{
                     position: 'sticky', top: 0, zIndex: 35,
-                    background: '#f1f5f9',
+                    background: '#eef2f7',
                     color: 'var(--color-text)',
                     textAlign: 'center',
                     fontWeight: 700,
@@ -1997,7 +2199,7 @@ export default function PlanningPage() {
                       style={{
                         position: 'sticky', top: 28, zIndex: 35,
                         textAlign: 'center',
-                        background: '#f8fafc',
+                        background: '#eef2f7',
                         borderBottom: '1px solid var(--color-border-dark)',
                         color: 'var(--color-text)',
                         fontSize: 'var(--fs-label)',
@@ -2013,7 +2215,7 @@ export default function PlanningPage() {
                             onClick={() => {
                                if (pageMode === 'actual') return; // allocation chỉ dùng trong plan mode
                                if (isDataLocked) {
-                                 setAlertInfo({ type: 'warning', title: 'Không hợp lệ', message: 'Dữ liệu đang bị khóa chỉnh sửa.' });
+                                 setAlertInfo({ type: 'warning', title: 'Chỉ xem tổng hợp', message: 'Vui lòng chọn một showroom cụ thể (không phải "Tất cả") để phân bổ ngân sách.' });
                                } else {
                                  setAllocationModal({ open: true, type: 'channel', name: ch.name });
                                }
@@ -2041,7 +2243,7 @@ export default function PlanningPage() {
                       colSpan={isActualSplitMode ? 2 : 1}
                       style={{
                         position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35,
-                        background: '#f8fafc',
+                        background: '#eef2f7',
                         color: 'var(--color-text-muted)',
                         width: isActualSplitMode ? 140 : (metric === 'Ngân sách' ? 80 : 62), minWidth: isActualSplitMode ? 140 : (metric === 'Ngân sách' ? 80 : 62),
                         textAlign: 'center',
@@ -2054,10 +2256,10 @@ export default function PlanningPage() {
                     </th>
                   ));
                 })}
-                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 88, minWidth: isActualSplitMode ? 140 : 88, background: '#f1f5f9', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '2px solid var(--color-border-dark)', padding: '4px 8px' }}>Ngân sách</th>
-                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 76, minWidth: isActualSplitMode ? 140 : 76, background: '#f1f5f9', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', padding: '4px 8px' }}>KHQT</th>
-                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 76, minWidth: isActualSplitMode ? 140 : 76, background: '#f1f5f9', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', padding: '4px 8px' }}>GDTD</th>
-                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 76, minWidth: isActualSplitMode ? 140 : 76, background: '#f1f5f9', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', padding: '4px 8px' }}>KHĐ</th>
+                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 88, minWidth: isActualSplitMode ? 140 : 88, background: '#eef2f7', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '2px solid var(--color-border-dark)', padding: '4px 8px' }}>Ngân sách</th>
+                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 76, minWidth: isActualSplitMode ? 140 : 76, background: '#eef2f7', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', padding: '4px 8px' }}>KHQT</th>
+                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 76, minWidth: isActualSplitMode ? 140 : 76, background: '#eef2f7', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', padding: '4px 8px' }}>GDTD</th>
+                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 76, minWidth: isActualSplitMode ? 140 : 76, background: '#eef2f7', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', padding: '4px 8px' }}>KHĐ</th>
               </tr>
 
               {/* Tier 4 (actual split mode only): KH | TH sub-headers per metric */}
@@ -2069,7 +2271,7 @@ export default function PlanningPage() {
                       <React.Fragment key={`${ch.name}-${metric}-split`}>
                         <th style={{
                           position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 35,
-                          background: '#f8fafc',
+                          background: '#eef2f7',
                           width: 70, minWidth: 70, height: 22,
                           textAlign: 'center', fontSize: 'var(--fs-label)', fontWeight: 600,
                           color: '#64748b',
@@ -2081,7 +2283,7 @@ export default function PlanningPage() {
                         </th>
                         <th style={{
                           position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 35,
-                          background: '#f8fafc',
+                          background: '#eef2f7',
                           width: 70, minWidth: 70, height: 22,
                           textAlign: 'center', fontSize: 'var(--fs-label)', fontWeight: 700,
                           color: '#0f172a',
@@ -2096,14 +2298,15 @@ export default function PlanningPage() {
                   {/* TỔNG CỘNG: KH | TH sub-headers */}
                   {['Ngân sách', 'KHQT', 'GDTD', 'KHĐ'].map((metric, idx) => (
                     <React.Fragment key={`total-split-${idx}`}>
-                      <th style={{ position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 35, background: '#f1f5f9', width: 70, minWidth: 70, height: 22, textAlign: 'center', fontSize: 'var(--fs-label)', fontWeight: 600, color: '#64748b', borderBottom: '2px solid var(--color-border-dark)', borderRight: '1px dashed var(--color-border-dark)', borderLeft: idx === 0 ? '2px solid var(--color-border-dark)' : '1px solid var(--color-border-dark)', padding: '2px 4px' }}>KH</th>
-                      <th style={{ position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 35, background: '#f1f5f9', width: 70, minWidth: 70, height: 22, textAlign: 'center', fontSize: 'var(--fs-label)', fontWeight: 700, color: '#0f172a', borderBottom: '2px solid var(--color-border-dark)', padding: '2px 4px' }}>TH</th>
+                      <th style={{ position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 35, background: '#eef2f7', width: 70, minWidth: 70, height: 22, textAlign: 'center', fontSize: 'var(--fs-label)', fontWeight: 600, color: '#64748b', borderBottom: '2px solid var(--color-border-dark)', borderRight: '1px dashed var(--color-border-dark)', borderLeft: idx === 0 ? '2px solid var(--color-border-dark)' : '1px solid var(--color-border-dark)', padding: '2px 4px' }}>KH</th>
+                      <th style={{ position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 35, background: '#eef2f7', width: 70, minWidth: 70, height: 22, textAlign: 'center', fontSize: 'var(--fs-label)', fontWeight: 700, color: '#0f172a', borderBottom: '2px solid var(--color-border-dark)', padding: '2px 4px' }}>TH</th>
                     </React.Fragment>
                   ))}
                 </tr>
               )}
             </thead>
             <tbody>
+
               {visibleBrands.filter(b => selectedBrand === 'all' || b.name === selectedBrand).map((brand) => {
                 const subtotal = brandSubtotals[brand.name] || { budget: 0, khqt: 0, gdtd: 0, khd: 0, histBudget: 0, histKhqt: 0, histGdtd: 0, histKhd: 0, channelTotals: {}, histChannelTotals: {} };
                 const isCollapsed = collapsedBrands.has(brand.name);
@@ -2117,6 +2320,8 @@ export default function PlanningPage() {
                       CHANNELS.some(ch => ch.name !== 'Tổng Digital' && METRICS.some(m => getCellValue(`${brand.name}-${model}-${ch.name}-${m}`) > 0))
                     )
                   : filteredBySelection;
+                // Ẩn toàn bộ brand nếu không có model nào hiển thị
+                if (hideZeroRows && displayModels.length === 0) return null;
                 return (
                   <React.Fragment key={brand.name}>
                     {/* Model rows — hidden when brand is collapsed */}
@@ -2155,8 +2360,7 @@ export default function PlanningPage() {
                               const cellKey = `${brand.name}-${model}-${ch.name}-${metric}`;
                               const val = getCellValue(cellKey);
                               const histVal = getHistoricalValue(cellKey, compareMode);
-                              const cellNote = (notesByMonth[month] || {})[cellKey];
-                              
+
                               let isHighCpl = false;
                               if (metric === 'Ngân sách' && val > 0) {
                                   const localKhqt = getCellValue(`${brand.name}-${model}-${ch.name}-KHQT`);
@@ -2249,6 +2453,14 @@ export default function PlanningPage() {
                                          if (e.button !== 0) return;
                                          if (ch.readonly || isComputedRow) return;
                                          if (cellKey.includes('-Tổng Digital-') || isComputedRow) return;
+                                         // Click vào cell đang chọn → vào edit ngay (giống Excel)
+                                         if (selectedCells.size === 1 && selectedCells.has(cellKey) && !isDataLocked) {
+                                           e.preventDefault();
+                                           setUndoStack(us => [...us.slice(-19), cellData]);
+                                           setEditingCell(cellKey);
+                                           setEditValue(String(getCellValue(cellKey) || ''));
+                                           return;
+                                         }
                                          setIsSelecting(true);
                                          setSelectionStartIdx(ALL_CELL_KEYS.indexOf(cellKey));
                                          setSelectedCells(new Set([cellKey]));
@@ -2281,15 +2493,10 @@ export default function PlanningPage() {
                                              setSelectedCells(newSel);
                                          }
                                       }}
-                                    onContextMenu={(e) => {
-                                      e.preventDefault();
-                                      setEditingNoteCell(cellKey);
-                                      setEditingCell(null);
-                                    }}
                                     onDoubleClick={(e) => {
                                       e.preventDefault();
                                       if (isDataLocked) {
-                                        setAlertInfo({ type: 'warning', title: 'Không hợp lệ', message: 'Dữ liệu đang bị khoá chỉnh sửa.' });
+                                        setAlertInfo({ type: 'warning', title: 'Chỉ xem tổng hợp', message: 'Vui lòng chọn một showroom cụ thể (không phải "Tất cả") để chỉnh sửa dữ liệu.' });
                                         return;
                                       }
                                       if (ch.readonly || isComputedRow) return;
@@ -2297,7 +2504,6 @@ export default function PlanningPage() {
                                       setUndoStack(us => [...us.slice(-19), cellData]); // Bug fix: dùng cellData (mode-aware) thay vì dataByMonth
                                       setEditingCell(cellKey);
                                       setEditValue(String(val || ''));
-                                      setEditingNoteCell(null);
                                     }}
                                      style={(() => {
                                         const isOverBudget = pageMode === 'actual' && cellKey.endsWith('-Ngân sách') && val > 0 && (planCellData[cellKey] || 0) > 0 && val > (planCellData[cellKey] || 0) * 1.1;
@@ -2328,51 +2534,11 @@ export default function PlanningPage() {
                                         </div>
                                       </div>
                                     )}
-                                    {cellNote && !isHighCpl && (
-                                      <div className="group" style={{ position: 'absolute', top: 0, right: 0, width: 14, height: 14, cursor: 'help', zIndex: 20 }}>
-                                        <div style={{ position: 'absolute', top: 0, right: 0, width: 0, height: 0, borderStyle: 'solid', borderWidth: '0 8px 8px 0', borderColor: 'transparent #ef4444 transparent transparent' }} />
-                                        <div 
-                                          className="hidden group-hover:block" 
-                                          style={{ 
-                                            position: 'absolute', top: 16, right: 0, 
-                                            backgroundColor: '#1e293b', color: '#fff', 
-                                            padding: '4px 8px', borderRadius: 4, fontSize: 11,
-                                            width: 'max-content', maxWidth: 200, wordWrap: 'break-word', whiteSpace: 'pre-wrap',
-                                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)', zIndex: 300 
-                                          }}
-                                        >
-                                          {cellNote}
-                                          {(!editingCell && !editingNoteCell) && (
-                                             <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 2 }}>(Chuột phải để sửa)</div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-                                    
-                                    {editingNoteCell === cellKey && (
-                                      <CellNoteEditor 
-                                        initialValue={cellNote || ''}
-                                        onSave={(newVal) => {
-                                          setNotesByMonth(prev => ({ ...prev, [month]: { ...(prev[month] || {}), [cellKey]: newVal } }));
-                                          setEditingNoteCell(null);
-                                        }}
-                                        onCancel={() => setEditingNoteCell(null)}
-                                        onDelete={() => {
-                                          setNotesByMonth(prev => {
-                                            const newMonth = { ...(prev[month] || {}) };
-                                            delete newMonth[cellKey];
-                                            return { ...prev, [month]: newMonth };
-                                          });
-                                          setEditingNoteCell(null);
-                                        }}
-                                      />
-                                    )}
-                                    
                                     {editingCell === cellKey && (
-                                        <input
-                                          type="text"
-                                          autoFocus
-                                          value={editValue}
+                                      <input
+                                        type="text"
+                                        autoFocus
+                                        value={editValue}
                                           onChange={(e) => setEditValue(e.target.value)}
                                           onBlur={() => {
                                             if (editValue.trim() !== '') {
@@ -2543,154 +2709,114 @@ export default function PlanningPage() {
                 </td>
               </tr>
 
-              {/* CHI TIẾT THEO SHOWROOM — Bottom-Up: chỉ hiện khi xem "Tất cả SR", data lấy theo code */}
-              {isAggregateView && (
-                <>
-                  <tr>
-                    <td colSpan={2} style={{ ...stickyBodyCol1, width: COL1_WIDTH + COL2_WIDTH, minWidth: COL1_WIDTH + COL2_WIDTH, background: '#f1f5f9', fontWeight: 800, padding: '10px 8px', borderTop: '4px solid var(--color-border-dark)', color: 'var(--color-text-secondary)', fontSize: 11, letterSpacing: '0.04em' }}>
-                      CHI TIẾT THEO SHOWROOM
-                    </td>
-                    <td colSpan={visibleChannels.length * visibleMetrics.length * (isActualSplitMode ? 2 : 1) + 4} style={{ background: '#f1f5f9', borderTop: '4px solid var(--color-border-dark)' }}></td>
-                  </tr>
+            </tbody>
 
-                  {showrooms.map((srObj) => {
-                    // Bottom-Up: key là SR CODE (uppercase), không phải tên
-                    const srKey = srObj.code.toUpperCase();
-                    const srPayload = showroomDataByMonth[month]?.[srKey] || {};
-                    const srActualPayload = showroomActualDataByMonth[month]?.[srKey] || {};
-                    // Lọc events theo showroom name (EventItem.showroom = tên SR)
-                    const eventsForSr = eventsByMonth[month]?.filter(e => e.showroom === srObj.name) || [];
-                    const sr = srObj.name; // alias để giữ code phía dưới không đổi
-                    
-                    // Create cell getter for specific showroom
-                    const getSrCell = (key: string, mode: 'plan'|'actual') => {
-                      if (mode === 'actual') return srActualPayload[key] || 0;
-                      return srPayload[key] || 0;
+            {/* ─── BẢNG THEO SHOWROOM — cùng <table> để cột thẳng hàng ─── */}
+            {(() => {
+              const displaySRs = isAggregateView
+                ? showrooms.filter(s => !s.id.startsWith('fallback'))
+                : showrooms.filter(s => s.name === selectedShowroom);
+              if (displaySRs.length === 0) return null;
+
+              return (
+                <tbody>
+                  {/* Section label row */}
+                  <tr>
+                    <td
+                      colSpan={2}
+                      style={{ padding: '5px 8px 3px', borderTop: '3px solid var(--color-border-dark)', background: '#f8fafc', position: 'sticky', left: 0, zIndex: 5, fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap', minWidth: COL1_WIDTH + COL2_WIDTH }}
+                    >
+                      {isAggregateView ? 'Chi tiết theo Showroom' : `Tổng hợp — ${selectedShowroom}`}
+                    </td>
+                    <td colSpan={999} style={{ borderTop: '3px solid var(--color-border-dark)', background: '#f8fafc' }} />
+                  </tr>
+                  {/* Sub-header row */}
+                  <tr style={{ height: 24 }}>
+                    <td colSpan={2} style={{ padding: '2px 8px', background: '#eef2f7', position: 'sticky', left: 0, zIndex: 5, fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border-dark)', minWidth: COL1_WIDTH + COL2_WIDTH }}>
+                      Đơn vị
+                    </td>
+                    {visibleChannels.map(ch => visibleMetrics.map(m => (
+                      <td key={`sr-hdr-${ch.name}-${m}`} colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 6px', background: '#eef2f7', textAlign: 'center', fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border-dark)' }}>
+                        {m === 'Ngân sách' ? 'NS' : m}
+                      </td>
+                    )))}
+                    <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', background: '#eef2f7', textAlign: 'center', fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderLeft: '2px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)' }}>NS</td>
+                    <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', background: '#eef2f7', textAlign: 'center', fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderLeft: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)' }}>KHQT</td>
+                    <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', background: '#eef2f7', textAlign: 'center', fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderLeft: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)' }}>GDTD</td>
+                    <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', background: '#eef2f7', textAlign: 'center', fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderLeft: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)' }}>KHĐ</td>
+                  </tr>
+                  {displaySRs.map((srObj, si) => {
+                    const srData = (pageMode === 'plan' ? showroomDataByMonth : showroomActualDataByMonth)[month]?.[srObj.id] || {};
+                    const bg = si % 2 === 0 ? '#ffffff' : '#fafafa';
+
+                    // Tổng theo channel+metric từ legacy keys (brand-model-channel-metric)
+                    const getChMetricSum = (chName: string, metric: string) => {
+                      let sum = 0;
+                      const suffix = `-${chName}-${metric}`;
+                      for (const [k, v] of Object.entries(srData)) {
+                        if (k.endsWith(suffix)) sum += (v as number) || 0;
+                      }
+                      return sum;
                     };
-                    
-                    // Compute totals on the fly for this SR based on its own payload
-                    let srTotalBudget = 0;
-                    let srTotalKhqt = 0;
-                    let srTotalGdtd = 0;
-                    let srTotalKhd = 0;
-                    let srHistTotalBudget = 0;
-                    let srHistTotalKhqt = 0;
-                    let srHistTotalGdtd = 0;
-                    let srHistTotalKhd = 0;
+                    // Tổng Digital = sum tất cả kênh digital
+                    const getChanSum = (ch: typeof visibleChannels[0], metric: string) =>
+                      ch.isAggregate
+                        ? digitalChannelNames.reduce((s, dcName) => s + getChMetricSum(dcName, metric), 0)
+                        : getChMetricSum(ch.name, metric);
+
+                    // Pre-compute summary totals (chỉ kênh thực, không tính Tổng Digital)
+                    let totalNS = 0, totalKHQT = 0, totalGDTD = 0, totalKHD = 0;
+                    visibleChannels.filter(ch => !ch.isAggregate).forEach(ch => {
+                      totalNS   += getChanSum(ch, 'Ngân sách');
+                      totalKHQT += getChanSum(ch, 'KHQT');
+                      totalGDTD += getChanSum(ch, 'GDTD');
+                      totalKHD  += getChanSum(ch, 'KHĐ');
+                    });
+
+                    // Áp dụng filter ẩn dòng trống — nhất quán với bảng brand
+                    if (hideZeroRows && totalNS === 0 && totalKHQT === 0 && totalGDTD === 0 && totalKHD === 0) return null;
 
                     return (
-                      <tr key={`sr-${srObj.code}`}>
-                        <td colSpan={2} style={{ ...stickyBodyCol1, width: COL1_WIDTH + COL2_WIDTH, minWidth: COL1_WIDTH + COL2_WIDTH, background: '#ffffff', fontWeight: 600, color: 'var(--color-text)' }}>
-                          {sr}
+                      <tr key={srObj.id} style={{ background: bg, height: 26 }}>
+                        {/* Showroom name — span cả 2 sticky cols để thẳng hàng */}
+                        <td
+                          colSpan={2}
+                          style={{ padding: '2px 8px', fontWeight: 600, color: 'var(--color-text)', borderBottom: '1px solid var(--color-border)', position: 'sticky', left: 0, background: bg, zIndex: 5, minWidth: COL1_WIDTH + COL2_WIDTH }}
+                        >
+                          {srObj.name}
                         </td>
-                        {visibleChannels.map((ch) =>
-                          visibleMetrics.map((metric) => {
-                            // Sum across all brands for this channel & metric
-                            let sumVal = 0; let histSumVal = 0;
-                            if (ch.name === 'Sự kiện') {
-                                if (metric === 'Ngân sách') sumVal = eventsForSr.reduce((sum, e) => sum + (e.budget || 0), 0);
-                                else if (metric === 'KHQT') sumVal = eventsForSr.reduce((sum, e) => sum + (e.leads || 0), 0);
-                                else if (metric === 'GDTD') sumVal = eventsForSr.reduce((sum, e) => sum + (e.gdtd || 0), 0);
-                                else if (metric === 'KHĐ')  sumVal = eventsForSr.reduce((sum, e) => sum + (e.deals || 0), 0);
-                                histSumVal = 0; // events hist is N/A
-                            } else {
-                                visibleBrands.forEach(b => {
-                                    const key = `${b.name}-${ch.name}-${metric}`;
-                                    sumVal += getSrCell(key, pageMode);
-                                    if (compareMode !== 'none') {
-                                        histSumVal += getSrCell(key, compareMode === 'actual' ? 'actual' : 'plan');
-                                    }
-                                });
-                            }
-                            
-                            // add to total
-                            if (metric === 'Ngân sách') srTotalBudget += sumVal;
-                            if (metric === 'KHQT') srTotalKhqt += sumVal;
-                            if (metric === 'GDTD') srTotalGdtd += sumVal;
-                            if (metric === 'KHĐ') srTotalKhd += sumVal;
-                            if (metric === 'Ngân sách') srHistTotalBudget += histSumVal;
-                            if (metric === 'KHQT') srHistTotalKhqt += histSumVal;
-                            if (metric === 'GDTD') srHistTotalGdtd += histSumVal;
-                            if (metric === 'KHĐ') srHistTotalKhd += histSumVal;
-
-                            return (
-                              <td
-                                key={`sr-${srObj.code}-${ch.name}-${metric}`}
-                                colSpan={isActualSplitMode ? 2 : 1}
-                                style={{
-                                  textAlign: 'right',
-                                  fontSize: 'var(--fs-table)',
-                                  background: ch.readonly ? '#f8fafc' : undefined,
-                                }}
-                              >
-                                {renderDualValue(
-                                  sumVal,
-                                  ch.name === 'Sự kiện' ? null : (compareMode !== 'none' ? histSumVal : null),
-                                  false
-                                )}
-                              </td>
-                            );
-                          })
-                        )}
-                        {(() => {
-                           // For showroom row totals, we use the local running sum variables computed above
-                           const srActualTotalBudget = visibleChannels.reduce((sum, ch) => {
-                             let sc = 0;
-                             if (ch.name === 'Sự kiện') {
-                               // for event actuals, actually we didn't track that locally. Use grandTotal actuals approx or sum up
-                               return sum; 
-                             } else {
-                               visibleBrands.forEach(b => { sc += getSrCell(`${b.name}-${ch.name}-Ngân sách`, 'actual'); });
-                             }
-                             return sum + sc;
-                           }, 0);
-                           const srActualTotalKhqt = visibleChannels.reduce((sum, ch) => {
-                             let sc = 0; if (ch.name !== 'Sự kiện') { visibleBrands.forEach(b => { sc += getSrCell(`${b.name}-${ch.name}-KHQT`, 'actual'); }); } return sum + sc;
-                           }, 0);
-                           const srActualTotalGdtd = visibleChannels.reduce((sum, ch) => {
-                             let sc = 0; if (ch.name !== 'Sự kiện') { visibleBrands.forEach(b => { sc += getSrCell(`${b.name}-${ch.name}-GDTD`, 'actual'); }); } return sum + sc;
-                           }, 0);
-                           const srActualTotalKhd = visibleChannels.reduce((sum, ch) => {
-                             let sc = 0; if (ch.name !== 'Sự kiện') { visibleBrands.forEach(b => { sc += getSrCell(`${b.name}-${ch.name}-KHĐ`, 'actual'); }); } return sum + sc;
-                           }, 0);
-
-                           const totals = [
-                             { key: 'budget', val: srTotalBudget, act: srActualTotalBudget, hist: srHistTotalBudget },
-                             { key: 'khqt', val: srTotalKhqt, act: srActualTotalKhqt, hist: srHistTotalKhqt },
-                             { key: 'gdtd', val: srTotalGdtd, act: srActualTotalGdtd, hist: srHistTotalGdtd },
-                             { key: 'khd', val: srTotalKhd, act: srActualTotalKhd, hist: srHistTotalKhd }
-                           ];
-                           
-                           return totals.map((t, idx) => {
-                             const bg = idx === 0 ? '#f1f5f9' : '#f8fafc';
-                             const fw = idx === 0 ? 700 : 600;
-                             const color = idx === 0 ? 'var(--color-text)' : 'inherit';
-                             
-                             if (isActualSplitMode) {
-                               return (
-                                 <React.Fragment key={`tot-sr-${srObj.code}-${t.key}`}>
-                                   <td style={{ padding: '2px 6px', textAlign: 'right', fontWeight: 600, background: '#f8fafc', color: 'var(--color-text-muted)', borderRight: '1px dashed var(--color-border-dark)' }}>
-                                     {t.val > 0 ? formatNumber(t.val) : ''}
-                                   </td>
-                                   <td style={{ padding: '2px 6px', textAlign: 'right', fontWeight: fw, background: bg, color: color }}>
-                                     {t.act > 0 ? formatNumber(t.act) : ''}
-                                   </td>
-                                 </React.Fragment>
-                               );
-                             }
-                             return (
-                               <td key={`tot-sr-${srObj.code}-${t.key}`} style={{ textAlign: 'right', fontWeight: fw, background: bg, color: color }}>
-                                 {renderDualValue(t.val, compareMode !== 'none' ? t.hist : null, false)}
-                               </td>
-                             );
-                           });
-                        })()}
+                        {/* Data cells — cùng visibleChannels × visibleMetrics như bảng trên */}
+                        {visibleChannels.map(ch => visibleMetrics.map(m => {
+                          const v = getChanSum(ch, m);
+                          return (
+                            <td
+                              key={`sr-${srObj.id}-${ch.name}-${m}`}
+                              colSpan={isActualSplitMode ? 2 : 1}
+                              style={{ padding: '2px 6px', textAlign: 'right', borderBottom: '1px solid var(--color-border)', background: ch.readonly ? (si % 2 === 0 ? '#fafafa' : '#f5f5f5') : undefined, color: v > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}
+                            >
+                              {v > 0 ? formatNumber(v) : '—'}
+                            </td>
+                          );
+                        }))}
+                        {/* Summary cols — khớp với TỔNG CỘNG của bảng trên */}
+                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', fontWeight: 700, background: '#f1f5f9', borderBottom: '1px solid var(--color-border)', borderLeft: '2px solid var(--color-border-dark)', color: totalNS > 0 ? 'var(--color-brand)' : 'var(--color-text-muted)' }}>
+                          {totalNS > 0 ? formatNumber(totalNS) : '—'}
+                        </td>
+                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', fontWeight: 600, background: '#f8fafc', borderBottom: '1px solid var(--color-border)', borderLeft: '1px solid var(--color-border-dark)', color: totalKHQT > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
+                          {totalKHQT > 0 ? formatNumber(totalKHQT) : '—'}
+                        </td>
+                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', fontWeight: 600, background: '#f8fafc', borderBottom: '1px solid var(--color-border)', borderLeft: '1px solid var(--color-border-dark)', color: totalGDTD > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
+                          {totalGDTD > 0 ? formatNumber(totalGDTD) : '—'}
+                        </td>
+                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', fontWeight: 600, background: '#f8fafc', borderBottom: '1px solid var(--color-border)', borderLeft: '1px solid var(--color-border-dark)', color: totalKHD > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
+                          {totalKHD > 0 ? formatNumber(totalKHD) : '—'}
+                        </td>
                       </tr>
                     );
                   })}
-                </>
-              )}
-            </tbody>
+                </tbody>
+              );
+            })()}
           </table>
 
           {/* SỰ KIỆN — Read-only summary, quản lý tại trang Quản trị sự kiện */}
