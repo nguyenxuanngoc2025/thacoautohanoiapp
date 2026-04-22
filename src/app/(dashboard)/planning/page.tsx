@@ -4,18 +4,17 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import PageHeader from '@/components/layout/PageHeader';
 import { formatNumber, cn } from '@/lib/utils';
 import { CHANNEL_CATEGORIES } from '@/lib/constants';
-import { DownloadCloud, UploadCloud, Save, Send, Copy, Wallet, Users, FileSignature, BarChart3, Wand2, Zap, X, CheckCircle2, AlertTriangle, Edit2, Trash2, ArrowUpRight, CalendarDays, Keyboard, ChevronDown, CloudUpload } from 'lucide-react';
+import { DownloadCloud, UploadCloud, Save, Send, Wallet, Users, FileSignature, BarChart3, Wand2, Zap, X, CheckCircle2, AlertTriangle, Edit2, Trash2, ArrowUpRight, CalendarDays, Keyboard, ChevronDown, CloudUpload } from 'lucide-react';
 import { Badge } from '@/components/reui/badge';
-import EventFormModal from '@/components/events/EventFormModal';
-import { type EventItem, EVENT_CPL, EVENT_CR1, EVENT_CR2, fetchEventsFromDB, upsertEventToDB, deleteEventFromDB } from '@/lib/events-data';
-import { fetchAllBudgetPlans, upsertBudgetPlan } from '@/lib/budget-data';
-import { computeHistoricalCPL, fetchAllActualEntries, upsertActualEntry } from '@/lib/actual-data';
-import { MASTER_BRANDS } from '@/lib/master-data';
+import { type EventItem, EVENT_CPL, EVENT_CR1, EVENT_CR2 } from '@/lib/events-data';
+import { useBudgetEntriesByShowroom, invalidateBudgetCaches } from '@/lib/use-data';
+import { upsertBudgetEntries, cellDataToEntries, makeCellKey } from '@/lib/db/budget-entries';
+import type { BudgetEntryRow } from '@/types/database';
 import { useBrands } from '@/contexts/BrandsContext';
 import { useShowrooms } from '@/contexts/ShowroomsContext';
 import { useUnit } from '@/contexts/UnitContext';
-import { useChannels, type Channel } from '@/contexts/ChannelsContext';
-import type { BrandWithModels } from '@/lib/brands-data';
+import { useChannels } from '@/contexts/ChannelsContext';
+import type { Channel } from '@/contexts/ChannelsContext';
 
 
 // CHANNELS được cung cấp động bởi ChannelsContext — xem useChannels() bên dưới
@@ -24,127 +23,97 @@ import type { BrandWithModels } from '@/lib/brands-data';
 const METRICS = ['Ngân sách', 'KHQT', 'GDTD', 'KHĐ'];
 
 // Fixed widths for sticky columns
-const COL1_WIDTH = 90;
-const COL2_WIDTH = 120;
+const COL1_WIDTH = 120;
+const COL2_WIDTH = 130;
 
 // Channel category color map (fallback only for categories without channel-level color)
 const CATEGORY_COLOR_MAP: Record<string, string> = {};
 CHANNEL_CATEGORIES.forEach(c => { CATEGORY_COLOR_MAP[c.value] = c.color; });
 
-// SR_WEIGHTS now provided by useShowrooms().weightMap — see inside component
-
-// Build ordered cellKeys for keyboard navigation
-function buildCellKeysList(brands: BrandWithModels[], channels: { name: string; readonly: boolean }[]): string[] {
-  const keys: string[] = [];
-  for (const brand of brands) {
-    for (const model of brand.models) {
-      const isAgg = brand.modelData?.find(x => x.name === model)?.is_aggregate;
-      if (isAgg) continue;
-      for (const ch of channels) {
-        if (ch.readonly) continue;
-        for (const metric of METRICS) {
-          keys.push(`${brand.name}-${model}-${ch.name}-${metric}`);
-        }
-      }
-    }
-  }
-  return keys;
-}
 
 interface CellData {
   [key: string]: number;
 }
 
-// --- Types hoisted out of component for performance ---
-type EventModalState = 
-  | { open: true;  data: EventItem; isNew: boolean }
-  | { open: false; data: null;      isNew: boolean };
-type AlertState = { type: 'warning' | 'success' | 'info', title: string, message: string };
+// ─── Key Translation Bridge ───────────────────────────────────────────────────
+// Grid uses legacy format: "brand-model-channelName-metricVN"
+// DB uses new format:      "brand|||model|||channelCode|||metricCode"
+// These helpers translate between the two WITHOUT changing grid logic.
 
-// Deterministic mockup data generation (kênh "Sự kiện" KHÔNG generate ở đây
-// vì được driven 100% từ events[] qua useEffect sync)
-// LƯU Ý: Đây là hàm helper ngoài component nên dùng STATIC channel list
-// Context sẽ ghi đè dữ liệu thực tế sau khi fetch xong
-const STATIC_CHANNELS_FOR_MOCKUP = [
-  { name: 'Google',      category: 'DIGITAL',    color: '#EA4335', readonly: false, isAggregate: false },
-  { name: 'Facebook',    category: 'DIGITAL',    color: '#1877F2', readonly: false, isAggregate: false },
-  { name: 'Khác',        category: 'DIGITAL',    color: '#64748B', readonly: false, isAggregate: false },
-  { name: 'Tổng Digital',category: 'DIGITAL',    color: '#0F172A', readonly: true,  isAggregate: true  },
-  { name: 'Sự kiện',   category: 'SỰ KIỆN',   color: '#10B981', readonly: true,  isAggregate: false },
-  { name: 'CSKH',        category: 'CSKH',       color: '#F59E0B', readonly: false, isAggregate: false },
-  { name: 'Nhận diện', category: 'NHẬN DIỆN', color: '#8B5CF6', readonly: false, isAggregate: false },
-];
+const METRIC_VN_TO_CODE: Record<string, 'ns' | 'khqt' | 'gdtd' | 'khd'> = {
+  'Ngân sách': 'ns', 'KHQT': 'khqt', 'GDTD': 'gdtd', 'KHĐ': 'khd',
+};
+const METRIC_CODE_TO_VN: Record<string, string> = {
+  'ns': 'Ngân sách', 'khqt': 'KHQT', 'gdtd': 'GDTD', 'khd': 'KHĐ',
+};
 
-type CellNotes = Record<string, string>;
-
-function generateMockData(monthSeed: number, brands?: BrandWithModels[]): CellData {
-  // Dùng MASTER_BRANDS làm fallback khi brands chưa load từ DB
-  const activeBrands: BrandWithModels[] = brands ?? MASTER_BRANDS.map(b => ({ name: b.name, color: null, models: b.models, modelData: [] }));
-
-  const data: CellData = {};
-  
-  const brandW: Record<string, number> = { 'KIA': 0.35, 'Mazda': 0.25, 'Peugeot': 0.1, 'BMW': 0.08, 'MINI': 0.02, 'TẢI BUS': 0.18, 'BMW MTR': 0.02 };
-  const modelW: Record<string, number> = {
-    // KIA — 10 dòng xe
-    'New Carnival': 0.20, 'Sportage': 0.15, 'Carens': 0.05,
-    'New Sonet': 0.10, 'New Seltos': 0.15, 'New Sorento': 0.10,
-    'Kia K5': 0.05, 'New Morning': 0.08, 'K3': 0.08, 'Soluto': 0.04,
-    // Mazda — 8 dòng xe
-    'CX-90': 0.05, 'MX-5': 0.02, 'Mazda CX-8': 0.15, 'Mazda CX-5': 0.35,
-    'Mazda3': 0.18, 'CX-3': 0.05, 'CX-30': 0.12, 'Mazda2': 0.08,
-    // Peugeot — 4 dòng xe
-    '408': 0.15, '2008': 0.20, '3008': 0.40, '5008': 0.25,
-    // BMW (nhóm) — 3 phân khúc
-    'Nhóm doanh số chính': 0.60, 'Nhóm cao cấp': 0.30, 'Nhóm Clear stock': 0.10,
-    // MINI — 4 dòng
-    '3-Cửa': 0.35, '5-Cửa': 0.30, 'Mui trần': 0.15, 'Countryman': 0.20,
-    // BMW MTR — 2 dòng
-    'Nhóm xe hiện hữu': 0.60, 'Nhóm xe mới': 0.40,
-    // TẢI BUS — 6 dòng xe có dữ liệu (không có Tổng Tải/Tổng Bus)
-    'Tải nhẹ máy xăng': 0.20, 'Tải van': 0.18, 'Tải nhẹ máy dầu': 0.22,
-    'Tải trung': 0.20, 'TN ĐK BN': 0.10, 'Bus': 0.06, 'Mini Bus': 0.04,
-  };
-  // Kênh Sự kiện bị loại khỏi mockup — driven by events[]
-  const chW: Record<string, number> = { 'Facebook': 0.40, 'Google': 0.30, 'Khác': 0.06, 'CSKH': 0.12, 'Nhận diện': 0.12 };
-  const baseBudget = 3000;
-  
-  for (const b of activeBrands) {
-    const bw = brandW[b.name] || 0.2;
-    for (const m of b.models) {
-      const isAgg = b.modelData?.find(x => x.name === m)?.is_aggregate;
-      if (isAgg) continue;
-      const mw = modelW[m] || (1 / b.models.length);
-      const mBdgt = baseBudget * bw * mw;
-      for (const c of STATIC_CHANNELS_FOR_MOCKUP) {
-        if (c.name === 'Tổng Digital') continue;
-        if (c.name === 'Sự kiện') continue; // Sự kiện do events[] driver
-        
-        const key = `${b.name}-${m}-${c.name}`;
-        let hash = 0;
-        const hashStr = key + monthSeed;
-        for (let i = 0; i < hashStr.length; i++) hash = Math.imul(31, hash) + hashStr.charCodeAt(i) | 0;
-        const noise = ((Math.abs(hash) % 100) / 100) * 0.4 + 0.8;
-        
-        if (['Khác', 'Nhận diện', 'CSKH'].includes(c.name) && (Math.abs(hash) % 10) < 4) continue;
-
-        const cw = chW[c.name] || 0.1;
-        const budget = Math.round(mBdgt * cw * noise * 10) / 10;
-        const cpl = c.name === 'Facebook' ? 0.08 : c.name === 'Google' ? 0.12 : 0.15;
-        
-        const khqt = Math.round(budget / cpl);
-        const cr1 = 0.15;
-        const gdtd = Math.round(khqt * cr1);
-        const khd = Math.round(gdtd * (c.name === 'CSKH' ? 0.5 : 0.25));
-
-        if (budget > 0) data[`${key}-Ngân sách`] = budget;
-        if (khqt > 0) data[`${key}-KHQT`] = khqt;
-        if (gdtd > 0) data[`${key}-GDTD`] = gdtd;
-        if (khd > 0) data[`${key}-KHĐ`] = khd;
+/**
+ * Convert BudgetEntryRow[] from DB → legacy CellData used by the grid.
+ * Legacy key format: "brand-model-channelName-metricVN"
+ */
+function entriesToLegacyCellData(
+  rows: BudgetEntryRow[],
+  channels: Channel[],
+  mode: 'plan' | 'actual'
+): CellData {
+  // Build code→name map for channels
+  const codeToName = new Map<string, string>(channels.map(c => [c.code, c.name]));
+  const result: CellData = {};
+  for (const row of rows) {
+    const chName = codeToName.get(row.channel_code) ?? row.channel_code;
+    for (const [metricVN, metricCode] of Object.entries(METRIC_VN_TO_CODE)) {
+      const col = `${mode}_${metricCode}` as keyof BudgetEntryRow;
+      const val = row[col] as number | null;
+      if (val !== null && val !== undefined) {
+        result[`${row.brand_name}-${row.model_name}-${chName}-${metricVN}`] = val;
       }
     }
   }
-  return data;
+  return result;
 }
+
+/**
+ * Convert legacy CellData from the grid → EntryInput[] for DB upsert.
+ * Legacy key format: "brand-model-channelName-metricVN"
+ */
+function legacyCellDataToEntries(
+  cellData: CellData,
+  channels: Channel[],
+  unitId: string,
+  showroomId: string,
+  year: number,
+  month: number,
+  mode: 'plan' | 'actual'
+) {
+  const nameToCode = new Map<string, string>(channels.map(c => [c.name, c.code]));
+  // Convert legacy keys to new ||| format then call cellDataToEntries
+  const newCellData: Record<string, number | null> = {};
+  for (const [legacyKey, val] of Object.entries(cellData)) {
+    const parts = legacyKey.split('-');
+    if (parts.length < 4) continue;
+    // metric is last part, channel is second-to-last, model may contain dashes
+    const metricVN = parts[parts.length - 1];
+    const chName = parts[parts.length - 2];
+    const modelName = parts.slice(1, parts.length - 2).join('-');
+    const brandName = parts[0];
+    const metricCode = METRIC_VN_TO_CODE[metricVN];
+    const chCode = nameToCode.get(chName);
+    if (!metricCode || !chCode) continue;
+    // Skip aggregate/readonly channels
+    const ch = channels.find(c => c.name === chName);
+    if (ch?.readonly || ch?.isAggregate) continue;
+    newCellData[makeCellKey(brandName, modelName, chCode, metricCode)] = val ?? null;
+  }
+  return cellDataToEntries(newCellData as Record<string, number | null>, unitId, showroomId, year, month, mode);
+}
+
+// --- Types hoisted out of component for performance ---
+type AlertState = { type: 'warning' | 'success' | 'info', title: string, message: string };
+
+
+type CellNotes = Record<string, string>;
+
+// Module-level cache removed — data is now managed by SWR via useBudgetEntriesByShowroom
 
 const CellNoteEditor = ({ initialValue, onSave, onCancel, onDelete }: { initialValue: string, onSave: (val: string) => void, onCancel: () => void, onDelete: () => void }) => {
   const [val, setVal] = useState(initialValue);
@@ -247,7 +216,7 @@ const FilterDropdown = ({
       </button>
       
       {isOpen && (
-        <div style={{ position: 'absolute', top: '100%', left: label ? 50 : 0, marginTop: 4, width: typeof width === 'number' ? Math.max(width, 220) : '100%', minWidth: 220, background: '#fff', border: '1px solid var(--color-border-dark)', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, display: 'flex', flexDirection: 'column', animation: 'scaleInId 0.15s ease-out', transformOrigin: 'top left' }}>
+        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, width: typeof width === 'number' ? Math.max(width, 220) : '100%', minWidth: 220, background: '#fff', border: '1px solid var(--color-border-dark)', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 200, display: 'flex', flexDirection: 'column', animation: 'scaleInId 0.15s ease-out', transformOrigin: 'top left' }}>
           <div style={{ maxHeight: 250, overflowY: 'auto' }}>
             {isMulti ? (
               <>
@@ -313,26 +282,32 @@ const FilterDropdown = ({
 
 
 export default function PlanningPage() {
-  // ─── Dynamic brands từ DB (thay thế DEMO_BRANDS tĩnh) ───────────────────────
   const { brands } = useBrands();
-  // ─── Dynamic showrooms từ DB (thay thế MASTER_SHOWROOMS hard-coded) ──────────
-  const { showrooms, weightMap: SR_WEIGHTS, showroomNames: SHOWROOMS } = useShowrooms();
+  const { showrooms, showroomNames: SHOWROOMS } = useShowrooms();
   const { activeUnitId } = useUnit();
-  // ─── Dynamic channels từ DB (thay thế CHANNELS hard-coded) ──────────────────
   const { channels: CHANNELS, digitalChannelNames } = useChannels();
 
   const [mounted, setMounted] = useState(false);
-  const [eventsLoaded, setEventsLoaded] = useState(false);
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState(4);
   const [viewMode, setViewMode] = useState<'month' | 'quarter' | 'year'>('month');
   const [selectedShowroom, setSelectedShowroom] = useState('all');
+  const selectedShowroomCode = useMemo(() => {
+    if (selectedShowroom === 'all') return null;
+    return showrooms.find(s => s.name === selectedShowroom)?.code?.toUpperCase() ?? null;
+  }, [selectedShowroom, showrooms]);
 
-  // Alias để tất cả code cũ hoạt động không đổi - được lọc qua ràng buộc brands của showroom
-  const DEMO_BRANDS = useMemo(() => {
+  // UUID of selected showroom — needed for thaco_budget_entries queries
+  const selectedShowroomId = useMemo(() => {
+    if (selectedShowroom === 'all') return null;
+    return showrooms.find(s => s.name === selectedShowroom)?.id ?? null;
+  }, [selectedShowroom, showrooms]);
+
+  // Brands hiển thị — lọc theo brands của showroom đang chọn (nếu có)
+  const visibleBrands = useMemo(() => {
     if (selectedShowroom === 'all') return brands;
     const sr = showrooms.find(s => s.name === selectedShowroom);
-    if (!sr || !sr.brands || sr.brands.length === 0) return brands; 
+    if (!sr || !sr.brands || sr.brands.length === 0) return brands;
     return brands.filter(b => sr.brands.includes(b.name));
   }, [brands, selectedShowroom, showrooms]);
   const [selectedBrand, setSelectedBrand] = useState('all');
@@ -357,31 +332,69 @@ export default function PlanningPage() {
   // Group 3: State for Notes
   const [notesByMonth, setNotesByMonth] = useState<Record<number, Record<string, string>>>({});
 
-  // Store generated mockup data for all 12 months locally
-  const [dataByMonth, setDataByMonth] = useState<Record<number, CellData>>(() => {
-    const initData: Record<number, CellData> = {};
-    for (let m = 1; m <= 12; m++) {
-      if (m <= 6) {
-        initData[m] = generateMockData(m);
-      } else {
-        initData[m] = {};
-      }
-    }
-    return initData;
-  });
+  // ─── Source of Truth: per-showroom data from DB ────────────────────────
+  const [showroomDataByMonth, setShowroomDataByMonth] = useState<Record<number, Record<string, CellData>>>({});
+  const [showroomActualDataByMonth, setShowroomActualDataByMonth] = useState<Record<number, Record<string, CellData>>>({});
 
-  const [approvalStatuses, setApprovalStatuses] = useState<Record<number, string>>({});
-  const approvalStatus = (approvalStatuses[month] as 'draft' | 'pending' | 'approved') || 'draft';
-  const setApprovalStatus = (st: 'draft' | 'pending' | 'approved') => {
-      setApprovalStatuses(prev => ({ ...prev, [month]: st }));
-  }
+  // Approval / Actual status per-SR per-month (populated by loadData)
+  const [approvalMapByMonthSR, setApprovalMapByMonthSR] = useState<Record<number, Record<string, string>>>({});
+  const [actualStatusMapByMonthSR, setActualStatusMapByMonthSR] = useState<Record<number, Record<string, string>>>({});
+
+  // ─── Derived data via useMemo — synchronous, eliminates flicker ────────
+  // Data is now keyed by showroomId (UUID) in showroomDataByMonth
+  const dataByMonth = useMemo(() => {
+    const result: Record<number, CellData> = {};
+    [1,2,3,4,5,6,7,8,9,10,11,12].forEach(m => {
+      if (showroomDataByMonth[m]) {
+        if (selectedShowroom === 'all') {
+          result[m] = {};
+          Object.values(showroomDataByMonth[m]).forEach(payload => {
+            Object.keys(payload).forEach(k => {
+              result[m][k] = (result[m][k] || 0) + (payload[k] || 0);
+            });
+          });
+        } else {
+          const id = selectedShowroomId || Object.keys(showroomDataByMonth[m])[0] || null;
+          result[m] = id ? { ...(showroomDataByMonth[m][id] || {}) } : {};
+        }
+      }
+    });
+    return result;
+  }, [showroomDataByMonth, selectedShowroom, selectedShowroomId]);
+
+  const actualDataByMonth = useMemo(() => {
+    const result: Record<number, CellData> = {};
+    [1,2,3,4,5,6,7,8,9,10,11,12].forEach(m => {
+      if (showroomActualDataByMonth[m]) {
+        if (selectedShowroom === 'all') {
+          result[m] = {};
+          Object.values(showroomActualDataByMonth[m]).forEach(payload => {
+            Object.keys(payload).forEach(k => {
+              result[m][k] = (result[m][k] || 0) + (payload[k] || 0);
+            });
+          });
+        } else {
+          const id = selectedShowroomId || Object.keys(showroomActualDataByMonth[m])[0] || null;
+          result[m] = id ? { ...(showroomActualDataByMonth[m][id] || {}) } : {};
+        }
+      }
+    });
+    return result;
+  }, [showroomActualDataByMonth, selectedShowroom, selectedShowroomId]);
+
+  const approvalStatus = useMemo(() => {
+    if (!selectedShowroomCode) return 'draft';
+    return approvalMapByMonthSR[month]?.[selectedShowroomCode] || 'draft';
+  }, [approvalMapByMonthSR, month, selectedShowroomCode]);
+
+  // Auto-save status indicator: idle | editing | saving | saved | error
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'editing' | 'saving' | 'saved' | 'error'>('idle');
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [retrySaveTrigger, setRetrySaveTrigger] = useState(0);
 
   // ─── Mode switcher: KẾ HOẠCH / THỰC HIỆN ─────────────────────────────────
   const [pageMode, setPageMode] = useState<'plan' | 'actual'>('plan');
-
-  // Actual entries data
-  const [actualDataByMonth, setActualDataByMonth] = useState<Record<number, CellData>>({});
-  const [actualStatusByMonth, setActualStatusByMonth] = useState<Record<number, string>>({});
+  
   // Dirty tracking — true khi user edit actual data chưa được lưu
   const [isDirtyActual, setIsDirtyActual] = useState(false);
   // Snapshot để hỗ trợ discard changes
@@ -396,37 +409,40 @@ export default function PlanningPage() {
   const planCellData = dataByMonth[month] || {};
 
   // ─── Edit lock guard (mode-aware) ────────────────────────────────────────
-  // Plan mode: locked khi showroom = 'all' HOẶC kế hoạch không ở draft
+  // Bottom-Up Phase 1: aggregate view (all SRs) is always read-only
+  const isAggregateView = selectedShowroom === 'all';
+
+  // Plan mode: locked khi showroom = 'all' HOẶC kế hoạch không ở draft / submitted / approved
   // Actual mode: locked khi entry đã submitted
-  const isDataLocked = pageMode === 'plan'
-    ? (selectedShowroom === 'all' || approvalStatus !== 'draft')
-    : (actualStatusByMonth[month] || 'draft') === 'submitted';
+  const isDataLocked = isAggregateView;
 
   // Actual split mode: draft months show Plan | Actual 2-column layout
-  const isActualSplitMode = pageMode === 'actual' && (actualStatusByMonth[month] || 'draft') === 'draft';
+  const actualEntryStatus = selectedShowroomCode ? (actualStatusMapByMonthSR[month]?.[selectedShowroomCode] || 'draft') : 'draft';
+  const isActualSplitMode = pageMode === 'actual' && actualEntryStatus === 'draft';
 
   const setCellData = useCallback((action: React.SetStateAction<CellData>) => {
+    if (!selectedShowroomId) return; // Guard: can't edit in aggregate view
     if (pageMode === 'plan') {
-      setDataByMonth(prev => {
-        const current = prev[month] || {};
+      setShowroomDataByMonth(cache => {
+        const current = cache[month]?.[selectedShowroomId] || {};
         const next = typeof action === 'function' ? action(current) : action;
-        return { ...prev, [month]: next };
+        return {
+          ...cache,
+          [month]: { ...(cache[month] || {}), [selectedShowroomId]: next }
+        };
       });
     } else {
-      setActualDataByMonth(prev => {
-        const current = prev[month] || {};
+      setShowroomActualDataByMonth(cache => {
+        const current = cache[month]?.[selectedShowroomId] || {};
         const next = typeof action === 'function' ? action(current) : action;
-        return { ...prev, [month]: next };
+        return {
+          ...cache,
+          [month]: { ...(cache[month] || {}), [selectedShowroomId]: next }
+        };
       });
       setIsDirtyActual(true);
     }
-  }, [month, pageMode]);
-
-  const currentWeight = useMemo(() => {
-    return selectedShowroom === 'all' ? 1 : (SR_WEIGHTS[selectedShowroom] || 1);
-  }, [selectedShowroom]);
-
-
+  }, [month, pageMode, selectedShowroomId]);
 
   const getRawHistoricalValue = useCallback((cellKey: string, mode: string): number | null => {
     if (mode === 'none') return null;
@@ -556,13 +572,10 @@ export default function PlanningPage() {
     return computeBase(cellKey);
   }, [dataByMonth, actualDataByMonth, month, cellData, brands, digitalChannelNames]);
 
+  // Bottom-Up: no weight scaling; data is already per-SR
   const getHistoricalValue = useCallback((cellKey: string, mode: string): number | null => {
-    const raw = getRawHistoricalValue(cellKey, mode);
-    if (raw === null || currentWeight === 1) return raw;
-    const scaled = raw * currentWeight;
-    const isBudget = cellKey.endsWith('-Ngân sách') || cellKey.endsWith('-CPL');
-    return isBudget ? Math.round(scaled * 10) / 10 : Math.round(scaled);
-  }, [getRawHistoricalValue, currentWeight]);
+    return getRawHistoricalValue(cellKey, mode);
+  }, [getRawHistoricalValue]);
 
   const calculateDelta = (curr: number, hist: number | null) => {
     if (hist === null) return null;
@@ -589,7 +602,7 @@ export default function PlanningPage() {
           <span style={{ color: val > 0 ? 'var(--color-text)' : 'transparent', fontWeight: val > 0 ? 600 : 400 }}>
             {val > 0 ? formatNumber(val) : ''}
           </span>
-          <span style={{ fontSize: 10, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 3, letterSpacing: '-0.02em' }}>
+          <span style={{ fontSize: 10, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 3, letterSpacing: '-0.02em' }}>
             KH:{histVal > 0 ? formatNumber(histVal) : '0'}
             <span style={{ color: pctColor, fontSize: 9, fontWeight: 700, background: `${pctColor}18`, padding: '0 3px', borderRadius: 2 }}>
               {pct}%
@@ -610,7 +623,7 @@ export default function PlanningPage() {
         <span style={{ color: val > 0 ? 'var(--color-text)' : 'transparent', fontWeight: val > 0 ? 600 : 400 }}>
           {val > 0 ? formatNumber(val) : ''}
         </span>
-        <span style={{ fontSize: 10, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 3, letterSpacing: '-0.02em' }}>
+        <span style={{ fontSize: 10, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 3, letterSpacing: '-0.02em' }}>
           {histVal > 0 ? formatNumber(histVal) : '0'}
           <span style={{ color: deltaColor, fontSize: 9, fontWeight: 700 }}>
             {delta !== 0 ? `${deltaIcon}${Math.abs(delta!)}%` : '—'}
@@ -625,73 +638,85 @@ export default function PlanningPage() {
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
   // Hidden channel categories (chip filter): Set of category names
   const [hiddenChannels, setHiddenChannels] = useState<Set<string>>(new Set());
-  // DIGITAL sub-group collapse (header click only)
-  const [digitalCollapsed, setDigitalCollapsed] = useState(false);
+  // DIGITAL sub-group collapse — mặc định thu gọn
+  const [digitalCollapsed, setDigitalCollapsed] = useState(true);
   // Metric columns visibility
   const [hiddenMetrics, setHiddenMetrics] = useState<Set<string>>(new Set());
   
   // Events — lưu theo tháng, KHQT/GDTD/KHĐ được derive từ cellData
   const [eventsByMonth, setEventsByMonth] = useState<Record<number, EventItem[]>>({});
 
-  const loadData = useCallback(async () => {
-    const [eventsData, budgetPlans, cplData, actualEntries] = await Promise.all([
-      fetchEventsFromDB(activeUnitId),
-      fetchAllBudgetPlans(activeUnitId),
-      computeHistoricalCPL(year, activeUnitId),
-      fetchAllActualEntries(year, activeUnitId),
-    ]);
-    if (Object.keys(cplData).length > 0) setHistoricalCPL(cplData);
-    else setHistoricalCPL({});
-    
-    setEventsByMonth(eventsData);
+  // ─── SWR: Load budget entries from thaco_budget_entries ──────────────────
+  // thaco_budget_entries stores both plan_* and actual_* columns in the same row.
+  // One query per (showroom, year, month) fetches data for both modes.
+  // SWR handles caching, deduplication and background revalidation.
+  const {
+    data: budgetEntryRows,
+    isLoading: isEntriesLoading,
+  } = useBudgetEntriesByShowroom(selectedShowroomId, year, month);
 
-    // Load budget plans — reset trước để tránh data từ chi nhánh/năm cũ còn lại
-    const newData: Record<number, CellData> = {};
-    const newNotes: Record<number, CellNotes> = {};
-    const newApproval: Record<number, string> = {};
+  // isDataLoading: true until first fetch completes for selected showroom
+  const isDataLoading = isEntriesLoading && selectedShowroom !== 'all';
 
-    if (budgetPlans && budgetPlans.length > 0) {
-      budgetPlans.forEach(p => {
-        if (Object.keys(p.payload).length > 0) newData[p.month] = p.payload;
-        if (Object.keys(p.notes).length > 0) newNotes[p.month] = p.notes;
-        newApproval[p.month] = p.approval_status;
-      });
-    }
+  // Sync SWR data → showroomDataByMonth and showroomActualDataByMonth state
+  const justLoadedFromDB = useRef(false);
+  useEffect(() => {
+    if (!selectedShowroomId || !budgetEntryRows) return;
+    const planLegacy = entriesToLegacyCellData(budgetEntryRows, CHANNELS, 'plan');
+    const actualLegacy = entriesToLegacyCellData(budgetEntryRows, CHANNELS, 'actual');
+    setShowroomDataByMonth(prev => ({
+      ...prev,
+      [month]: { ...(prev[month] || {}), [selectedShowroomId]: planLegacy },
+    }));
+    setShowroomActualDataByMonth(prev => ({
+      ...prev,
+      [month]: { ...(prev[month] || {}), [selectedShowroomId]: actualLegacy },
+    }));
+    justLoadedFromDB.current = true;
+  }, [budgetEntryRows, selectedShowroomId, month, CHANNELS]);
 
-    setDataByMonth(newData);
-    setNotesByMonth(newNotes);
-    setApprovalStatuses(newApproval);
+  // Set mounted once data arrives (or immediately if no showroom selected)
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-    // Load actual entries — reset trước để tránh data từ năm cũ còn lại
-    const newActualData: Record<number, CellData> = {};
-    const newActualStatus: Record<number, string> = {};
-    if (actualEntries && actualEntries.length > 0) {
-      actualEntries.forEach(a => {
-        if (Object.keys(a.payload).length > 0) newActualData[a.month] = a.payload;
-        newActualStatus[a.month] = a.status;
-      });
-    }
-    setActualDataByMonth(newActualData);
-    setActualStatusByMonth(newActualStatus);
-  }, [year, activeUnitId]);
-
-  // Auto-save plan data (debounce 1.5s)
+  // ─── Auto-save PLAN data (debounce 400ms) ────────────────────────────────
   const lastSavedPayload = useRef<string>('');
   React.useEffect(() => {
     if (!mounted || pageMode !== 'plan') return;
-    if (!activeUnitId || activeUnitId === 'all') return; // Không save khi xem tổng hợp
+    if (selectedShowroom === 'all' || !selectedShowroomId) return;
+
     const currentPayload = dataByMonth[month];
-    const currentNotes = notesByMonth[month] || {};
     if (!currentPayload || Object.keys(currentPayload).length === 0) return;
-    const payloadStr = JSON.stringify({ currentPayload, currentNotes, approvalStatus });
+    const payloadStr = JSON.stringify(currentPayload);
+
+    // Skip auto-save right after DB load — data hasn't been edited yet
+    if (justLoadedFromDB.current) {
+      justLoadedFromDB.current = false;
+      lastSavedPayload.current = payloadStr;
+      return;
+    }
+
     if (payloadStr === lastSavedPayload.current) return;
+
+    setSaveStatus('editing');
+    const unitIdForSave = activeUnitId && activeUnitId !== 'all' ? activeUnitId : '';
+    if (!unitIdForSave) { setSaveStatus('error'); return; }
+
     const timeout = setTimeout(() => {
-      upsertBudgetPlan(month, currentPayload, currentNotes, approvalStatus, activeUnitId === 'all' ? undefined : activeUnitId).then(success => {
-        if (success) lastSavedPayload.current = payloadStr;
-      });
-    }, 1500);
+      setSaveStatus('saving');
+      const entries = legacyCellDataToEntries(currentPayload, CHANNELS, unitIdForSave, selectedShowroomId, year, month, 'plan');
+      upsertBudgetEntries(entries)
+        .then(() => {
+          lastSavedPayload.current = payloadStr;
+          setSaveStatus('saved');
+          setLastSavedAt(new Date());
+          invalidateBudgetCaches(unitIdForSave, selectedShowroomId, year, month);
+        })
+        .catch(() => setSaveStatus('error'));
+    }, 400);
     return () => clearTimeout(timeout);
-  }, [dataByMonth, notesByMonth, approvalStatus, month, mounted, pageMode, activeUnitId]);
+  }, [dataByMonth, month, mounted, pageMode, activeUnitId, selectedShowroom, selectedShowroomId, year, retrySaveTrigger, CHANNELS]);
 
   // Reset dirty flag khi chuyển tháng
   React.useEffect(() => {
@@ -701,127 +726,56 @@ export default function PlanningPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month]);
 
-  // Handlers lưu/nộp actual (không auto-save — user phải bấm)
-  const handleSaveActual = useCallback(async () => {
-    const payload = actualDataByMonth[month] || {};
-    const ok = await upsertActualEntry(month, year, payload, {}, 'draft', activeUnitId === 'all' ? undefined : activeUnitId);
-    if (ok) {
-      setIsDirtyActual(false);
-      lastSavedActualSnapshot.current = { ...payload };
-      setAlertInfo({ type: 'success', title: 'Lưu thành công', message: `Số thực hiện tháng ${month} đã được lưu nháp.` });
-    } else {
-      setAlertInfo({ type: 'warning', title: 'Lỗi lưu dữ liệu', message: 'Không thể lưu vào hệ thống. Kiểm tra kết nối và thử lại.' });
-    }
-  }, [actualDataByMonth, month, year, activeUnitId]);
-
-  const handleSubmitActual = useCallback(async () => {
-    const payload = actualDataByMonth[month] || {};
-    if (Object.keys(payload).length === 0) {
-      setAlertInfo({ type: 'warning', title: 'Chưa có dữ liệu', message: 'Chưa có số liệu thực hiện để nộp.' });
-      return;
-    }
-    const ok = await upsertActualEntry(month, year, payload, {}, 'submitted', activeUnitId === 'all' ? undefined : activeUnitId);
-    if (ok) {
-      setIsDirtyActual(false);
-      lastSavedActualSnapshot.current = { ...payload };
-      setActualStatusByMonth(prev => ({ ...prev, [month]: 'submitted' }));
-      setAlertInfo({ type: 'success', title: 'Nộp thành công', message: `Số thực hiện tháng ${month} đã được nộp và chốt.` });
-    } else {
-      setAlertInfo({ type: 'warning', title: 'Lỗi nộp dữ liệu', message: 'Không thể nộp. Kiểm tra kết nối và thử lại.' });
-    }
-  }, [actualDataByMonth, month, year, activeUnitId]);
-
-  const handleDiscardActual = useCallback(() => {
-    if (lastSavedActualSnapshot.current !== null) {
-      setActualDataByMonth(prev => ({ ...prev, [month]: { ...lastSavedActualSnapshot.current! } }));
-    } else {
-      setActualDataByMonth(prev => { const n = { ...prev }; delete n[month]; return n; });
-    }
-    setIsDirtyActual(false);
-  }, [month]);
-
-  // Load on mount and focus
+  // ─── Auto-save ACTUAL data (debounce 400ms) ──────────────────────────────
+  const lastSavedActualPayload = useRef<string>('');
   React.useEffect(() => {
-    loadData().then(() => { setMounted(true); setEventsLoaded(true); });
-  }, [loadData]);
+    if (!mounted || pageMode !== 'actual') return;
+    if (selectedShowroom === 'all' || !selectedShowroomId) return;
 
+    const currentPayload = actualDataByMonth[month];
+    if (!currentPayload || Object.keys(currentPayload).length === 0) return;
+    const payloadStr = JSON.stringify(currentPayload);
+
+    if (payloadStr === lastSavedActualPayload.current) return;
+
+    setSaveStatus('editing');
+    const unitIdForSave = activeUnitId && activeUnitId !== 'all' ? activeUnitId : '';
+    if (!unitIdForSave) { setSaveStatus('error'); return; }
+
+    const timeout = setTimeout(() => {
+      setSaveStatus('saving');
+      const entries = legacyCellDataToEntries(currentPayload, CHANNELS, unitIdForSave, selectedShowroomId, year, month, 'actual');
+      upsertBudgetEntries(entries)
+        .then(() => {
+          lastSavedActualPayload.current = payloadStr;
+          setSaveStatus('saved');
+          setLastSavedAt(new Date());
+          setIsDirtyActual(false);
+          invalidateBudgetCaches(unitIdForSave, selectedShowroomId, year, month);
+        })
+        .catch(() => setSaveStatus('error'));
+    }, 400);
+    return () => clearTimeout(timeout);
+  }, [actualDataByMonth, month, mounted, pageMode, activeUnitId, selectedShowroom, selectedShowroomId, year, retrySaveTrigger, CHANNELS]);
+
+  // Mặc định thu gọn tất cả brands khi brands load lần đầu
+  const brandsInitialized = useRef(false);
   React.useEffect(() => {
-    const onFocus = () => loadData();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [loadData]);
-
-  // Sprint 4: Load/save budget cap per month from localStorage
-  React.useEffect(() => {
-    if (!mounted) return;
-    const stored = localStorage.getItem(`thaco_budget_cap_${month}_2026`);
-    setBudgetCap(stored ? parseFloat(stored) : 0);
-  }, [month, mounted]);
-
-  const saveBudgetCap = (val: number) => {
-    setBudgetCap(val);
-    if (val > 0) localStorage.setItem(`thaco_budget_cap_${month}_2026`, String(val));
-    else localStorage.removeItem(`thaco_budget_cap_${month}_2026`);
-  };
+    if (!brandsInitialized.current && brands.length > 0) {
+      brandsInitialized.current = true;
+      setCollapsedBrands(new Set(brands.map(b => b.name)));
+    }
+  }, [brands]);
 
   const events = eventsByMonth[month] || [];
 
-  const getEventValueRaw = useCallback((brandName: string, modelName: string, metric: string): number => {
-    let total = 0;
-    for (const ev of events) {
-      if (!ev) continue;
-      let applyMultiplier = 0;
-      if (selectedShowroom === 'all') { applyMultiplier = 1; }
-      else {
-        if (ev.showroom === 'all' || ev.showroom === 'Tất cả') applyMultiplier = SR_WEIGHTS[selectedShowroom] || 0;
-        else if (ev.showroom === selectedShowroom) applyMultiplier = 1;
-        else applyMultiplier = 0;
-      }
-      if (applyMultiplier === 0) continue;
-
-      const touchedBrands = brands.filter(db => 
-        ev.brands.includes(db.name) || db.models.some(m => ev.brands.includes(m))
-      );
-      const isGlobalEvent = touchedBrands.length === 0;
-      
-      const brandObj = brands.find(b => b.name === brandName);
-      if (!brandObj) continue;
-
-      if (!isGlobalEvent && !touchedBrands.includes(brandObj)) continue;
-
-      const numBrands = isGlobalEvent ? brands.length : touchedBrands.length;
-      
-      const allBrandModels = brandObj.models.filter((m: string) => {
-        const mObj = brandObj.modelData?.find((x: any) => x.name === m);
-        return !mObj?.is_aggregate;
-      });
-      const selectedModelsForBrand = allBrandModels.filter((m: string) => ev.brands.includes(m));
-      const targetModels = selectedModelsForBrand.length > 0 ? selectedModelsForBrand : allBrandModels;
-      
-      if (!targetModels.includes(modelName)) continue;
-
-      const fraction = (1 / numBrands) * (1 / targetModels.length);
-      
-      let val = 0;
-      if (metric === 'Ngân sách') val = ev.budget || 0;
-      else if (metric === 'KHQT') val = ev.leads || 0;
-      else if (metric === 'GDTD') val = ev.gdtd || 0;
-      else if (metric === 'KHĐ')  val = ev.deals || 0;
-      else if (metric === 'Lái thử') val = ev.testDrives || 0;
-
-      total += val * fraction * applyMultiplier;
-    }
-    return total;
-  }, [events, selectedShowroom, brands]);
-
   const getRawCellValue = useCallback((cellKey: string): number => {
     if (cellKey.includes('-Tổng Digital-')) {
-      // Dynamic: dùng tên kênh digital từ ChannelsContext thay vì cứng
       return digitalChannelNames.reduce((sum, chName) =>
         sum + getRawCellValue(cellKey.replace('-Tổng Digital-', `-${chName}-`)), 0
       );
     }
-    
+
     // Dynamic Model Aggregation
     for (const b of brands) {
       if (!b.modelData) continue;
@@ -838,22 +792,10 @@ export default function PlanningPage() {
         }
       }
     }
-    // FIX: Dùng substring matching thay vì split('-') vì model names có thể chứa '-'
-    // (VD: CX-5, CX-30, BT-50, 3-Cửa, 5-Cửa)
-    const eventMarker = '-Sự kiện-';
-    const evIdx = cellKey.indexOf(eventMarker);
-    if (evIdx !== -1) {
-      const brandModel = cellKey.substring(0, evIdx); // "Mazda-CX-30" hoặc "KIA-New Seltos"
-      const metric = cellKey.substring(evIdx + eventMarker.length); // "Ngân sách", "KHQT"...
-      const firstDash = brandModel.indexOf('-');
-      if (firstDash !== -1) {
-        const brandName = brandModel.substring(0, firstDash);
-        const modelName = brandModel.substring(firstDash + 1);
-        return getEventValueRaw(brandName, modelName, metric);
-      }
-    }
+
+    // SSOT: luôn đọc từ cellData (thaco_budget_entries) — không đọc trực tiếp từ events
     return cellData[cellKey] || 0;
-  }, [cellData, getEventValueRaw, brands]);
+  }, [cellData, brands]);
 
   const getUnroundedCellValue = useCallback((cellKey: string): number => {
     return getRawCellValue(cellKey);
@@ -862,19 +804,10 @@ export default function PlanningPage() {
   const getCellValue = useCallback((cellKey: string): number => {
     const raw = getRawCellValue(cellKey);
     
-    // Sự kiện has already factored in showroom logic within getEventValueRaw!
-    // So DO NOT multiply by currentWeight.
-    // FIX: Dùng substring matching thay vì split('-') — tương tự getRawCellValue
-    const isEvent = cellKey.includes('-Sự kiện-');
+    // Bottom-Up: data is per-SR, no weight scaling needed
     const isBudget = cellKey.endsWith('-Ngân sách') || cellKey.endsWith('-CPL');
-    
-    if (isEvent || currentWeight === 1) {
-       return isBudget ? Math.round(raw * 10) / 10 : Math.round(raw);
-    }
-
-    const scaled = raw * currentWeight;
-    return isBudget ? Math.round(scaled * 10) / 10 : Math.round(scaled);
-  }, [getRawCellValue, currentWeight]);
+    return isBudget ? Math.round(raw * 10) / 10 : Math.round(raw);
+  }, [getRawCellValue]);
 
   const setEvents = useCallback((action: React.SetStateAction<EventItem[]>) => {
     setEventsByMonth(prev => {
@@ -883,7 +816,6 @@ export default function PlanningPage() {
       return { ...prev, [month]: next };
     });
   }, [month]);
-  const [eventModal, setEventModal] = useState<EventModalState>({ open: false, data: null, isNew: false });
   // Hide rows with all-zero data
   const [hideZeroRows, setHideZeroRows] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -892,17 +824,11 @@ export default function PlanningPage() {
   const [massPercent, setMassPercent] = useState<number>(15);
   const [alertInfo, setAlertInfo] = useState<AlertState | null>(null);
 
-  const [confirmInfo, setConfirmInfo] = useState<{ type: 'save' | 'submit' | 'delete', title: string, message: string } | null>(null);
+
   const [pendingDeleteFn, setPendingDeleteFn] = useState<(() => void) | null>(null);
 
-  // ── Sprint 3: Historical CPL ──────────────────────────────────────────────
+  // Historical CPL từ actual entries — dùng trong auto-fill công thức
   const [historicalCPL, setHistoricalCPL] = useState<Record<string, number>>({});
-
-  // ── Sprint 4: Budget Cap ──────────────────────────────────────────────────
-  // Giới hạn ngân sách tháng (triệu VND). User tự nhập, lưu localStorage theo month.
-  const [budgetCap, setBudgetCap] = useState<number>(0);
-  const [editingCap, setEditingCap] = useState(false);
-  const [capInput, setCapInput] = useState('');
 
   const toggleBrand = (brandName: string) => {
     setCollapsedBrands(prev => {
@@ -940,7 +866,7 @@ export default function PlanningPage() {
 
   const VISIBLE_GRID_KEYS = useMemo(() => {
     const grid: string[][] = [];
-    DEMO_BRANDS.forEach(b => {
+    visibleBrands.forEach(b => {
       if (selectedBrand !== 'all' && b.name !== selectedBrand) return;
       if (!collapsedBrands.has(b.name)) {
         const sortedModels = [...b.models];
@@ -981,11 +907,6 @@ export default function PlanningPage() {
       
       if (!isBudget) num = Math.max(0, parseInt(value, 10)) || 0;
       else num = Math.max(0, num);
-    }
-
-    if (currentWeight !== 1) {
-      num = num / currentWeight;
-      if (!isBudget) num = Math.round(num); // Ensure global whole unit for customers
     }
 
     setCellData(prev => {
@@ -1178,7 +1099,6 @@ export default function PlanningPage() {
                                             const v = parseFloat(rawVal);
                                             if (!isNaN(v)) {
                                                 let num = v;
-                                                if (currentWeight !== 1) num = num / currentWeight;
                                                 if (cellKey.endsWith('-KHQT') || cellKey.endsWith('-GDTD') || cellKey.endsWith('-KHĐ')) {
                                                     num = Math.round(num); // Ép kiểu số nguyên
                                                 }
@@ -1217,7 +1137,7 @@ export default function PlanningPage() {
          if (first) {
             setUndoStack(us => [...us.slice(-19), dataByMonth[month] || {}]);
             setEditingCell(first);
-            setEditValue(currentWeight === 1 ? String(getCellValue(first) || '') : String((getCellValue(first) * currentWeight).toFixed(2)));
+            setEditValue(String(getCellValue(first) || ''));
          }
       }
       else if (e.key.length === 1 && /[0-9\-]/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -1244,7 +1164,7 @@ export default function PlanningPage() {
       window.removeEventListener('keydown', handleGlobalKeyDown);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [selectedCells, currentWeight, ALL_CELL_KEYS, VISIBLE_GRID_KEYS, getCellValue]);
+  }, [selectedCells, ALL_CELL_KEYS, VISIBLE_GRID_KEYS, getCellValue]);
 
   // Scroll shadow handler
   const handleScroll = useCallback(() => {
@@ -1252,13 +1172,6 @@ export default function PlanningPage() {
       setIsScrolled(scrollRef.current.scrollLeft > 2);
     }
   }, []);
-
-  // Removed summary from here to place below grandTotal
-
-  // Get channel color — uses channel-specific color first, falls back to category
-  const getChannelColor = (ch: Channel): string => {
-    return ch.color;
-  };
 
   // Inline style constants for sticky cells — prevents CSS cache issues
   const stickyHeaderCol1: React.CSSProperties = {
@@ -1268,8 +1181,10 @@ export default function PlanningPage() {
     background: '#eef2f7',
     width: COL1_WIDTH,
     minWidth: COL1_WIDTH,
-    borderRight: '2px solid #cbd5e1',
+    borderRight: '2px solid var(--color-border-dark)',
     borderTop: '3px solid var(--color-brand)',
+    verticalAlign: 'middle',
+    padding: '0 4px',
   };
 
   const stickyHeaderCol2: React.CSSProperties = {
@@ -1279,18 +1194,22 @@ export default function PlanningPage() {
     background: '#eef2f7',
     width: COL2_WIDTH,
     minWidth: COL2_WIDTH,
-    borderRight: '2px solid #cbd5e1',
+    maxWidth: COL2_WIDTH,
+    overflow: 'hidden',
+    borderRight: '2px solid var(--color-border-dark)',
     borderTop: '3px solid var(--color-brand)',
+    verticalAlign: 'middle',
+    padding: '0 4px',
   };
 
   const stickyBodyCol1: React.CSSProperties = {
     position: 'sticky',
     left: 0,
-    zIndex: 30,
+    zIndex: 31,
     background: '#ffffff',
     width: COL1_WIDTH,
     minWidth: COL1_WIDTH,
-    borderRight: '2px solid #cbd5e1',
+    borderRight: '2px solid var(--color-border-dark)',
     fontWeight: 700,
     color: 'var(--color-brand)',
   };
@@ -1302,7 +1221,7 @@ export default function PlanningPage() {
     background: '#ffffff',
     width: COL2_WIDTH,
     minWidth: COL2_WIDTH,
-    borderRight: '2px solid #cbd5e1',
+    borderRight: '2px solid var(--color-border-dark)',
   };
 
   const brandSubtotals = useMemo(() => {
@@ -1436,32 +1355,7 @@ export default function PlanningPage() {
     };
   }, [grandTotal]);
 
-  // Per-showroom direct event totals (for PHÂN BỔ SHOWROOM — Sự kiện channel)
-  const showroomEventTotals = useMemo(() => {
-    const result: Record<string, Record<string, number>> = {};
-    for (const sr of SHOWROOMS) {
-      result[sr] = { 'Ngân sách': 0, 'KHQT': 0, 'GDTD': 0, 'KHĐ': 0 };
-      for (const ev of events) {
-        let mult: number;
-        if (ev.showroom === 'all' || ev.showroom === 'Tất cả') {
-          mult = SR_WEIGHTS[sr] || 0;
-        } else if (ev.showroom === sr) {
-          mult = 1;
-        } else {
-          continue;
-        }
-        result[sr]['Ngân sách'] += (ev.budget || 0) * mult;
-        result[sr]['KHQT']      += (ev.leads  || 0) * mult;
-        result[sr]['GDTD']      += (ev.gdtd   || 0) * mult;
-        result[sr]['KHĐ']       += (ev.deals  || 0) * mult;
-      }
-      // Round
-      for (const m of Object.keys(result[sr])) {
-        result[sr][m] = m === 'Ngân sách' ? Math.round(result[sr][m] * 10) / 10 : Math.round(result[sr][m]);
-      }
-    }
-    return result;
-  }, [events]);
+  // showroomEventTotals removed — Bottom-Up Phase 1: section "CHI TIẾT THEO SHOWROOM" đã bị disable
 
   const hasTier2 = useMemo(() => {
     return visibleChannels.some(ch => visibleChannels.filter(c => c.category === ch.category).length > 1);
@@ -1509,7 +1403,7 @@ export default function PlanningPage() {
 
       setCellData(prev => {
         const next = {...prev};
-        const brand = DEMO_BRANDS.find(b => b.name === allocationModal.name);
+        const brand = visibleBrands.find(b => b.name === allocationModal.name);
         if (!brand) return next;
 
         const models = brand.models;
@@ -1571,7 +1465,7 @@ export default function PlanningPage() {
             : [allocationModal.name];
         }
 
-        DEMO_BRANDS.forEach(b => {
+        visibleBrands.forEach(b => {
           b.models.forEach(m => {
             channelsToUpdate.forEach(chName => {
               const baseKey = `${b.name}-${m}-${chName}`;
@@ -1616,7 +1510,7 @@ export default function PlanningPage() {
           {val > 0 ? formatNumber(val) : ''}
         </span>
         {ghost > 0 && (
-          <span style={{ fontSize: 9, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 2 }}>
+          <span style={{ fontSize: 9, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
             {formatNumber(ghost)}
             {delta !== null && (
               <span style={{ color: deltaColor, fontWeight: 700 }}>
@@ -1648,68 +1542,77 @@ export default function PlanningPage() {
             <button className="button-erp-secondary" style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4 }} title="Import Excel">
               <UploadCloud size={14} /> <span style={{ fontSize: 12 }}>Import</span>
             </button>
-            <button className="button-erp-secondary" style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4 }} title="Export Excel">
+            <button
+              className="button-erp-secondary"
+              style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4 }}
+              title="Export Excel"
+              onClick={async () => {
+                try {
+                  setAlertInfo({ type: 'info', title: 'Đang xuất...', message: 'Đang tạo file Excel, vui lòng đợi.' });
+                  // Build headers
+                  const metricList = METRICS.filter(m => !hiddenMetrics.has(m));
+                  const channelHeaders = CHANNELS.filter(c => !hiddenChannels.has(c.category)).map(c => c.name);
+                  const headerRow1 = ['Thương hiệu', 'Model', ...channelHeaders.flatMap(ch => metricList.map(() => ch))];
+                  const headerRow2 = ['', '', ...channelHeaders.flatMap(() => metricList)];
+                  // Build data rows
+                  const dataRows: (string | number)[][] = [];
+                  for (const brand of visibleBrands) {
+                    const modelList = brand.models.filter(m => selectedModels.length === 0 || selectedModels.includes(m));
+                    for (const model of modelList) {
+                      const row: (string | number)[] = [brand.name, model];
+                      for (const ch of channelHeaders) {
+                        for (const metric of metricList) {
+                          const key = `${brand.name}-${model}-${ch}-${metric}`;
+                          row.push(cellData[key] || 0);
+                        }
+                      }
+                      dataRows.push(row);
+                    }
+                  }
+                  const res = await fetch('/api/export/planning', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: `Kế hoạch ngân sách T${month}/${year} — ${selectedShowroom}`, headers: [headerRow1, headerRow2], rows: dataRows, month, year }),
+                  });
+                  if (!res.ok) throw new Error('Export failed');
+                  const blob = await res.blob();
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a'); a.href = url; a.download = `KH_Thang${month}_${year}.xlsx`; a.click();
+                  window.URL.revokeObjectURL(url);
+                  setAlertInfo({ type: 'success', title: 'Xuất thành công', message: `File Excel đã được tải về.` });
+                } catch {
+                  setAlertInfo({ type: 'warning', title: 'Lỗi xuất', message: 'Không thể tạo file Excel. Kiểm tra lại.' });
+                }
+              }}
+            >
               <DownloadCloud size={14} /> <span style={{ fontSize: 12 }}>Export</span>
             </button>
             <div style={{ width: 1, height: 16, background: 'var(--color-border)', margin: '0 4px' }}></div>
-            {pageMode === 'plan' ? (
+            {!isAggregateView && (
               <>
-                <button
-                  className="button-erp-secondary"
-                  style={{ color: 'var(--color-brand)', fontWeight: 600, padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4 }}
-                  onClick={() => setConfirmInfo({ type: 'save', title: 'Xác nhận Lưu nháp', message: 'Bạn có muốn lưu lại bản nháp hiện tại của kế hoạch ngân sách?' })}
-                >
-                  <Save size={13} />
-                  <span style={{ fontSize: 12 }}>Lưu nháp</span>
-                </button>
-                <button
-                  className="button-erp-primary"
-                  style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4, background: approvalStatus !== 'draft' ? 'var(--color-text-muted)' : undefined, borderColor: approvalStatus !== 'draft' ? 'var(--color-text-muted)' : undefined }}
-                  onClick={() => {
-                    if (approvalStatus !== 'draft') {
-                        setAlertInfo({ type: 'info', title: 'Thông báo', message: `Kế hoạch đang ở trạng thái: ${approvalStatus === 'pending' ? 'Chờ duyệt' : 'Đã duyệt'}` });
-                    } else if (budgetCap > 0 && summary.budget > budgetCap) {
-                        setAlertInfo({ type: 'warning', title: 'Vượt giới hạn ngân sách', message: `Tổng ngân sách kế hoạch (${formatNumber(summary.budget)} tr) đã vượt giới hạn cho phép (${formatNumber(budgetCap)} tr). Vui lòng điều chỉnh trước khi gửi duyệt.` });
-                    } else {
-                        setConfirmInfo({ type: 'submit', title: 'Xác nhận Gửi duyệt', message: 'Sau khi gửi duyệt, bạn sẽ không thể chỉnh sửa kế hoạch này cho đến khi có phản hồi từ Quản lý. Bạn có chắc chắn?' });
-                    }
-                  }}
-                >
-                  <Send size={13} />
-                  <span style={{ fontSize: 12 }}>{approvalStatus === 'draft' ? 'Gửi duyệt' : (approvalStatus === 'pending' ? 'Đã gửi duyệt' : 'Hoàn tất')}</span>
-                </button>
-              </>
-            ) : (
-              <>
-                {/* Actual mode: Lưu TH + Nộp TH */}
-                {(actualStatusByMonth[month] || 'draft') !== 'submitted' && (
-                  <button
-                    className="button-erp-secondary"
-                    style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4, opacity: isDirtyActual ? 1 : 0.6 }}
-                    onClick={handleSaveActual}
-                    title="Lưu nháp thực hiện"
-                  >
-                    <Save size={13} />
-                    <span style={{ fontSize: 12 }}>Lưu TH</span>
-                  </button>
+                {/* Save status indicator */}
+                {saveStatus === 'saving' && (
+                  <span style={{ fontSize: 11, color: '#64748b' }}>Đang lưu...</span>
                 )}
-                <button
-                  className="button-erp-primary"
-                  style={{
-                    padding: '2px 12px', height: 26, display: 'flex', alignItems: 'center', gap: 4,
-                    background: (actualStatusByMonth[month] || 'draft') === 'submitted' ? '#6b7280' : '#059669',
-                    borderColor: (actualStatusByMonth[month] || 'draft') === 'submitted' ? '#6b7280' : '#059669',
-                    cursor: (actualStatusByMonth[month] || 'draft') === 'submitted' ? 'default' : 'pointer',
-                  }}
-                  onClick={() => {
-                    if ((actualStatusByMonth[month] || 'draft') === 'submitted') return;
-                    setConfirmInfo({ type: 'submit-actual' as never, title: 'Xác nhận Nộp số thực hiện', message: `Sau khi nộp, số thực hiện tháng ${month}/${year} sẽ được chốt và không thể chỉnh sửa. Bạn có chắc chắn?` });
-                  }}
-                  title={(actualStatusByMonth[month] || 'draft') === 'submitted' ? 'Đã nộp số thực hiện' : 'Nộp xác nhận số thực hiện'}
-                >
-                  <CloudUpload size={13} />
-                  <span style={{ fontSize: 12 }}>{(actualStatusByMonth[month] || 'draft') === 'submitted' ? 'Đã chốt' : 'Nộp TH'}</span>
-                </button>
+                {saveStatus === 'saved' && lastSavedAt && (
+                  <span style={{ fontSize: 11, color: '#16a34a' }}>
+                    Đã lưu {lastSavedAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+                {saveStatus === 'error' && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 11, color: '#ef4444' }}>Lỗi lưu!</span>
+                    <button
+                      onClick={() => {
+                        if (pageMode === 'plan') lastSavedPayload.current = '';
+                        else lastSavedActualPayload.current = '';
+                        setRetrySaveTrigger(t => t + 1);
+                      }}
+                      style={{ fontSize: 10, color: '#ef4444', border: '1px solid #fca5a5', borderRadius: 3, padding: '1px 6px', background: '#fff1f2', cursor: 'pointer', lineHeight: 1.4 }}
+                      title="Thử lại lưu dữ liệu"
+                    >Thử lại</button>
+                  </span>
+                )}
               </>
             )}
           </div>
@@ -1726,14 +1629,14 @@ export default function PlanningPage() {
 
       {/* ROW 3: Mode Switcher | Entity Selection — Đơn vị | Thương hiệu | Dòng xe | So sánh */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 0,
+        display: 'flex', alignItems: 'center', gap: 10,
         padding: '0 12px', height: 34, minHeight: 34,
         borderBottom: '1px solid var(--color-border)',
         background: pageMode === 'actual' ? '#fffbeb' : 'var(--color-surface)',
         flexShrink: 0, flexWrap: 'nowrap',
       }}>
         {/* ── Mode Switcher KẾ HOẠCH / THỰC HIỆN ── */}
-        <div style={{ display: 'flex', borderRadius: 5, overflow: 'hidden', flexShrink: 0, boxShadow: '0 1px 2px rgba(0,0,0,0.06)', marginRight: 8 }}>
+        <div style={{ display: 'flex', borderRadius: 5, overflow: 'hidden', flexShrink: 0, boxShadow: '0 1px 2px rgba(0,0,0,0.06)' }}>
           <button
             onClick={() => { setPageMode('plan'); setCompareMode('none'); }}
             style={{
@@ -1763,18 +1666,8 @@ export default function PlanningPage() {
           >THỰC HIỆN</button>
         </div>
 
-        {/* Status badge actual mode */}
-        {pageMode === 'actual' && (
-          <Badge
-            variant={(actualStatusByMonth[month] || 'draft') === 'submitted' ? 'success-light' : isDirtyActual ? 'warning-light' : 'secondary'}
-            size="sm"
-            style={{ letterSpacing: '0.04em', fontWeight: 700, marginRight: 8 }}
-          >
-            {(actualStatusByMonth[month] || 'draft') === 'submitted' ? '✓ Đã chốt' : isDirtyActual ? '● Chưa lưu' : '○ Nháp'}
-          </Badge>
-        )}
 
-        <div className="toolbar-sep" style={{ height: 14, margin: '0 8px' }} />
+        <div className="toolbar-sep" style={{ height: 14 }} />
         {/* Nhóm 1: Đơn vị */}
         <FilterDropdown
           label="Đơn vị"
@@ -1784,16 +1677,16 @@ export default function PlanningPage() {
           width={140}
           placeholder="— Tất cả SR —"
         />
-        <div className="toolbar-sep" style={{ height: 14, margin: '0 10px' }} />
+        <div className="toolbar-sep" style={{ height: 14 }} />
         {/* Nhóm 2: Thương hiệu */}
         <FilterDropdown
           label="Thương hiệu"
           value={selectedBrand}
-          options={[{value: 'all', label: '— Tất cả —'}, ...DEMO_BRANDS.map(b => ({value: b.name, label: b.name}))]}
+          options={[{value: 'all', label: '— Tất cả —'}, ...visibleBrands.map(b => ({value: b.name, label: b.name}))]}
           onChange={(val: string) => { setSelectedBrand(val); setSelectedModels([]); }}
           width={120}
         />
-        <div className="toolbar-sep" style={{ height: 14, margin: '0 10px' }} />
+        <div className="toolbar-sep" style={{ height: 14 }} />
         {/* Nhóm 3: Dòng xe */}
         <FilterDropdown
           label="Dòng xe"
@@ -1806,6 +1699,7 @@ export default function PlanningPage() {
         />
         {/* Spacer */}
         <div style={{ flex: 1 }} />
+        <div className="toolbar-sep" style={{ height: 14 }} />
         {/* Nhóm 4: So sánh — đẩy sang phải */}
         <FilterDropdown
           label="So sánh"
@@ -1846,7 +1740,7 @@ export default function PlanningPage() {
               style={{
                 padding: '2px 8px', fontSize: 11, fontWeight: 600,
                 border: '1px solid', borderRadius: 4,
-                borderColor: hiddenChannels.has('DIGITAL') ? '#cbd5e1' : '#EA4335',
+                borderColor: hiddenChannels.has('DIGITAL') ? 'var(--color-border-dark)' : '#EA4335',
                 background: hiddenChannels.has('DIGITAL') ? 'transparent' : '#EA433515',
                 color: hiddenChannels.has('DIGITAL') ? 'var(--color-text-muted)' : '#EA4335',
                 cursor: 'pointer', textDecoration: hiddenChannels.has('DIGITAL') ? 'line-through' : 'none',
@@ -1854,23 +1748,14 @@ export default function PlanningPage() {
             >
               Digital
             </button>
-            {!hiddenChannels.has('DIGITAL') && (
-              <button
-                onClick={() => setDigitalCollapsed(c => !c)}
-                style={{ padding: '2px 7px', fontSize: 10, border: '1px solid #EA433540', borderRadius: 4, background: digitalCollapsed ? '#EA433520' : 'transparent', color: '#EA4335', cursor: 'pointer' }}
-                title={digitalCollapsed ? 'Mở rộng kênh Digital' : 'Thu gọn kênh Digital'}
-              >
-                {digitalCollapsed ? '⊞ Mở' : '⊟ Thu'}
-              </button>
-            )}
             {[{ cat: 'SỰ KIỆN', label: 'Sự kiện', color: '#10B981' }, { cat: 'CSKH', label: 'CSKH', color: '#F59E0B' }, { cat: 'NHẬN DIỆN', label: 'Nhận diện', color: '#8B5CF6' }].map(({ cat, label, color }) => (
               <button
                 key={cat}
                 onClick={() => toggleHiddenChannel(cat)}
                 style={{
-                  padding: '2px 8px', fontSize: 10, fontWeight: 600,
+                  padding: '2px 8px', fontSize: 11, fontWeight: 600,
                   border: '1px solid', borderRadius: 4,
-                  borderColor: hiddenChannels.has(cat) ? '#cbd5e1' : color,
+                  borderColor: hiddenChannels.has(cat) ? 'var(--color-border-dark)' : color,
                   background: hiddenChannels.has(cat) ? 'transparent' : `${color}15`,
                   color: hiddenChannels.has(cat) ? 'var(--color-text-muted)' : color,
                   cursor: 'pointer', textDecoration: hiddenChannels.has(cat) ? 'line-through' : 'none',
@@ -1922,133 +1807,93 @@ export default function PlanningPage() {
             Ẩn dòng trống
           </label>
 
+          {/* Xem tổng hợp (chỉ đọc) — hiện khi đang ở aggregate view */}
+          {pageMode === 'plan' && isAggregateView && (
+            <>
+              <div className="toolbar-sep" style={{ height: 14, flexShrink: 0 }} />
+              <span style={{ fontSize: 11, color: '#64748b', padding: '0 4px', whiteSpace: 'nowrap', flexShrink: 0, fontStyle: 'italic' }}>Xem tổng hợp (chỉ đọc)</span>
+            </>
+          )}
+
         </div>
 
-        {/* ROW 4: Quick Summary Strip — KPIs căn phải */}
-        <div className="summary-strip" style={{ display: 'flex', alignItems: 'center', padding: '5px 12px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div className="summary-chip">
-              <Wallet size={12} style={{ color: 'var(--color-brand)', opacity: 0.7 }} />
-              <span className="summary-chip-label">Tổng NS</span>
-              <span className="summary-chip-value" style={{ color: 'var(--color-brand)' }}>
-                {summary.budget > 0 ? formatNumber(summary.budget) : '—'} <span className="summary-chip-unit">tr</span>
-              </span>
-            </div>
-            <div className="summary-divider" style={{ width: 1, height: 16, background: 'var(--color-border)' }} />
-            <div className="summary-chip">
-              <Users size={12} style={{ color: '#3B82F6', opacity: 0.7 }} />
-              <span className="summary-chip-label">KHQT</span>
-              <span className="summary-chip-value" style={{ color: '#3B82F6' }}>
-                {summary.khqt > 0 ? formatNumber(summary.khqt) : '—'}
-              </span>
-            </div>
-            <div className="summary-divider" style={{ width: 1, height: 16, background: 'var(--color-border)' }} />
-            <div className="summary-chip">
-              <BarChart3 size={12} style={{ color: '#F59E0B', opacity: 0.7 }} />
-              <span className="summary-chip-label">GDTD</span>
-              <span className="summary-chip-value" style={{ color: '#F59E0B' }}>
-                {summary.gdtd > 0 ? formatNumber(summary.gdtd) : '—'}
-              </span>
-            </div>
-            <div className="summary-divider" style={{ width: 1, height: 16, background: 'var(--color-border)' }} />
-            <div className="summary-chip">
-              <FileSignature size={12} style={{ color: '#10B981', opacity: 0.7 }} />
-              <span className="summary-chip-label">KHĐ</span>
-              <span className="summary-chip-value" style={{ color: '#10B981' }}>
-                {summary.khd > 0 ? formatNumber(summary.khd) : '—'}
-              </span>
-            </div>
-            <div className="summary-divider" style={{ width: 1, height: 16, background: 'var(--color-border)' }} />
-            <div className="summary-chip">
-              <span className="summary-chip-label">CPL</span>
-              <span className="summary-chip-value" style={{ color: summary.cpl !== null ? '#8B5CF6' : 'var(--color-text-muted)' }}>
-                {summary.cpl !== null ? summary.cpl.toFixed(1) : '—'} <span className="summary-chip-unit">tr/lead</span>
-              </span>
-            </div>
 
-            {/* Sprint 4: Budget Cap */}
-            <div className="summary-divider" style={{ width: 1, height: 16, background: 'var(--color-border)' }} />
-            <div className="summary-chip" style={{ gap: 5 }}>
-              <span className="summary-chip-label">Giới hạn NS</span>
-              {editingCap ? (
-                <input
-                  type="number"
-                  value={capInput}
-                  autoFocus
-                  onChange={e => setCapInput(e.target.value)}
-                  onBlur={() => {
-                    const v = parseFloat(capInput) || 0;
-                    saveBudgetCap(v);
-                    setEditingCap(false);
-                  }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' || e.key === 'Escape') {
-                      const v = e.key === 'Enter' ? (parseFloat(capInput) || 0) : budgetCap;
-                      saveBudgetCap(v);
-                      setEditingCap(false);
-                    }
-                  }}
-                  style={{ width: 60, height: 20, fontSize: 11, padding: '0 4px', border: '1px solid var(--color-brand)', borderRadius: 2, textAlign: 'right' }}
-                />
-              ) : (
-                <span
-                  className="summary-chip-value"
-                  title="Click để đặt giới hạn ngân sách"
-                  onClick={() => { setCapInput(budgetCap > 0 ? String(budgetCap) : ''); setEditingCap(true); }}
-                  style={{
-                    color: budgetCap > 0
-                      ? (summary.budget > budgetCap ? '#dc2626' : summary.budget > budgetCap * 0.9 ? '#d97706' : '#059669')
-                      : 'var(--color-text-muted)',
-                    cursor: 'pointer', textDecoration: 'underline dotted',
-                  }}
-                >
-                  {budgetCap > 0 ? (
-                    <>
-                      {formatNumber(summary.budget)}/{formatNumber(budgetCap)}
-                      <span className="summary-chip-unit"> tr</span>
-                      {summary.budget > budgetCap && (
-                        <span style={{ marginLeft: 4, color: '#dc2626', fontWeight: 700 }}>VUOT!</span>
-                      )}
-                    </>
-                  ) : (
-                    <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Chua dat</span>
-                  )}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
 
         {/* Spreadsheet Data Grid */}
+        {/* Subtle top progress bar — chỉ hiện khi cold start (chưa có cache) */}
+        {isDataLoading && (
+          <div style={{ height: 2, background: '#e2e8f0', overflow: 'hidden', flexShrink: 0 }}>
+            <div style={{
+              height: '100%', width: '40%', background: 'linear-gradient(90deg, #004B9B, #0ea5e9)',
+              animation: 'progressSlide 1.2s ease-in-out infinite',
+            }} />
+          </div>
+        )}
         <div
           ref={scrollRef}
           className={cn("table-scroll-container", isScrolled && "scrolled")}
           onScroll={handleScroll}
         >
           <table className="data-table">
+            <colgroup>
+              <col style={{ width: COL1_WIDTH }} />
+              <col style={{ width: COL2_WIDTH }} />
+              {visibleChannels.flatMap((ch) =>
+                visibleMetrics.flatMap((metric) =>
+                  isActualSplitMode
+                    ? [
+                        <col key={`${ch.name}-${metric}-kh`} style={{ width: 70 }} />,
+                        <col key={`${ch.name}-${metric}-th`} style={{ width: 70 }} />,
+                      ]
+                    : [<col key={`${ch.name}-${metric}`} style={{ width: metric === 'Ngân sách' ? 80 : 62 }} />]
+                )
+              )}
+              {isActualSplitMode
+                ? ['ns-kh','ns-th','khqt-kh','khqt-th','gdtd-kh','gdtd-th','khd-kh','khd-th'].map(k => <col key={`tot-${k}`} style={{ width: 70 }} />)
+                : [88, 76, 76, 76].map((w, i) => <col key={`tot-${i}`} style={{ width: w }} />)
+              }
+            </colgroup>
             <thead>
               {/* Tier 1: Category Group Headers */}
               <tr style={{ height: 28 }}>
-                <th rowSpan={hasTier2 ? (isActualSplitMode ? 4 : 3) : (isActualSplitMode ? 3 : 2)} style={{ ...stickyHeaderCol1, top: 0 }}>
-                  Thương hiệu
-                </th>
-                <th rowSpan={hasTier2 ? (isActualSplitMode ? 4 : 3) : (isActualSplitMode ? 3 : 2)} style={{ ...stickyHeaderCol2, top: 0 }}>
+                <th
+                  rowSpan={hasTier2 ? (isActualSplitMode ? 4 : 3) : (isActualSplitMode ? 3 : 2)}
+                  style={{
+                    ...stickyHeaderCol1, top: 0,
+                    height: hasTier2 ? (isActualSplitMode ? 106 : 84) : (isActualSplitMode ? 78 : 56)
+                  }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
-                    <span>Dòng xe</span>
-                    <span 
+                    <span>Thương hiệu</span>
+                    <ChevronDown
+                      size={12}
                       onClick={() => {
-                        if (collapsedBrands.size === DEMO_BRANDS.length) {
+                        if (collapsedBrands.size === visibleBrands.length) {
                           setCollapsedBrands(new Set());
                         } else {
-                          setCollapsedBrands(new Set(DEMO_BRANDS.map(b => b.name)));
+                          setCollapsedBrands(new Set(visibleBrands.map(b => b.name)));
                         }
                       }}
-                      style={{ cursor: 'pointer', color: 'var(--color-brand)', fontSize: 10, fontWeight: 700, padding: '2px 4px', background: '#eef2f7', borderRadius: 4 }}
-                      title={collapsedBrands.size === DEMO_BRANDS.length ? 'Mở rộng tất cả dòng xe' : 'Thu gọn tất cả dòng xe'}
-                    >
-                      {collapsedBrands.size === DEMO_BRANDS.length ? '⊞ Mở' : '⊟ Thu'}
-                    </span>
+                      style={{
+                        cursor: 'pointer',
+                        color: 'var(--color-brand)',
+                        opacity: 0.7,
+                        transform: collapsedBrands.size === visibleBrands.length ? 'rotate(-90deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.15s',
+                        flexShrink: 0,
+                      }}
+                      aria-label={collapsedBrands.size === visibleBrands.length ? 'Mở rộng tất cả' : 'Thu gọn tất cả'}
+                    />
                   </div>
+                </th>
+                <th
+                  rowSpan={hasTier2 ? (isActualSplitMode ? 4 : 3) : (isActualSplitMode ? 3 : 2)}
+                  style={{
+                    ...stickyHeaderCol2, top: 0,
+                    height: hasTier2 ? (isActualSplitMode ? 106 : 84) : (isActualSplitMode ? 78 : 56)
+                  }}
+                >
+                  Dòng xe
                 </th>
                 {(() => {
                   const renderedCategories = new Set<string>();
@@ -2077,56 +1922,60 @@ export default function PlanningPage() {
                         colSpan={colSpanCount}
                         rowSpan={rowSpanCount}
                         style={{
-                          position: 'sticky', top: 0, zIndex: 20,
+                          position: 'sticky', top: 0, zIndex: 35,
                           textAlign: 'center',
-                          background: `color-mix(in srgb, ${catColor} 10%, #f8fafc)`,
-                          borderBottom: '1px solid #cbd5e1',
+                          background: '#f8fafc',
+                          borderBottom: '1px solid var(--color-border-dark)',
                           borderTop: `3px solid ${catColor}`,
                           padding: '4px 8px'
                         }}
                       >
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                           <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: catColor, flexShrink: 0 }} />
-                          {ch.category}
+                          {/* Digital: click tên để collapse/expand */}
+                          {ch.category === 'DIGITAL' ? (
+                            <span
+                              onClick={() => setDigitalCollapsed(prev => !prev)}
+                              style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 2, color: catColor }}
+                              title={digitalCollapsed ? 'Mở rộng kênh Digital' : 'Thu gọn kênh Digital'}
+                            >
+                              {ch.category}
+                              <ChevronDown size={11} style={{ transform: digitalCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }} />
+                            </span>
+                          ) : (
+                            ch.category
+                          )}
                           <span 
                             onClick={() => {
-                               if (pageMode === 'actual') return; // allocation chỉ dùng trong plan mode
+                               if (pageMode === 'actual') return;
                                if (isDataLocked) {
                                  setAlertInfo({ type: 'warning', title: 'Không hợp lệ', message: 'Dữ liệu đang bị khóa chỉnh sửa.' });
                                } else {
                                  setAllocationModal({ open: true, type: 'category', name: ch.category });
                                }
                             }}
-                            style={{ cursor: pageMode === 'actual' ? 'default' : 'pointer', opacity: pageMode === 'actual' ? 0.3 : 0.7, padding: '2px', marginLeft: 2 }}
-                            title={pageMode === 'actual' ? 'Phân bổ chỉ dùng trong KẾ HOẠCH' : 'Thao tác nhanh cho nhóm kênh này'}
+                            style={{ cursor: pageMode === 'actual' ? 'default' : 'pointer', opacity: pageMode === 'actual' ? 0.3 : 1, padding: '2px 3px', marginLeft: 2, borderRadius: 3, display: 'inline-flex', alignItems: 'center' }}
+                            title={pageMode === 'actual' ? 'Phân bổ chỉ dùng trong KẾ HOẠCH' : 'Nhấn để phân bổ ngân sách hàng loạt cho nhóm kênh này'}
                           >
-                            <Zap size={11} style={{ verticalAlign: 'text-bottom', color: catColor }} />
+                            <Zap size={12} style={{ verticalAlign: 'text-bottom', color: catColor }} />
                           </span>
-                          {ch.category === 'DIGITAL' && (
-                            <span 
-                              onClick={() => setDigitalCollapsed(c => !c)}
-                              style={{ fontSize: 10, color: catColor, fontWeight: 700, cursor: 'pointer', marginLeft: 4 }}
-                              title={digitalCollapsed ? 'Mở rộng kênh Digital' : 'Thu gọn kênh Digital'}
-                            >
-                              {digitalCollapsed ? '[⊕ Mở]' : '[⊟ Thu]'}
-                            </span>
-                          )}
                         </span>
                       </th>
                     );
                   });
                 })()}
                 <th
-                  colSpan={4}
+                  colSpan={isActualSplitMode ? 8 : 4}
                   rowSpan={hasTier2 ? 2 : 1}
                   style={{
-                    position: 'sticky', top: 0, zIndex: 20,
-                    background: '#e8f4fd',
-                    color: 'var(--color-brand)',
+                    position: 'sticky', top: 0, zIndex: 35,
+                    background: '#f1f5f9',
+                    color: 'var(--color-text)',
                     textAlign: 'center',
                     fontWeight: 700,
-                    borderTop: '3px solid var(--color-brand)',
-                    borderBottom: '1px solid #cbd5e1'
+                    borderTop: '3px solid var(--color-text-muted)',
+                    borderLeft: '2px solid var(--color-border-dark)',
+                    borderBottom: '1px solid var(--color-border-dark)'
                   }}
                 >
                   TỔNG CỘNG
@@ -2140,17 +1989,17 @@ export default function PlanningPage() {
                   const channelsInCat = visibleChannels.filter(c => c.category === ch.category);
                   if (channelsInCat.length === 1) return null;
 
-                  const color = getChannelColor(ch);
+                  const color = ch.color;
                   return (
                     <th
                       key={`channel-${ch.name}`}
                       colSpan={visibleMetrics.length * (isActualSplitMode ? 2 : 1)}
                       style={{
-                        position: 'sticky', top: 28, zIndex: 20,
+                        position: 'sticky', top: 28, zIndex: 35,
                         textAlign: 'center',
-                        background: `color-mix(in srgb, ${color} 10%, #f8fafc)`,
-                        borderBottom: '1px solid #cbd5e1',
-                        color: ch.name === 'Tổng Digital' ? 'var(--color-brand)' : color,
+                        background: '#f8fafc',
+                        borderBottom: '1px solid var(--color-border-dark)',
+                        color: 'var(--color-text)',
                         fontSize: 'var(--fs-label)',
                         fontWeight: 600,
                         textTransform: 'uppercase',
@@ -2169,10 +2018,10 @@ export default function PlanningPage() {
                                  setAllocationModal({ open: true, type: 'channel', name: ch.name });
                                }
                             }}
-                            style={{ cursor: pageMode === 'actual' ? 'default' : 'pointer', opacity: pageMode === 'actual' ? 0.3 : 0.7, padding: '2px', display: 'flex' }}
-                            title={pageMode === 'actual' ? 'Phân bổ chỉ dùng trong KẾ HOẠCH' : 'Tăng/giảm ngân sách hàng loạt cho kênh này'}
+                            style={{ cursor: pageMode === 'actual' ? 'default' : 'pointer', opacity: pageMode === 'actual' ? 0.3 : 1, padding: '2px 3px', display: 'inline-flex', alignItems: 'center', borderRadius: 3 }}
+                            title={pageMode === 'actual' ? 'Phân bổ chỉ dùng trong KẾ HOẠCH' : 'Nhấn để tăng/giảm ngân sách hàng loạt cho kênh này'}
                           >
-                            <Zap size={11} />
+                            <Zap size={12} />
                           </span>
                         )}
                       </div>
@@ -2185,18 +2034,19 @@ export default function PlanningPage() {
               {/* Tier 3: Metric sub-headers */}
               <tr style={{ height: 28 }}>
                 {visibleChannels.map((ch) => {
-                  const color = getChannelColor(ch);
+                  const color = ch.color;
                   return visibleMetrics.map((metric) => (
                     <th
                       key={`${ch.name}-${metric}`}
                       colSpan={isActualSplitMode ? 2 : 1}
                       style={{
-                        position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 20,
-                        background: `color-mix(in srgb, ${color} 10%, #f8fafc)`,
-                        width: isActualSplitMode ? 80 : 72, minWidth: isActualSplitMode ? 80 : 72,
+                        position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35,
+                        background: '#f8fafc',
+                        color: 'var(--color-text-muted)',
+                        width: isActualSplitMode ? 140 : (metric === 'Ngân sách' ? 80 : 62), minWidth: isActualSplitMode ? 140 : (metric === 'Ngân sách' ? 80 : 62),
                         textAlign: 'center',
                         fontSize: 'var(--fs-label)',
-                        borderBottom: isActualSplitMode ? 'none' : '1px solid #cbd5e1',
+                        borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)',
                         padding: '4px 8px'
                       }}
                     >
@@ -2204,38 +2054,38 @@ export default function PlanningPage() {
                     </th>
                   ));
                 })}
-                <th style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 20, width: 80, minWidth: 80, background: '#e8f4fd', textAlign: 'right', fontWeight: 600, borderBottom: '1px solid #cbd5e1', padding: '4px 8px' }}>Ngân sách</th>
-                <th style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 20, width: 60, minWidth: 60, background: '#e8f4fd', textAlign: 'right', fontWeight: 600, borderBottom: '1px solid #cbd5e1', padding: '4px 8px' }}>KHQT</th>
-                <th style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 20, width: 60, minWidth: 60, background: '#e8f4fd', textAlign: 'right', fontWeight: 600, borderBottom: '1px solid #cbd5e1', padding: '4px 8px' }}>GDTD</th>
-                <th style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 20, width: 60, minWidth: 60, background: '#e8f4fd', textAlign: 'right', fontWeight: 600, borderBottom: '1px solid #cbd5e1', padding: '4px 8px' }}>KHĐ</th>
+                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 88, minWidth: isActualSplitMode ? 140 : 88, background: '#f1f5f9', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '2px solid var(--color-border-dark)', padding: '4px 8px' }}>Ngân sách</th>
+                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 76, minWidth: isActualSplitMode ? 140 : 76, background: '#f1f5f9', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', padding: '4px 8px' }}>KHQT</th>
+                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 76, minWidth: isActualSplitMode ? 140 : 76, background: '#f1f5f9', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', padding: '4px 8px' }}>GDTD</th>
+                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 76, minWidth: isActualSplitMode ? 140 : 76, background: '#f1f5f9', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', padding: '4px 8px' }}>KHĐ</th>
               </tr>
 
               {/* Tier 4 (actual split mode only): KH | TH sub-headers per metric */}
               {isActualSplitMode && (
                 <tr style={{ height: 22 }}>
                   {visibleChannels.map((ch) => {
-                    const color = getChannelColor(ch);
+                    const color = ch.color;
                     return visibleMetrics.map((metric) => (
                       <React.Fragment key={`${ch.name}-${metric}-split`}>
                         <th style={{
-                          position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 20,
-                          background: `color-mix(in srgb, ${color} 8%, #f0f4f8)`,
-                          width: 40, minWidth: 40, maxWidth: 40,
-                          textAlign: 'center', fontSize: 9, fontWeight: 600,
-                          color: '#64748b', letterSpacing: '0.04em',
-                          borderBottom: '2px solid #cbd5e1',
-                          borderRight: '1px dashed #e2e8f0',
+                          position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 35,
+                          background: '#f8fafc',
+                          width: 70, minWidth: 70, height: 22,
+                          textAlign: 'center', fontSize: 'var(--fs-label)', fontWeight: 600,
+                          color: '#64748b',
+                          borderBottom: '2px solid var(--color-border-dark)',
+                          borderRight: '1px dashed var(--color-border-dark)',
                           padding: '2px 4px'
                         }}>
                           KH
                         </th>
                         <th style={{
-                          position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 20,
-                          background: `color-mix(in srgb, #f59e0b 8%, #fffbeb)`,
-                          width: 40, minWidth: 40, maxWidth: 40,
-                          textAlign: 'center', fontSize: 9, fontWeight: 700,
-                          color: '#d97706', letterSpacing: '0.04em',
-                          borderBottom: '2px solid #fde68a',
+                          position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 35,
+                          background: '#f8fafc',
+                          width: 70, minWidth: 70, height: 22,
+                          textAlign: 'center', fontSize: 'var(--fs-label)', fontWeight: 700,
+                          color: '#0f172a',
+                          borderBottom: '2px solid var(--color-border-dark)',
                           padding: '2px 4px'
                         }}>
                           TH
@@ -2243,13 +2093,18 @@ export default function PlanningPage() {
                       </React.Fragment>
                     ));
                   })}
-                  {/* TỔNG CỘNG: không split */}
-                  <th colSpan={4} style={{ position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 20, background: '#e8f4fd', borderBottom: '2px solid #cbd5e1' }} />
+                  {/* TỔNG CỘNG: KH | TH sub-headers */}
+                  {['Ngân sách', 'KHQT', 'GDTD', 'KHĐ'].map((metric, idx) => (
+                    <React.Fragment key={`total-split-${idx}`}>
+                      <th style={{ position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 35, background: '#f1f5f9', width: 70, minWidth: 70, height: 22, textAlign: 'center', fontSize: 'var(--fs-label)', fontWeight: 600, color: '#64748b', borderBottom: '2px solid var(--color-border-dark)', borderRight: '1px dashed var(--color-border-dark)', borderLeft: idx === 0 ? '2px solid var(--color-border-dark)' : '1px solid var(--color-border-dark)', padding: '2px 4px' }}>KH</th>
+                      <th style={{ position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 35, background: '#f1f5f9', width: 70, minWidth: 70, height: 22, textAlign: 'center', fontSize: 'var(--fs-label)', fontWeight: 700, color: '#0f172a', borderBottom: '2px solid var(--color-border-dark)', padding: '2px 4px' }}>TH</th>
+                    </React.Fragment>
+                  ))}
                 </tr>
               )}
             </thead>
             <tbody>
-              {DEMO_BRANDS.filter(b => selectedBrand === 'all' || b.name === selectedBrand).map((brand) => {
+              {visibleBrands.filter(b => selectedBrand === 'all' || b.name === selectedBrand).map((brand) => {
                 const subtotal = brandSubtotals[brand.name] || { budget: 0, khqt: 0, gdtd: 0, khd: 0, histBudget: 0, histKhqt: 0, histGdtd: 0, histKhd: 0, channelTotals: {}, histChannelTotals: {} };
                 const isCollapsed = collapsedBrands.has(brand.name);
 
@@ -2271,6 +2126,11 @@ export default function PlanningPage() {
                       let totalGdtd = 0, histTotalGdtd = 0;
                       let totalKhd = 0, histTotalKhd = 0;
 
+                      let actTotalBudget = 0;
+                      let actTotalKhqt = 0;
+                      let actTotalGdtd = 0;
+                      let actTotalKhd = 0;
+
                       const isComputedRow = brand.modelData?.find((x: any) => x.name === model)?.is_aggregate || false;
 
                       return (
@@ -2282,12 +2142,12 @@ export default function PlanningPage() {
                               onClick={() => toggleBrand(brand.name)}
                             >
                               <span style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', userSelect: 'none' }}>
-                                <span style={{ fontSize: 8, color: 'var(--color-text-muted)', transition: 'transform 0.2s', display: 'inline-block', transform: 'rotate(0deg)' }}>▼</span>
+                                <span style={{ fontSize: 8, color: 'var(--color-text-muted)', display: 'inline-block' }}>▼</span>
                                 {brand.name}
                               </span>
                             </td>
                           )}
-                          <td style={{ ...stickyBodyCol2, fontWeight: isComputedRow ? 700 : '500', background: isComputedRow ? '#f0f4f8' : '#ffffff', color: isComputedRow ? 'var(--color-brand)' : 'inherit', textTransform: isComputedRow ? 'uppercase' : 'none' }}>
+                          <td style={{ ...stickyBodyCol2, fontWeight: isComputedRow ? 700 : '500', background: isComputedRow ? '#f1f5f9' : '#ffffff', color: isComputedRow ? 'var(--color-brand)' : 'inherit', textTransform: isComputedRow ? 'uppercase' : 'none' }}>
                             {model}
                           </td>
                           {visibleChannels.map((ch) =>
@@ -2304,20 +2164,25 @@ export default function PlanningPage() {
                               }
                               
                               if (ch.name !== 'Tổng Digital') {
+                                const actualVal = (actualDataByMonth[month] || {})[cellKey] || 0;
                                 if (metric === 'Ngân sách') {
                                   totalBudget += val;
+                                  actTotalBudget += actualVal;
                                   if (histVal !== null) histTotalBudget += histVal;
                                 }
                                 if (metric === 'KHQT') {
                                   totalKhqt += val;
+                                  actTotalKhqt += actualVal;
                                   if (histVal !== null) histTotalKhqt += histVal;
                                 }
                                 if (metric === 'GDTD') {
                                   totalGdtd += val;
+                                  actTotalGdtd += actualVal;
                                   if (histVal !== null) histTotalGdtd += histVal;
                                 }
                                 if (metric === 'KHĐ') {
                                   totalKhd += val;
+                                  actTotalKhd += actualVal;
                                   if (histVal !== null) histTotalKhd += histVal;
                                 }
                               }
@@ -2330,13 +2195,13 @@ export default function PlanningPage() {
                                 return (
                                   <React.Fragment key={cellKey}>
                                     {/* KH — Plan value: read-only reference */}
-                                    <td style={{ padding: 0, borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', borderLeft: '1px solid #e2e8f0', borderRight: '1px dashed #cbd5e1', height: 26, background: '#f8fafc' }}>
-                                      <div style={{ padding: '2px 6px', textAlign: 'right', fontSize: 'var(--fs-table)', color: '#94a3b8', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                    <td style={{ padding: 0, borderTop: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', borderRight: '1px dashed var(--color-border-dark)', height: 26, background: '#f8fafc' }}>
+                                      <div style={{ padding: '2px 6px', textAlign: 'right', fontSize: 'var(--fs-table)', color: 'var(--color-text-muted)', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                                         {planVal > 0 ? formatNumber(planVal) : ''}
                                       </div>
                                     </td>
                                     {/* TH — Actual value: inline editable */}
-                                    <td style={{ padding: 0, borderTop: '1px solid #fde68a', borderBottom: '1px solid #fde68a', borderLeft: 'none', borderRight: '1px solid #fde68a', height: 26, background: actualVal > 0 ? '#fffbeb' : '#ffffff' }}>
+                                    <td style={{ padding: 0, borderTop: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)', borderLeft: 'none', borderRight: '1px solid var(--color-border-dark)', height: 26, background: actualVal > 0 ? '#fffbeb' : '#ffffff' }}>
                                       <input
                                         type="text"
                                         inputMode="decimal"
@@ -2369,7 +2234,7 @@ export default function PlanningPage() {
                               }
 
                               return (
-                                <td key={cellKey} style={{ padding: 0, border: '1px solid #e2e8f0', height: compareMode !== 'none' ? 44 : 26 }}>
+                                <td key={cellKey} colSpan={isActualSplitMode ? 2 : 1} style={{ padding: 0, border: '1px solid #e2e8f0', height: compareMode !== 'none' ? 44 : 26 }}>
                                   <div
                                     className={cn(
                                       "cell-wrapper",
@@ -2431,14 +2296,14 @@ export default function PlanningPage() {
                                       if (cellKey.includes('-Tổng Digital-') || isComputedRow) return;
                                       setUndoStack(us => [...us.slice(-19), cellData]); // Bug fix: dùng cellData (mode-aware) thay vì dataByMonth
                                       setEditingCell(cellKey);
-                                      setEditValue(currentWeight === 1 ? String(val || '') : String((val * currentWeight).toFixed(2)));
+                                      setEditValue(String(val || ''));
                                       setEditingNoteCell(null);
                                     }}
                                      style={(() => {
                                         const isOverBudget = pageMode === 'actual' && cellKey.endsWith('-Ngân sách') && val > 0 && (planCellData[cellKey] || 0) > 0 && val > (planCellData[cellKey] || 0) * 1.1;
                                         return {
                                           height: '100%', position: 'relative' as const,
-                                          background: isOverBudget ? '#fff5f5' : ((ch.readonly || isComputedRow) ? '#f0f4f8' : (isHighCpl ? '#fef08a' : (selectedCells.has(cellKey) ? '#e0f2fe' : 'transparent'))),
+                                          background: isOverBudget ? '#fff5f5' : ((ch.readonly || isComputedRow) ? '#f1f5f9' : (isHighCpl ? '#fef08a' : (selectedCells.has(cellKey) ? '#e0f2fe' : 'transparent'))),
                                           boxShadow: isOverBudget ? 'inset 0 0 0 1.5px #ef4444' : (selectedCells.has(cellKey) ? 'inset 0 0 0 1.5px var(--color-brand)' : 'none'),
                                           cursor: (ch.readonly || isComputedRow) ? 'default' : (selectedCells.has(cellKey) ? 'cell' : 'text'),
                                           fontWeight: isComputedRow ? 600 : 'normal',
@@ -2478,7 +2343,7 @@ export default function PlanningPage() {
                                         >
                                           {cellNote}
                                           {(!editingCell && !editingNoteCell) && (
-                                             <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2 }}>(Chuột phải để sửa)</div>
+                                             <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 2 }}>(Chuột phải để sửa)</div>
                                           )}
                                         </div>
                                       </div>
@@ -2543,18 +2408,36 @@ export default function PlanningPage() {
                             })
                           )}
                           {/* Row totals */}
-                          <td style={{ textAlign: 'right', fontWeight: 700, background: isComputedRow ? '#e2e8f0' : '#e8f4fd', color: 'var(--color-brand)' }}>
-                            {renderDualValue(totalBudget, compareMode !== 'none' ? histTotalBudget : null, false)}
-                          </td>
-                          <td style={{ textAlign: 'right', fontWeight: isComputedRow ? 700 : 600, background: isComputedRow ? '#e2e8f0' : '#f0f9ff', color: isComputedRow ? 'var(--color-brand)' : 'inherit' }}>
-                            {renderDualValue(totalKhqt, compareMode !== 'none' ? histTotalKhqt : null, false)}
-                          </td>
-                          <td style={{ textAlign: 'right', fontWeight: isComputedRow ? 700 : 600, background: isComputedRow ? '#e2e8f0' : '#f0f9ff', color: isComputedRow ? 'var(--color-brand)' : 'inherit' }}>
-                            {renderDualValue(totalGdtd, compareMode !== 'none' ? histTotalGdtd : null, false)}
-                          </td>
-                          <td style={{ textAlign: 'right', fontWeight: isComputedRow ? 700 : 600, background: isComputedRow ? '#e2e8f0' : '#f0f9ff', color: isComputedRow ? 'var(--color-brand)' : 'inherit' }}>
-                            {renderDualValue(totalKhd, compareMode !== 'none' ? histTotalKhd : null, false)}
-                          </td>
+                          {(() => {
+                             const totals = [
+                               { key: 'budget', val: totalBudget, act: actTotalBudget, hist: histTotalBudget },
+                               { key: 'khqt', val: totalKhqt, act: actTotalKhqt, hist: histTotalKhqt },
+                               { key: 'gdtd', val: totalGdtd, act: actTotalGdtd, hist: histTotalGdtd },
+                               { key: 'khd', val: totalKhd, act: actTotalKhd, hist: histTotalKhd }
+                             ];
+                             return totals.map((t, idx) => {
+                               const bg = isComputedRow ? '#e2e8f0' : (idx === 0 ? '#f1f5f9' : '#f8fafc');
+                               const color = idx === 0 || isComputedRow ? 'var(--color-text)' : 'inherit';
+                               const fw = idx === 0 || isComputedRow ? 700 : 600;
+                               if (isActualSplitMode) {
+                                 return (
+                                    <React.Fragment key={`tot-${t.key}`}>
+                                      <td style={{ padding: '2px 6px', textAlign: 'right', fontWeight: 600, background: '#f8fafc', color: 'var(--color-text-muted)', borderRight: '1px dashed var(--color-border-dark)', borderLeft: idx === 0 ? '2px solid var(--color-border-dark)' : '1px solid var(--color-border-dark)' }}>
+                                        {t.val > 0 ? formatNumber(t.val) : ''}
+                                      </td>
+                                      <td style={{ padding: '2px 6px', textAlign: 'right', fontWeight: fw, background: bg, color: color }}>
+                                        {t.act > 0 ? formatNumber(t.act) : ''}
+                                      </td>
+                                    </React.Fragment>
+                                 );
+                               }
+                               return (
+                                 <td key={`tot-${t.key}`} style={{ textAlign: 'right', fontWeight: fw, background: bg, color: color, borderLeft: idx === 0 ? '2px solid var(--color-border-dark)' : '1px solid var(--color-border-dark)' }}>
+                                   {renderDualValue(t.val, compareMode !== 'none' ? t.hist : null, false)}
+                                 </td>
+                               );
+                             });
+                          })()}
                         </tr>
                       );
                     })}
@@ -2562,32 +2445,32 @@ export default function PlanningPage() {
                     {/* Brand Subtotal Row — always visible, click to toggle */}
                     <tr className="subtotal">
                       <td
-                        style={{ ...stickyBodyCol1, background: isCollapsed ? '#e8f0fb' : '#f0f4f8', fontWeight: 700, cursor: 'pointer', userSelect: 'none' }}
+                        style={{ ...stickyBodyCol1, background: isCollapsed ? '#e2e8f0' : '#f1f5f9', fontWeight: 700, cursor: 'pointer', userSelect: 'none' }}
                         onClick={() => toggleBrand(brand.name)}
-                        title={isCollapsed ? `Mở rộng ${brand.name}` : `Thu gọn ${brand.name}`}
+                        title={(isCollapsed || displayModels.length === 0) ? `Mở rộng ${brand.name}` : `Thu gọn ${brand.name}`}
                       >
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
                           <span style={{
                             fontSize: 8,
-                            color: 'var(--color-brand)',
+                            color: 'var(--color-text-muted)',
                             display: 'inline-block',
-                            transition: 'transform 0.2s',
-                            transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-                          }}>▼</span>
+                            flexShrink: 0,
+                          }}>{(isCollapsed || displayModels.length === 0) ? '▶' : '▼'}</span>
                           {brand.name}
                         </span>
                       </td>
-                      <td style={{ ...stickyBodyCol2, background: isCollapsed ? '#e8f0fb' : '#f0f4f8', fontWeight: 700, fontSize: 'var(--fs-table)', color: 'var(--color-text)' }}>
+                      <td style={{ ...stickyBodyCol2, background: isCollapsed ? '#e2e8f0' : '#f1f5f9', fontWeight: 700, fontSize: 'var(--fs-table)', color: 'var(--color-text)' }}>
                         Σ {brand.name}
                       </td>
                       {visibleChannels.map((ch) =>
                         visibleMetrics.map((metric) => (
                           <td
                             key={`sub-${brand.name}-${ch.name}-${metric}`}
+                            colSpan={isActualSplitMode ? 2 : 1}
                             style={{
                               textAlign: 'right',
                               fontWeight: 600,
-                              background: isCollapsed ? '#e8f0fb' : '#f0f4f8',
+                              background: isCollapsed ? '#e2e8f0' : '#f1f5f9',
                               color: 'var(--color-text-secondary)',
                               fontSize: 'var(--fs-table)',
                             }}
@@ -2600,16 +2483,16 @@ export default function PlanningPage() {
                           </td>
                         ))
                       )}
-                      <td style={{ textAlign: 'right', fontWeight: 700, background: '#dbeafe', color: 'var(--color-brand)' }}>
+                      <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 700, background: '#e2e8f0', color: 'var(--color-text)', borderLeft: '2px solid var(--color-border-dark)' }}>
                         {renderDualValue(subtotal.budget, compareMode !== 'none' ? subtotal.histBudget : null, false)}
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 600, background: '#e0f2fe' }}>
+                      <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 600, background: '#f1f5f9', borderLeft: '1px solid var(--color-border-dark)' }}>
                         {renderDualValue(subtotal.khqt, compareMode !== 'none' ? subtotal.histKhqt : null, false)}
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 600, background: '#e0f2fe' }}>
+                      <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 600, background: '#f1f5f9', borderLeft: '1px solid var(--color-border-dark)' }}>
                         {renderDualValue(subtotal.gdtd, compareMode !== 'none' ? subtotal.histGdtd : null, false)}
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 600, background: '#e0f2fe' }}>
+                      <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 600, background: '#f1f5f9', borderLeft: '1px solid var(--color-border-dark)' }}>
                         {renderDualValue(subtotal.khd, compareMode !== 'none' ? subtotal.histKhd : null, false)}
                       </td>
                     </tr>
@@ -2619,21 +2502,23 @@ export default function PlanningPage() {
 
               {/* Grand Total Row */}
               <tr className="grand-total">
-                <td style={{ ...stickyBodyCol1, background: '#f0f9ff', fontWeight: 800, color: 'var(--color-brand)', borderTop: '2px solid var(--color-brand)' }}>
+                <td style={{ ...stickyBodyCol1, background: '#f1f5f9', fontWeight: 800, color: 'var(--color-text)', borderTop: '2px solid var(--color-text-muted)' }}>
                   TỔNG
                 </td>
-                <td style={{ ...stickyBodyCol2, background: '#f0f9ff', fontWeight: 700, borderTop: '2px solid var(--color-brand)', color: 'var(--color-brand)' }}>
+                <td style={{ ...stickyBodyCol2, background: '#f1f5f9', fontWeight: 700, borderTop: '2px solid var(--color-text-muted)', color: 'var(--color-text)' }}>
                   TOÀN BỘ
                 </td>
                 {visibleChannels.map((ch) =>
                   visibleMetrics.map((metric) => (
                     <td
                       key={`grand-${ch.name}-${metric}`}
+                      colSpan={isActualSplitMode ? 2 : 1}
                       style={{
                         textAlign: 'right',
                         fontWeight: 700,
                         fontSize: 'var(--fs-table)',
-                        background: ch.readonly ? '#f0f4f8' : undefined,
+                        background: ch.readonly ? '#f8fafc' : undefined,
+                        borderTop: '2px solid var(--color-text-muted)'
                       }}
                     >
                       {renderDualValue(
@@ -2644,357 +2529,297 @@ export default function PlanningPage() {
                     </td>
                   ))
                 )}
-                <td style={{ textAlign: 'right', fontWeight: 800, background: '#dbeafe', color: 'var(--color-brand)', fontSize: 12 }}>
+                <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 800, background: '#e2e8f0', color: 'var(--color-text)', fontSize: 12, borderTop: '2px solid var(--color-text-muted)', borderLeft: '2px solid var(--color-border-dark)' }}>
                   {renderDualValue(grandTotal.budget, compareMode !== 'none' ? grandTotal.histBudget : null, false)}
                 </td>
-                <td style={{ textAlign: 'right', fontWeight: 700, background: '#e0f2fe', color: 'var(--color-brand)' }}>
+                <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 700, background: '#f1f5f9', color: 'var(--color-text)', borderTop: '2px solid var(--color-text-muted)', borderLeft: '1px solid var(--color-border-dark)' }}>
                   {renderDualValue(grandTotal.khqt, compareMode !== 'none' ? grandTotal.histKhqt : null, false)}
                 </td>
-                <td style={{ textAlign: 'right', fontWeight: 700, background: '#e0f2fe', color: 'var(--color-brand)' }}>
+                <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 700, background: '#f1f5f9', color: 'var(--color-text)', borderTop: '2px solid var(--color-text-muted)', borderLeft: '1px solid var(--color-border-dark)' }}>
                   {renderDualValue(grandTotal.gdtd, compareMode !== 'none' ? grandTotal.histGdtd : null, false)}
                 </td>
-                <td style={{ textAlign: 'right', fontWeight: 700, background: '#e0f2fe', color: 'var(--color-brand)' }}>
+                <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 700, background: '#f1f5f9', color: 'var(--color-text)', borderTop: '2px solid var(--color-text-muted)', borderLeft: '1px solid var(--color-border-dark)' }}>
                   {renderDualValue(grandTotal.khd, compareMode !== 'none' ? grandTotal.histKhd : null, false)}
                 </td>
               </tr>
 
-              {/* TỔNG HỢP THEO SHOWROOM */}
-              <tr>
-                <td colSpan={2} style={{ ...stickyBodyCol1, background: '#f1f5f9', fontWeight: 800, padding: '10px 8px', borderTop: '4px solid #cbd5e1', color: 'var(--color-text-secondary)', fontSize: 11, letterSpacing: '0.04em' }}>
-                  PHÂN BỔ SHOWROOM
-                </td>
-                <td colSpan={visibleChannels.length * visibleMetrics.length + 4} style={{ background: '#f1f5f9', borderTop: '4px solid #cbd5e1' }}></td>
-              </tr>
-
-              {(selectedShowroom === 'all' ? SHOWROOMS : SHOWROOMS.filter(s => s === selectedShowroom || s.toLowerCase().includes(selectedShowroom))).map((sr) => {
-                const weight = SR_WEIGHTS[sr] || 0.05;
-                const getGlobal = (v: number) => currentWeight > 0 ? v / currentWeight : v;
-                return (
-                  <tr key={`sr-${sr}`}>
-                    <td colSpan={2} style={{ ...stickyBodyCol1, background: '#ffffff', fontWeight: 600, color: 'var(--color-text)' }}>
-                      {sr} <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400, marginLeft: 4 }}>({(weight * 100).toFixed(0)}%)</span>
+              {/* CHI TIẾT THEO SHOWROOM — Bottom-Up: chỉ hiện khi xem "Tất cả SR", data lấy theo code */}
+              {isAggregateView && (
+                <>
+                  <tr>
+                    <td colSpan={2} style={{ ...stickyBodyCol1, width: COL1_WIDTH + COL2_WIDTH, minWidth: COL1_WIDTH + COL2_WIDTH, background: '#f1f5f9', fontWeight: 800, padding: '10px 8px', borderTop: '4px solid var(--color-border-dark)', color: 'var(--color-text-secondary)', fontSize: 11, letterSpacing: '0.04em' }}>
+                      CHI TIẾT THEO SHOWROOM
                     </td>
-                    {visibleChannels.map((ch) =>
-                      visibleMetrics.map((metric) => {
-                        const totalVal = grandTotal.channelTotals[ch.name]?.[metric] ?? 0;
-                        const histTotalVal = grandTotal.histChannelTotals[ch.name]?.[metric] ?? 0;
-                        const isBudget = metric === 'Ngân sách' || metric === 'CPL';
-                        const getWeighted = (v: number) => isBudget ? Math.round(getGlobal(v) * weight * 10) / 10 : Math.round(getGlobal(v) * weight);
-                        const displayVal = ch.name === 'Sự kiện'
-                          ? (showroomEventTotals[sr]?.[metric] ?? 0)
-                          : getWeighted(totalVal);
-                        const displayHistVal = ch.name === 'Sự kiện'
-                          ? null
-                          : (compareMode !== 'none' ? getWeighted(histTotalVal) : null);
-                        return (
-                          <td
-                            key={`sr-${sr}-${ch.name}-${metric}`}
-                            style={{
-                              textAlign: 'right',
-                              fontSize: 'var(--fs-table)',
-                              background: ch.readonly ? '#f8fafc' : undefined,
-                            }}
-                          >
-                            {renderDualValue(
-                              displayVal,
-                              displayHistVal,
-                              false
-                            )}
-                          </td>
-                        );
-                      })
-                    )}
-                    {(() => {
-                      // grandTotal.budget includes event budgets spread globally (applyMultiplier=1 when selectedShowroom='all').
-                      // We must remove the global event contribution and add back the SR-specific event totals.
-                      const globalEvBudget = grandTotal.channelTotals['Sự kiện']?.['Ngân sách'] ?? 0;
-                      const globalEvKhqt   = grandTotal.channelTotals['Sự kiện']?.['KHQT']     ?? 0;
-                      const globalEvGdtd   = grandTotal.channelTotals['Sự kiện']?.['GDTD']     ?? 0;
-                      const globalEvKhd    = grandTotal.channelTotals['Sự kiện']?.['KHĐ']      ?? 0;
-                      const srEvBudget = showroomEventTotals[sr]?.['Ngân sách'] ?? 0;
-                      const srEvKhqt   = showroomEventTotals[sr]?.['KHQT']     ?? 0;
-                      const srEvGdtd   = showroomEventTotals[sr]?.['GDTD']     ?? 0;
-                      const srEvKhd    = showroomEventTotals[sr]?.['KHĐ']      ?? 0;
-                      const srBudget = Math.round((getGlobal(grandTotal.budget - globalEvBudget) * weight + srEvBudget) * 10) / 10;
-                      const srKhqt   = Math.round(getGlobal(grandTotal.khqt - globalEvKhqt) * weight + srEvKhqt);
-                      const srGdtd   = Math.round(getGlobal(grandTotal.gdtd - globalEvGdtd) * weight + srEvGdtd);
-                      const srKhd    = Math.round(getGlobal(grandTotal.khd  - globalEvKhd)  * weight + srEvKhd);
-                      const srHistBudget = compareMode !== 'none' ? Math.round(getGlobal(grandTotal.histBudget) * weight * 10) / 10 : null;
-                      const srHistKhqt   = compareMode !== 'none' ? Math.round(getGlobal(grandTotal.histKhqt) * weight) : null;
-                      const srHistGdtd   = compareMode !== 'none' ? Math.round(getGlobal(grandTotal.histGdtd) * weight) : null;
-                      const srHistKhd    = compareMode !== 'none' ? Math.round(getGlobal(grandTotal.histKhd)  * weight) : null;
-                      return (<>
-                        <td style={{ textAlign: 'right', fontWeight: 700, background: '#f0f9ff', color: 'var(--color-brand)' }}>
-                          {renderDualValue(srBudget, srHistBudget, false)}
-                        </td>
-                        <td style={{ textAlign: 'right', fontWeight: 600, background: '#f8fafc' }}>
-                          {renderDualValue(srKhqt, srHistKhqt, false)}
-                        </td>
-                        <td style={{ textAlign: 'right', fontWeight: 600, background: '#f8fafc' }}>
-                          {renderDualValue(srGdtd, srHistGdtd, false)}
-                        </td>
-                        <td style={{ textAlign: 'right', fontWeight: 600, background: '#f8fafc' }}>
-                          {renderDualValue(srKhd, srHistKhd, false)}
-                        </td>
-                      </>);
-                    })()}
+                    <td colSpan={visibleChannels.length * visibleMetrics.length * (isActualSplitMode ? 2 : 1) + 4} style={{ background: '#f1f5f9', borderTop: '4px solid var(--color-border-dark)' }}></td>
                   </tr>
-                );
-              })}
+
+                  {showrooms.map((srObj) => {
+                    // Bottom-Up: key là SR CODE (uppercase), không phải tên
+                    const srKey = srObj.code.toUpperCase();
+                    const srPayload = showroomDataByMonth[month]?.[srKey] || {};
+                    const srActualPayload = showroomActualDataByMonth[month]?.[srKey] || {};
+                    // Lọc events theo showroom name (EventItem.showroom = tên SR)
+                    const eventsForSr = eventsByMonth[month]?.filter(e => e.showroom === srObj.name) || [];
+                    const sr = srObj.name; // alias để giữ code phía dưới không đổi
+                    
+                    // Create cell getter for specific showroom
+                    const getSrCell = (key: string, mode: 'plan'|'actual') => {
+                      if (mode === 'actual') return srActualPayload[key] || 0;
+                      return srPayload[key] || 0;
+                    };
+                    
+                    // Compute totals on the fly for this SR based on its own payload
+                    let srTotalBudget = 0;
+                    let srTotalKhqt = 0;
+                    let srTotalGdtd = 0;
+                    let srTotalKhd = 0;
+                    let srHistTotalBudget = 0;
+                    let srHistTotalKhqt = 0;
+                    let srHistTotalGdtd = 0;
+                    let srHistTotalKhd = 0;
+
+                    return (
+                      <tr key={`sr-${srObj.code}`}>
+                        <td colSpan={2} style={{ ...stickyBodyCol1, width: COL1_WIDTH + COL2_WIDTH, minWidth: COL1_WIDTH + COL2_WIDTH, background: '#ffffff', fontWeight: 600, color: 'var(--color-text)' }}>
+                          {sr}
+                        </td>
+                        {visibleChannels.map((ch) =>
+                          visibleMetrics.map((metric) => {
+                            // Sum across all brands for this channel & metric
+                            let sumVal = 0; let histSumVal = 0;
+                            if (ch.name === 'Sự kiện') {
+                                if (metric === 'Ngân sách') sumVal = eventsForSr.reduce((sum, e) => sum + (e.budget || 0), 0);
+                                else if (metric === 'KHQT') sumVal = eventsForSr.reduce((sum, e) => sum + (e.leads || 0), 0);
+                                else if (metric === 'GDTD') sumVal = eventsForSr.reduce((sum, e) => sum + (e.gdtd || 0), 0);
+                                else if (metric === 'KHĐ')  sumVal = eventsForSr.reduce((sum, e) => sum + (e.deals || 0), 0);
+                                histSumVal = 0; // events hist is N/A
+                            } else {
+                                visibleBrands.forEach(b => {
+                                    const key = `${b.name}-${ch.name}-${metric}`;
+                                    sumVal += getSrCell(key, pageMode);
+                                    if (compareMode !== 'none') {
+                                        histSumVal += getSrCell(key, compareMode === 'actual' ? 'actual' : 'plan');
+                                    }
+                                });
+                            }
+                            
+                            // add to total
+                            if (metric === 'Ngân sách') srTotalBudget += sumVal;
+                            if (metric === 'KHQT') srTotalKhqt += sumVal;
+                            if (metric === 'GDTD') srTotalGdtd += sumVal;
+                            if (metric === 'KHĐ') srTotalKhd += sumVal;
+                            if (metric === 'Ngân sách') srHistTotalBudget += histSumVal;
+                            if (metric === 'KHQT') srHistTotalKhqt += histSumVal;
+                            if (metric === 'GDTD') srHistTotalGdtd += histSumVal;
+                            if (metric === 'KHĐ') srHistTotalKhd += histSumVal;
+
+                            return (
+                              <td
+                                key={`sr-${srObj.code}-${ch.name}-${metric}`}
+                                colSpan={isActualSplitMode ? 2 : 1}
+                                style={{
+                                  textAlign: 'right',
+                                  fontSize: 'var(--fs-table)',
+                                  background: ch.readonly ? '#f8fafc' : undefined,
+                                }}
+                              >
+                                {renderDualValue(
+                                  sumVal,
+                                  ch.name === 'Sự kiện' ? null : (compareMode !== 'none' ? histSumVal : null),
+                                  false
+                                )}
+                              </td>
+                            );
+                          })
+                        )}
+                        {(() => {
+                           // For showroom row totals, we use the local running sum variables computed above
+                           const srActualTotalBudget = visibleChannels.reduce((sum, ch) => {
+                             let sc = 0;
+                             if (ch.name === 'Sự kiện') {
+                               // for event actuals, actually we didn't track that locally. Use grandTotal actuals approx or sum up
+                               return sum; 
+                             } else {
+                               visibleBrands.forEach(b => { sc += getSrCell(`${b.name}-${ch.name}-Ngân sách`, 'actual'); });
+                             }
+                             return sum + sc;
+                           }, 0);
+                           const srActualTotalKhqt = visibleChannels.reduce((sum, ch) => {
+                             let sc = 0; if (ch.name !== 'Sự kiện') { visibleBrands.forEach(b => { sc += getSrCell(`${b.name}-${ch.name}-KHQT`, 'actual'); }); } return sum + sc;
+                           }, 0);
+                           const srActualTotalGdtd = visibleChannels.reduce((sum, ch) => {
+                             let sc = 0; if (ch.name !== 'Sự kiện') { visibleBrands.forEach(b => { sc += getSrCell(`${b.name}-${ch.name}-GDTD`, 'actual'); }); } return sum + sc;
+                           }, 0);
+                           const srActualTotalKhd = visibleChannels.reduce((sum, ch) => {
+                             let sc = 0; if (ch.name !== 'Sự kiện') { visibleBrands.forEach(b => { sc += getSrCell(`${b.name}-${ch.name}-KHĐ`, 'actual'); }); } return sum + sc;
+                           }, 0);
+
+                           const totals = [
+                             { key: 'budget', val: srTotalBudget, act: srActualTotalBudget, hist: srHistTotalBudget },
+                             { key: 'khqt', val: srTotalKhqt, act: srActualTotalKhqt, hist: srHistTotalKhqt },
+                             { key: 'gdtd', val: srTotalGdtd, act: srActualTotalGdtd, hist: srHistTotalGdtd },
+                             { key: 'khd', val: srTotalKhd, act: srActualTotalKhd, hist: srHistTotalKhd }
+                           ];
+                           
+                           return totals.map((t, idx) => {
+                             const bg = idx === 0 ? '#f1f5f9' : '#f8fafc';
+                             const fw = idx === 0 ? 700 : 600;
+                             const color = idx === 0 ? 'var(--color-text)' : 'inherit';
+                             
+                             if (isActualSplitMode) {
+                               return (
+                                 <React.Fragment key={`tot-sr-${srObj.code}-${t.key}`}>
+                                   <td style={{ padding: '2px 6px', textAlign: 'right', fontWeight: 600, background: '#f8fafc', color: 'var(--color-text-muted)', borderRight: '1px dashed var(--color-border-dark)' }}>
+                                     {t.val > 0 ? formatNumber(t.val) : ''}
+                                   </td>
+                                   <td style={{ padding: '2px 6px', textAlign: 'right', fontWeight: fw, background: bg, color: color }}>
+                                     {t.act > 0 ? formatNumber(t.act) : ''}
+                                   </td>
+                                 </React.Fragment>
+                               );
+                             }
+                             return (
+                               <td key={`tot-sr-${srObj.code}-${t.key}`} style={{ textAlign: 'right', fontWeight: fw, background: bg, color: color }}>
+                                 {renderDualValue(t.val, compareMode !== 'none' ? t.hist : null, false)}
+                               </td>
+                             );
+                           });
+                        })()}
+                      </tr>
+                    );
+                  })}
+                </>
+              )}
             </tbody>
           </table>
 
-          {/* CHI TIẾT TỔ CHỨC SỰ KIỆN TRONG THÁNG */}
-          <div style={{ marginTop: 24, borderTop: '2px solid var(--color-border-dark)', paddingTop: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text)', textTransform: 'uppercase', letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <CalendarDays size={16} />
-                Kế hoạch tổ chức sự kiện trong tháng
-              </h3>
-              
-              <div style={{ display: 'flex', gap: 8 }}>
-                {approvalStatus === 'draft' && (
-                  <button 
-                    className="button-erp-primary" 
-                    style={{ height: 26, padding: '0 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, opacity: selectedShowroom === 'all' ? 0.5 : 1, cursor: selectedShowroom === 'all' ? 'not-allowed' : 'pointer' }}
-                    disabled={selectedShowroom === 'all'}
-                    title={selectedShowroom === 'all' ? 'Vui lòng chọn đơn vị để thêm sự kiện' : 'Thêm sự kiện mới'}
-                    onClick={() => {
-                      if (selectedShowroom === 'all') return;
-                      setEventModal({
-                        open: true,
-                        isNew: true,
-                        data: {
-                          id: Date.now(),
-                          showroom: selectedShowroom,
-                          name: '',
-                          type: 'Sự kiện KH',
-                          date: '',
-                          location: '',
-                          brands: [],
-                          budget: 0
-                        }
-                      });
-                    }}
-                  >
-                    <span style={{ fontSize: 14 }}>+</span> Thêm sự kiện
-                  </button>
-                )}
-              </div>
-            </div>
-            
-            <table className="erp-table" style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: '#f8fafc', height: 32 }}>
-                  {selectedShowroom === 'all' && (
-                    <th style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'left', width: 150, color: 'var(--color-text-muted)', fontWeight: 600 }}>Chi nhánh / Đơn vị</th>
-                  )}
-                  <th style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'left', width: 200, color: 'var(--color-text-muted)', fontWeight: 600 }}>Tên chiến dịch / Sự kiện</th>
-                  <th style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'center', width: 100, color: 'var(--color-text-muted)', fontWeight: 600 }}>Loại hình</th>
-                  <th style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'center', width: 90, color: 'var(--color-text-muted)', fontWeight: 600 }}>Thời gian</th>
-                  <th style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'left', width: 150, color: 'var(--color-text-muted)', fontWeight: 600 }}>Địa điểm dự kiến</th>
-                  <th style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'left', width: 130, color: 'var(--color-text-muted)', fontWeight: 600 }}>Thương hiệu</th>
-                  <th style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'left', color: 'var(--color-text-muted)', fontWeight: 600 }}>Dòng xe áp dụng</th>
-                  <th style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'right', width: 90, color: 'var(--color-text-muted)', fontWeight: 600 }}>NS <span style={{ fontSize: 10, fontWeight: 400 }}>(Triệu đ)</span></th>
-                  <th style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'right', width: 60, color: 'var(--color-text-muted)', fontWeight: 600 }}>KHQT</th>
-                  <th style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'right', width: 60, color: 'var(--color-text-muted)', fontWeight: 600 }}>Lái thử</th>
-                  <th style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'right', width: 60, color: 'var(--color-text-muted)', fontWeight: 600 }}>GDTD</th>
-                  <th style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'right', width: 60, color: 'var(--color-text-muted)', fontWeight: 600 }}>KHĐ</th>
-                  <th style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'center', width: 80, color: 'var(--color-text-muted)', fontWeight: 600 }}>Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
+          {/* SỰ KIỆN — Read-only summary, quản lý tại trang Quản trị sự kiện */}
+          <div style={{ marginTop: 20, borderTop: '2px solid var(--color-border-dark)', paddingTop: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              {/* Left: title + stats */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <CalendarDays size={15} style={{ color: '#10B981' }} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                    Sự kiện tháng {month}
+                  </span>
+                </div>
+                {/* Stats pills */}
                 {(() => {
-                  // Lọc sự kiện: Bao gồm sự kiện của Showroom + sự kiện Tất cả SR (Global)
-                  const filteredEvents = selectedShowroom === 'all' 
-                    ? events 
-                    : events.filter(ev => ev.showroom === selectedShowroom || ev.showroom === 'all' || ev.showroom === 'Tất cả');
-
-                  const getMultiplier = (ev: EventItem) => {
-                    if (selectedShowroom === 'all') return 1;
-                    if (ev.showroom === selectedShowroom) return 1;
-                    if (ev.showroom === 'all' || ev.showroom === 'Tất cả') return SR_WEIGHTS[selectedShowroom] || 0;
-                    return 0;
-                  };
-
-                  if (!eventsLoaded) return (
-                    <tr>
-                      <td colSpan={selectedShowroom === 'all' ? 13 : 12} style={{ border: '1px solid var(--color-border)', padding: '16px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                        Đang tải dữ liệu sự kiện...
-                      </td>
-                    </tr>
+                  const evs = events.filter(ev =>
+                    selectedShowroom === 'all' ? true : ev.showroom === selectedShowroom
                   );
-
-                  if (filteredEvents.length === 0) return (
-                    <tr>
-                      <td colSpan={selectedShowroom === 'all' ? 13 : 12} style={{ border: '1px solid var(--color-border)', padding: '16px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                        Chưa có sự kiện nào được lên kế hoạch trong tháng này{selectedShowroom !== 'all' ? ` tại ${selectedShowroom}` : ''}.
-                      </td>
-                    </tr>
+                  const totalBudget = evs.reduce((s, e) => s + (e.budget || 0), 0);
+                  const totalLeads  = evs.reduce((s, e) => s + (e.leads  || 0), 0);
+                  const totalDeals  = evs.reduce((s, e) => s + (e.deals  || 0), 0);
+                  if (evs.length === 0) return (
+                    <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+                      Chưa có sự kiện nào được lập kế hoạch
+                    </span>
                   );
-
-                  const eventScopeFactors: Record<string, number> = {};
-                  for (const ev of filteredEvents) {
-                    if (selectedBrand === 'all' && selectedModels.length === 0) {
-                      eventScopeFactors[ev.id] = 1; continue;
-                    }
-                    const touchedBrands = brands.filter(db => 
-                      ev.brands.includes(db.name) || db.models.some(m => ev.brands.includes(m))
-                    );
-                    const isGlobalEvent = touchedBrands.length === 0;
-                    const numBrands = isGlobalEvent ? brands.length : touchedBrands.length;
-                    if (numBrands === 0) { eventScopeFactors[ev.id] = 1; continue; }
-                    
-                    let f = 0;
-                    const visibleBrands = brands.filter(b => selectedBrand === 'all' || b.name === selectedBrand);
-                    for (const b of visibleBrands) {
-                      if (!isGlobalEvent && !touchedBrands.find(tb => tb.name === b.name)) continue;
-                      const allBrandModels = b.models.filter((m: string) => {
-                        const mObj = b.modelData?.find((x: { name: string; is_aggregate?: boolean }) => x.name === m);
-                        return !mObj?.is_aggregate;
-                      });
-                      const selectedModelsForBrand = allBrandModels.filter((m: string) => ev.brands.includes(m));
-                      const targetModels = selectedModelsForBrand.length > 0 ? selectedModelsForBrand : allBrandModels;
-                      const visibleModels = targetModels.filter(m => selectedModels.length === 0 || selectedModels.includes(m));
-                      f += (1 / numBrands) * (1 / targetModels.length) * visibleModels.length;
-                    }
-                    eventScopeFactors[ev.id] = f;
-                  }
-
-                  const totalBudget = filteredEvents.reduce((s, ev) => s + (ev.budget * getMultiplier(ev) * (eventScopeFactors[ev.id] || 1)), 0);
-                  const totalDerived = filteredEvents.reduce((acc, ev) => {
-                    const d = getEventDerived(ev);
-                    const m = getMultiplier(ev) * (eventScopeFactors[ev.id] || 1);
-                    return { 
-                      khqt: acc.khqt + (d.khqt * m), 
-                      gdtd: acc.gdtd + (d.gdtd * m), 
-                      khd: acc.khd + (d.khd * m), 
-                      testDrives: acc.testDrives + (d.testDrives * m) 
-                    };
-                  }, { khqt: 0, gdtd: 0, khd: 0, testDrives: 0 });
-
-                  return (<>
-                  {filteredEvents.map((ev) => {
-                    const baseM = getMultiplier(ev);
-                    const scopeF = eventScopeFactors[ev.id] || 1;
-                    const m = baseM * scopeF;
-                    const isAllocated = m < 1;
-                    return (
-                    <tr key={ev.id} style={{ height: 36, background: (baseM < 1) ? '#fafafa' : '#fff' }}>
-                          {selectedShowroom === 'all' && (
-                            <td style={{ border: '1px solid var(--color-border)', padding: '0 8px', color: 'var(--color-text-muted)' }}>{ev.showroom}</td>
-                          )}
-                          <td style={{ border: '1px solid var(--color-border)', padding: '0 8px', fontWeight: 500 }}>
-                            {ev.name}
-                            {isAllocated && (
-                              <span style={{ marginLeft: 6, fontSize: 9, padding: '2px 4px', background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 4, letterSpacing: '-0.3px', display: 'inline-block' }} title={`Sự kiện phân bổ: ${baseM < 1 ? `Chi nhánh (${(baseM*100).toFixed(0)}%) ` : ''}${scopeF < 1 ? `Ngữ cảnh lọc (${(scopeF*100).toFixed(0)}%)` : ''}`}>[Phân bổ {(m * 100).toFixed(0)}%]</span>
-                            )}
-                          </td>
-                          <td style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'center' }}>
-                            <span style={{ padding: '2px 6px', background: '#e0e7ff', color: '#4338ca', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>{ev.type}</span>
-                          </td>
-                          <td style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'center', color: 'var(--color-text)', fontSize: 11, fontWeight: 500 }}>{ev.date || '—'}</td>
-                          <td style={{ border: '1px solid var(--color-border)', padding: '0 8px', color: 'var(--color-text-muted)' }}>{ev.location || '—'}</td>
-                          {/* Cột Thương hiệu */}
-                          <td style={{ border: '1px solid var(--color-border)', padding: '0 8px' }}>
-                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                              {ev.brands
-                                .filter((b: string) => DEMO_BRANDS.some(db => db.name === b))
-                                .map((b: string) => (
-                                  <span key={b} style={{ fontSize: 10, padding: '1px 6px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 4, color: '#1d4ed8', fontWeight: 600 }}>{b}</span>
-                                ))}
-                            </div>
-                          </td>
-                          {/* Cột Dòng xe */}
-                          <td style={{ border: '1px solid var(--color-border)', padding: '0 8px' }}>
-                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                              {ev.brands
-                                .filter((b: string) => !DEMO_BRANDS.some(db => db.name === b))
-                                .map((b: string) => (
-                                  <span key={b} style={{ fontSize: 10, padding: '1px 6px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 4, color: '#475569' }}>{b}</span>
-                                ))}
-                              {ev.brands.filter((b: string) => !DEMO_BRANDS.some(db => db.name === b)).length === 0 && (
-                                <span style={{ fontSize: 10, color: '#94a3b8', fontStyle: 'italic' }}>Tất cả dòng xe</span>
-                              )}
-                            </div>
-                          </td>
-                          <td style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'right', fontWeight: 700, color: 'var(--color-brand)' }}>{formatNumber(ev.budget * m)}</td>
-                          {(() => { const d = getEventDerived(ev); return (<>
-                          <td style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'right', fontWeight: 600, color: '#3b82f6' }}>{formatNumber(d.khqt * m)}</td>
-                          <td style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'right', fontWeight: 600, color: '#06b6d4' }}>{formatNumber(d.testDrives * m)}</td>
-                          <td style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'right', fontWeight: 600, color: '#f59e0b' }}>{formatNumber(d.gdtd * m)}</td>
-                          <td style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'right', fontWeight: 600, color: '#10b981' }}>{formatNumber(d.khd * m)}</td>
-                          </>); })()}
-                          <td style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'center' }}>
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
-                              {baseM < 1 ? (
-                                <span style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>Read-only</span>
-                              ) : (
-                                <>
-                                  <button onClick={() => setEventModal({ open: true, isNew: false, data: {...ev} })} style={{ color: 'var(--color-text-muted)', background: 'transparent', border: 'none', cursor: 'pointer' }} title="Chỉnh sửa">
-                                    <Edit2 size={14} />
-                                  </button>
-                                  <button onClick={() => {
-                                    setConfirmInfo({ type: 'delete', title: `Xóa sự kiện "${ev.name}"?`, message: `Ngân sách ${formatNumber(ev.budget)} triệu sẽ bị loại bỏ khỏi kế hoạch. Hành động này không thể hoàn tác.` });
-                                    // Store delete handler in a ref-like approach via the confirm callback
-                                    const originalConfirmHandler = async () => {
-                                      const success = await deleteEventFromDB(ev.id);
-                                      if (success) {
-                                        setEvents(prev => prev.filter(e => e.id !== ev.id));
-                                        setConfirmInfo(null);
-                                        setAlertInfo({ type: 'success', title: 'Đã xóa', message: `Sự kiện "${ev.name}" đã được xóa thành công.` });
-                                      } else {
-                                        setAlertInfo({ type: 'warning', title: 'Lỗi', message: `Không thể xóa sự kiện "${ev.name}". Vui lòng thử lại.` });
-                                        setConfirmInfo(null);
-                                      }
-                                    };
-                                    // Override confirm handler via state
-                                    setPendingDeleteFn(() => originalConfirmHandler);
-                                  }} style={{ color: 'var(--color-danger)', background: 'transparent', border: 'none', cursor: 'pointer' }} title="Xóa">
-                                    <Trash2 size={14} />
-                                  </button>
-                                </>
-                              )}
-                              <div style={{ width: 1, background: '#e2e8f0', margin: '0 2px' }}></div>
-                              <button onClick={() => setAlertInfo({ type: 'info', title: 'Tính năng đang phát triển', message: 'Chức năng Nghiệm thu sự kiện sẽ được triển khai trong phiên bản tiếp theo.' })} style={{ color: '#3b82f6', background: 'transparent', border: 'none', cursor: 'pointer' }} title="Nghiệm thu sự kiện (Sắp ra mắt)">
-                                <ArrowUpRight size={14} />
-                              </button>
-                            </div>
-                          </td>
-                    </tr>
-                    );
-                  })}
-                  {/* Event Total Row */}
-                  <tr style={{ height: 32, background: '#f0f9ff', borderTop: '2px solid var(--color-brand)' }}>
-                    {selectedShowroom === 'all' && <td style={{ border: '1px solid var(--color-border)', padding: '0 8px' }}></td>}
-                    <td colSpan={6} style={{ border: '1px solid var(--color-border)', padding: '0 8px', fontWeight: 700, color: 'var(--color-brand)' }}>Σ Tổng ({filteredEvents.length} sự kiện)</td>
-                    <td style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'right', fontWeight: 800, color: 'var(--color-brand)', fontSize: 13 }}>{formatNumber(totalBudget)}</td>
-                    <td style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'right', fontWeight: 700, color: '#3b82f6' }}>{formatNumber(totalDerived.khqt)}</td>
-                    <td style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'right', fontWeight: 700, color: '#06b6d4' }}>{formatNumber(totalDerived.testDrives)}</td>
-                    <td style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'right', fontWeight: 700, color: '#f59e0b' }}>{formatNumber(totalDerived.gdtd)}</td>
-                    <td style={{ border: '1px solid var(--color-border)', padding: '0 8px', textAlign: 'right', fontWeight: 700, color: '#10b981' }}>{formatNumber(totalDerived.khd)}</td>
-                    <td style={{ border: '1px solid var(--color-border)' }}></td>
-                  </tr>
-                  </>);
+                  return (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <span style={{ padding: '2px 8px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 12, fontSize: 11, fontWeight: 700, color: '#059669' }}>
+                        {evs.length} sự kiện
+                      </span>
+                      <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                        NS: <strong style={{ color: 'var(--color-brand)' }}>{formatNumber(totalBudget)} tr</strong>
+                      </span>
+                      <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                        KHQT: <strong style={{ color: '#3b82f6' }}>{formatNumber(totalLeads)}</strong>
+                      </span>
+                      <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                        KHĐ: <strong style={{ color: '#10b981' }}>{formatNumber(totalDeals)}</strong>
+                      </span>
+                      {/* Mini event list */}
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: 400 }}>
+                        {evs.slice(0, 4).map(ev => (
+                          <span key={ev.id} style={{
+                            fontSize: 10, padding: '1px 7px', borderRadius: 10,
+                            background: ev.status === 'completed' ? '#f0fdf4' : ev.status === 'overdue' ? '#fef2f2' : '#eff6ff',
+                            color: ev.status === 'completed' ? '#059669' : ev.status === 'overdue' ? '#dc2626' : '#2563eb',
+                            border: `1px solid ${ev.status === 'completed' ? '#86efac' : ev.status === 'overdue' ? '#fecaca' : '#93c5fd'}`,
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {ev.name.length > 20 ? ev.name.slice(0, 20) + '…' : ev.name}
+                          </span>
+                        ))}
+                        {evs.length > 4 && (
+                          <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10, background: '#f1f5f9', color: '#64748b', border: '1px solid #e2e8f0' }}>
+                            +{evs.length - 4} khác
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
                 })()}
-              </tbody>
-            </table>
+              </div>
+              {/* Right: link button */}
+              <a
+                href={`/events?month=${month}`}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '5px 14px', borderRadius: 7,
+                  background: '#eff6ff', border: '1px solid #93c5fd',
+                  color: '#1d4ed8', fontSize: 12, fontWeight: 600,
+                  textDecoration: 'none', whiteSpace: 'nowrap',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#dbeafe'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#eff6ff'; }}
+              >
+                <CalendarDays size={13} />
+                Quản trị sự kiện →
+              </a>
+            </div>
           </div>
         </div>
 
         {/* Status bar */}
         <div className="status-bar">
           <div className="status-bar-item">
-            Dữ liệu kỳ: Tháng {String(month).padStart(2, '0')}/{year} | {DEMO_BRANDS.reduce((s, b) => s + b.models.filter(m => !m.startsWith('Tổng ')).length, 0)} dòng xe
+            Dữ liệu kỳ: Tháng {String(month).padStart(2, '0')}/{year} | {visibleBrands.reduce((s, b) => s + b.models.filter(m => !m.startsWith('Tổng ')).length, 0)} dòng xe
           </div>
-          <div className="status-bar-item">
-            Tổng thương hiệu: {DEMO_BRANDS.length}
-          </div>
-          <div className="status-bar-item" style={{ display: 'flex', alignItems: 'center' }}>
-            <Keyboard size={14} style={{ marginRight: 4 }} /> Tab/Enter/Arrow để di chuyển
-          </div>
-          <div className="status-bar-item">
-            Hà Nội, {mounted ? new Date().toLocaleDateString('vi-VN') : '...'}
+          {/* KPI Summary — thay thế các mục cũ */}
+          <div className="status-bar-item" style={{ display: 'flex', alignItems: 'center', gap: 0, marginLeft: 'auto', paddingLeft: 0, borderLeft: 'none' }}>
+            <div className="summary-chip">
+              <Wallet size={11} style={{ color: 'var(--color-brand)', opacity: 0.7 }} />
+              <span className="summary-chip-label">Tổng NS</span>
+              <span className="summary-chip-value" style={{ color: 'var(--color-brand)', fontSize: 11 }}>
+                {summary.budget > 0 ? formatNumber(summary.budget) : '—'} <span className="summary-chip-unit">tr</span>
+              </span>
+            </div>
+            <div className="summary-divider" />
+            <div className="summary-chip">
+              <Users size={11} style={{ color: '#3B82F6', opacity: 0.7 }} />
+              <span className="summary-chip-label">KHQT</span>
+              <span className="summary-chip-value" style={{ color: '#3B82F6', fontSize: 11 }}>
+                {summary.khqt > 0 ? formatNumber(summary.khqt) : '—'}
+              </span>
+            </div>
+            <div className="summary-divider" />
+            <div className="summary-chip">
+              <BarChart3 size={11} style={{ color: '#F59E0B', opacity: 0.7 }} />
+              <span className="summary-chip-label">GDTD</span>
+              <span className="summary-chip-value" style={{ color: '#F59E0B', fontSize: 11 }}>
+                {summary.gdtd > 0 ? formatNumber(summary.gdtd) : '—'}
+              </span>
+            </div>
+            <div className="summary-divider" />
+            <div className="summary-chip">
+              <FileSignature size={11} style={{ color: '#10B981', opacity: 0.7 }} />
+              <span className="summary-chip-label">KHĐ</span>
+              <span className="summary-chip-value" style={{ color: '#10B981', fontSize: 11 }}>
+                {summary.khd > 0 ? formatNumber(summary.khd) : '—'}
+              </span>
+            </div>
+            <div className="summary-divider" />
+            <div className="summary-chip">
+              <span className="summary-chip-label">CPL</span>
+              <span className="summary-chip-value" style={{ color: summary.cpl !== null ? '#8B5CF6' : 'var(--color-text-muted)', fontSize: 11 }}>
+                {summary.cpl !== null ? summary.cpl.toFixed(1) : '—'} <span className="summary-chip-unit">tr/lead</span>
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -3106,7 +2931,7 @@ export default function PlanningPage() {
                           <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: '#64748b', pointerEvents: 'none' }}>%</span>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--color-text-muted)', marginTop: 4 }}>
                         <span>-100%</span>
                         <span>0%</span>
                         <span>+500%</span>
@@ -3138,11 +2963,16 @@ export default function PlanningPage() {
         </div>
       )}
 
+
       {/* Global CSS for Animations */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes slideInId {
           from { opacity: 0; transform: translateY(-10px) scale(0.98); }
           to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes progressSlide {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(350%); }
         }
         @keyframes pulse {
           0%, 100% { box-shadow: 0 0 0 3px rgba(245,158,11,0.25); }
@@ -3166,140 +2996,8 @@ export default function PlanningPage() {
         }
       `}} />
 
-      {/* Confirm Component */}
-      {confirmInfo && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(15,23,42,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setConfirmInfo(null)}>
-          <div style={{ background: '#fff', borderRadius: 12, width: 360, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden', animation: 'scaleInId 0.2s ease-out' }} onClick={(e) => e.stopPropagation()}>
-             <div style={{ padding: 24, textAlign: 'center' }}>
-               <div style={{ 
-                 background: confirmInfo.type === 'submit' ? '#e0f2fe' : '#f0f9ff', 
-                 width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' 
-               }}>
-                 {confirmInfo.type === 'submit' ? <Send size={28} color="#0284c7" strokeWidth={2.5} /> : <Save size={28} color="#0284c7" strokeWidth={2.5} />}
-               </div>
-               <h3 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: '0 0 8px 0' }}>{confirmInfo.title}</h3>
-               <p style={{ color: '#475569', fontSize: 14, margin: '0 0 24px 0', lineHeight: 1.5 }}>{confirmInfo.message}</p>
-               <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-                 <button 
-                   className="button-erp-secondary" 
-                   style={{ flex: 1, padding: '10px', textAlign: 'center', justifyContent: 'center' }}
-                   onClick={() => setConfirmInfo(null)}
-                 >
-                   Hủy
-                 </button>
-                 <button 
-                   className="button-erp-primary" 
-                   style={{ flex: 1, padding: '10px', textAlign: 'center', justifyContent: 'center' }}
-                   onClick={() => {
-                      if (confirmInfo.type === 'delete' && pendingDeleteFn) {
-                          pendingDeleteFn();
-                          setPendingDeleteFn(null);
-                      } else if (confirmInfo.type === 'save') {
-                          upsertBudgetPlan(month, dataByMonth[month], notesByMonth[month] || {}, approvalStatus, activeUnitId === 'all' ? undefined : activeUnitId);
-                          setAlertInfo({ type: 'success', title: 'Lưu bản nháp thành công', message: 'Dữ liệu của bạn đã được ghi nhận an toàn vào hệ thống DB.' });
-                      } else if (confirmInfo.type === 'submit') {
-                          upsertBudgetPlan(month, dataByMonth[month], notesByMonth[month] || {}, 'pending', activeUnitId === 'all' ? undefined : activeUnitId);
-                          setApprovalStatus('pending');
-                          setAlertInfo({ type: 'success', title: 'Gửi duyệt thành công', message: 'Kế hoạch đã được bảo vệ và chuyển tới Cấp quản lý.' });
-                      } else if ((confirmInfo.type as string) === 'submit-actual') {
-                          handleSubmitActual();
-                      }
-                      setConfirmInfo(null);
-                   }}
-                 >
-                   Xác nhận
-                 </button>
-               </div>
-             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Event Modal */}
-      {eventModal.open && eventModal.data && (
-        <EventFormModal 
-          isNew={eventModal.isNew}
-          initialData={eventModal.data}
-          fixedShowroom={selectedShowroom !== 'all' && !eventModal.isNew ? eventModal.data.showroom : undefined}
-          onClose={() => setEventModal({ open: false, data: null, isNew: false })}
-          onSave={async (data) => {
-            const success = await upsertEventToDB(data);
-            if (!success) return;
-            if (eventModal.isNew) {
-              setEvents([...events, data]);
-            } else {
-              setEvents(events.map(ev => ev.id === data.id ? data : ev));
-            }
-            setEventModal({ open: false, data: null, isNew: false });
-          }}
-        />
-      )}
 
 
-      {/* ── FLOATING SAVE BAR — hiện khi actual mode + draft + có thay đổi ── */}
-      {pageMode === 'actual' && isActualSplitMode && isDirtyActual && (
-        <div style={{
-          position: 'sticky', bottom: 0, left: 0, right: 0, zIndex: 200,
-          background: 'linear-gradient(90deg, #fffbeb 0%, #fef3c7 60%, #fffbeb 100%)',
-          borderTop: '2px solid #f59e0b',
-          boxShadow: '0 -4px 16px rgba(245,158,11,0.2)',
-          padding: '8px 16px',
-          display: 'flex', alignItems: 'center', gap: 10,
-          flexShrink: 0,
-          animation: 'slideInId 0.2s ease-out',
-        }}>
-          {/* Left: indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-            <div style={{
-              width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-              background: '#f59e0b',
-              animation: 'pulse 2s infinite',
-            }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#92400e', whiteSpace: 'nowrap' }}>
-              T{month}/{year} — chưa lưu
-            </span>
-            <Badge variant="warning-light" size="xs">● Chưa lưu</Badge>
-          </div>
-
-          {/* Right: action buttons */}
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-            <button
-              onClick={handleDiscardActual}
-              style={{
-                height: 28, padding: '0 12px', borderRadius: 5,
-                border: '1px solid #fcd34d', background: '#fff',
-                color: '#92400e', fontSize: 12, fontWeight: 500,
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
-              }}
-            >
-              <X size={12} /> Huỷ
-            </button>
-            <button
-              onClick={handleSaveActual}
-              style={{
-                height: 28, padding: '0 14px', borderRadius: 5,
-                border: '1px solid #f59e0b', background: '#fff7ed',
-                color: '#b45309', fontSize: 12, fontWeight: 600,
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
-              }}
-            >
-              <Save size={12} /> Lưu TH
-            </button>
-            <button
-              onClick={() => setConfirmInfo({ type: 'submit-actual' as never, title: 'Xác nhận Nộp số thực hiện', message: `Sau khi nộp, số thực hiện tháng ${month}/${year} sẽ được chốt và không thể chỉnh sửa. Bạn có chắc chắn?` })}
-              style={{
-                height: 28, padding: '0 16px', borderRadius: 5,
-                border: 'none', background: '#059669',
-                color: '#fff', fontSize: 12, fontWeight: 700,
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
-                boxShadow: '0 2px 6px rgba(5,150,105,0.35)',
-              }}
-            >
-              <CloudUpload size={13} /> Nộp TH
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Alert Component */}
       {alertInfo && (
@@ -3330,3 +3028,4 @@ export default function PlanningPage() {
     </div>
   );
 }
+
