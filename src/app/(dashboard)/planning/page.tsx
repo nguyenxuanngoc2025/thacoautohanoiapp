@@ -614,10 +614,6 @@ export default function PlanningPage() {
     return null;
   }, [dataByMonth, actualDataByMonth, month, cellData, brands, digitalChannelNames]);
 
-  // Bottom-Up: no weight scaling; data is already per-SR
-  const getHistoricalValue = useCallback((cellKey: string, mode: string): number | null => {
-    return getRawHistoricalValue(cellKey, mode);
-  }, [getRawHistoricalValue]);
 
   const calculateDelta = (curr: number, hist: number | null) => {
     if (hist === null) return null;
@@ -779,46 +775,54 @@ export default function PlanningPage() {
     setMounted(true);
   }, []);
 
-  // ─── Auto-save PLAN data (debounce 400ms) ────────────────────────────────
+  // ─── Auto-save (plan + actual) — debounce 400ms ───────────────────────────
   const lastSavedPayload = useRef<string>('');
+  const lastSavedActualPayload = useRef<string>('');
+
   React.useEffect(() => {
-    if (!mounted || pageMode !== 'plan') return;
+    if (!mounted) return;
     if (selectedShowroom === 'all' || !selectedShowroomId) return;
 
-    const currentPayload = dataByMonth[month];
+    const isActualMode = pageMode === 'actual';
+    const currentPayload = isActualMode ? actualDataByMonth[month] : dataByMonth[month];
     if (!currentPayload || Object.keys(currentPayload).length === 0) return;
     const payloadStr = JSON.stringify(currentPayload);
 
-    // Skip auto-save right after DB load — data hasn't been edited yet
-    if (justLoadedFromDB.current) {
+    const savedRef = isActualMode ? lastSavedActualPayload : lastSavedPayload;
+
+    // Skip auto-save ngay sau DB load (plan mode only)
+    if (!isActualMode && justLoadedFromDB.current) {
       justLoadedFromDB.current = false;
-      lastSavedPayload.current = payloadStr;
+      savedRef.current = payloadStr;
       return;
     }
 
-    if (payloadStr === lastSavedPayload.current) return;
+    if (payloadStr === savedRef.current) return;
 
     setSaveStatus('editing');
-    // Khi super_admin ở mode 'all', dùng unit_id của showroom đang chọn
     const srUnitId = showrooms.find(s => s.name === selectedShowroom)?.unit_id ?? '';
     const unitIdForSave = (activeUnitId && activeUnitId !== 'all') ? activeUnitId : srUnitId;
     if (!unitIdForSave) { setSaveStatus('error'); return; }
 
     const timeout = setTimeout(() => {
       setSaveStatus('saving');
-      const entries = legacyCellDataToEntries(currentPayload, CHANNELS, unitIdForSave, selectedShowroomId, year, month, 'plan');
+      const entries = legacyCellDataToEntries(
+        currentPayload, CHANNELS, unitIdForSave,
+        selectedShowroomId, year, month, isActualMode ? 'actual' : 'plan'
+      );
       upsertBudgetEntries(entries)
         .then(() => {
-          lastSavedPayload.current = payloadStr;
+          savedRef.current = payloadStr;
           hasPendingEdits.current = false;
           setSaveStatus('saved');
           setLastSavedAt(new Date());
+          if (isActualMode) setIsDirtyActual(false);
           invalidateBudgetCaches(unitIdForSave, selectedShowroomId, year, month);
         })
         .catch(() => setSaveStatus('error'));
     }, 400);
     return () => clearTimeout(timeout);
-  }, [dataByMonth, month, mounted, pageMode, activeUnitId, selectedShowroom, selectedShowroomId, year, retrySaveTrigger, CHANNELS]);
+  }, [dataByMonth, actualDataByMonth, month, mounted, pageMode, activeUnitId, selectedShowroom, selectedShowroomId, year, retrySaveTrigger, CHANNELS]);
 
   // Reset dirty flag khi chuyển tháng
   React.useEffect(() => {
@@ -832,42 +836,6 @@ export default function PlanningPage() {
   React.useEffect(() => {
     hasPendingEdits.current = false;
   }, [selectedShowroomId]);
-
-  // ─── Auto-save ACTUAL data (debounce 400ms) ──────────────────────────────
-  const lastSavedActualPayload = useRef<string>('');
-  React.useEffect(() => {
-    if (!mounted || pageMode !== 'actual') return;
-    if (selectedShowroom === 'all' || !selectedShowroomId) return;
-
-    const currentPayload = actualDataByMonth[month];
-    if (!currentPayload || Object.keys(currentPayload).length === 0) return;
-    const payloadStr = JSON.stringify(currentPayload);
-
-    if (payloadStr === lastSavedActualPayload.current) return;
-
-    setSaveStatus('editing');
-    // Khi super_admin ở mode 'all', dùng unit_id của showroom đang chọn
-    const srUnitId = showrooms.find(s => s.name === selectedShowroom)?.unit_id ?? '';
-    const unitIdForSave = (activeUnitId && activeUnitId !== 'all') ? activeUnitId : srUnitId;
-    if (!unitIdForSave) { setSaveStatus('error'); return; }
-
-    const timeout = setTimeout(() => {
-      setSaveStatus('saving');
-      const entries = legacyCellDataToEntries(currentPayload, CHANNELS, unitIdForSave, selectedShowroomId, year, month, 'actual');
-      upsertBudgetEntries(entries)
-        .then(() => {
-          lastSavedActualPayload.current = payloadStr;
-          hasPendingEdits.current = false;
-          setSaveStatus('saved');
-          setLastSavedAt(new Date());
-          setIsDirtyActual(false);
-          invalidateBudgetCaches(unitIdForSave, selectedShowroomId, year, month);
-        })
-        .catch(() => setSaveStatus('error'));
-    }, 400);
-    return () => clearTimeout(timeout);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actualDataByMonth, month, mounted, pageMode, activeUnitId, selectedShowroom, selectedShowroomId, year, retrySaveTrigger, CHANNELS]);
 
   // Mặc định thu gọn tất cả brands khi brands load lần đầu
   const brandsInitialized = useRef(false);
@@ -908,9 +876,6 @@ export default function PlanningPage() {
     return cellData[cellKey] || 0;
   }, [cellData, brands]);
 
-  const getUnroundedCellValue = useCallback((cellKey: string): number => {
-    return getRawCellValue(cellKey);
-  }, [getRawCellValue]);
 
   const getCellValue = useCallback((cellKey: string): number => {
     const raw = getRawCellValue(cellKey);
@@ -934,12 +899,18 @@ export default function PlanningPage() {
   const [allocationModal, setAllocationModal] = useState<{ open: boolean, type: 'brand' | 'channel' | 'category', name: string } | null>(null);
   const [massPercent, setMassPercent] = useState<number>(15);
   const [alertInfo, setAlertInfo] = useState<AlertState | null>(null);
+  const [allocAction, setAllocAction] = useState<'weight' | 'even'>('weight');
+  const [allocChannel, setAllocChannel] = useState<string>('all');
+  const [allocBase, setAllocBase] = useState<number | string>(() => {
+    const d = new Date();
+    const prevMonth = d.getMonth() === 0 ? 12 : d.getMonth();
+    return prevMonth;
+  });
+  const [allocBudget, setAllocBudget] = useState<number>(0);
 
 
   const [pendingDeleteFn, setPendingDeleteFn] = useState<(() => void) | null>(null);
 
-  // Historical CPL từ actual entries — dùng trong auto-fill công thức
-  const [historicalCPL, setHistoricalCPL] = useState<Record<string, number>>({});
 
   const toggleBrand = (brandName: string) => {
     setCollapsedBrands(prev => {
@@ -1052,7 +1023,7 @@ export default function PlanningPage() {
              const cName = parts[parts.length - 1]; // "Facebook", "Google"
              // Sprint 3: Dùng historical CPL nếu có, fallback hardcoded
              const FALLBACK_CPL: Record<string, number> = { Facebook: 0.08, Google: 0.12 };
-             const cpl = cName === 'Sự kiện' ? EVENT_CPL : (historicalCPL[cName] ?? FALLBACK_CPL[cName] ?? 0.15);
+             const cpl = cName === 'Sự kiện' ? EVENT_CPL : (FALLBACK_CPL[cName] ?? 0.15);
              const cr1 = (cName === 'Sự kiện') ? EVENT_CR1 : 0.15; // Leads to Deal
              // CR2: CSKH cao hơn (khách cũ), Sự kiện dùng EVENT_CR2, digital fallback 0.25
              const FALLBACK_CR2: Record<string, number> = { CSKH: 0.5, 'Sự kiện': EVENT_CR2 };
@@ -1359,8 +1330,8 @@ export default function PlanningPage() {
           if (isAgg) continue; // Prevent double counting
           for (const metric of METRICS) {
             const cellKey = `${brand.name}-${model}-${ch.name}-${metric}`;
-            const val = getUnroundedCellValue(cellKey);
-            const histVal = getHistoricalValue(cellKey, compareMode);
+            const val = getRawCellValue(cellKey);
+            const histVal = getRawHistoricalValue(cellKey, compareMode);
             
             channelTotals[ch.name][metric] += val;
             if (histVal !== null) histChannelTotals[ch.name][metric] += histVal;
@@ -1397,7 +1368,7 @@ export default function PlanningPage() {
       subtotals[brand.name] = { budget, khqt, gdtd, khd, histBudget, histKhqt, histGdtd, histKhd, channelTotals, histChannelTotals };
     }
     return subtotals;
-  }, [cellData, compareMode, getHistoricalValue, selectedBrand, selectedModels, getUnroundedCellValue]);
+  }, [cellData, compareMode, getRawHistoricalValue, selectedBrand, selectedModels, getRawCellValue]);
 
   // Compute grand total — derived from brandSubtotals in O(brands) instead of O(B×M×C×K)
   const grandTotal = useMemo(() => {
@@ -1453,13 +1424,9 @@ export default function PlanningPage() {
 
   const handleExecuteAllocation = () => {
     if (!allocationModal) return;
-    const actionEl = document.getElementById('alloc-action') as HTMLSelectElement;
-    const valEl = document.getElementById('alloc-budget') as HTMLInputElement;
-    const baseEl = document.getElementById('alloc-base') as HTMLSelectElement;
-    const val = (allocationModal.type === 'channel' || allocationModal.type === 'category') ? massPercent : (parseFloat(valEl?.value) || 0);
-    
-    let baseMonth = month;
-    if (baseEl && baseEl.value !== 'current') baseMonth = parseInt(baseEl.value, 10);
+    const val = (allocationModal.type === 'channel' || allocationModal.type === 'category') ? massPercent : allocBudget;
+    let baseMonth = allocBase === 'current' ? month : (typeof allocBase === 'number' ? allocBase : parseInt(String(allocBase), 10));
+    const action = allocAction;
     const baseData = dataByMonth[baseMonth] || {};
 
     const autoCalculateMetrics = (cName: string, newBudget: number, nextObj: CellData, baseKey: string, baseData: CellData) => {
@@ -1485,9 +1452,7 @@ export default function PlanningPage() {
     };
 
     if (allocationModal.type === 'brand') {
-      const channelEl = document.getElementById('alloc-channel') as HTMLSelectElement;
-      const action = actionEl.value; // 'even' | 'weight'
-      const targetChannel = channelEl.value; // 'all' | channel name
+      const targetChannel = allocChannel; // 'all' | channel name
       const budget = val;
       if (budget <= 0) { setAlertInfo({ type: 'warning', title: 'Thông báo', message: 'Vui lòng nhập ngân sách hợp lệ (>0).' }); return; }
 
@@ -1574,6 +1539,10 @@ export default function PlanningPage() {
       });
     }
     setAllocationModal(null);
+    setAllocAction('weight');
+    setAllocChannel('all');
+    setAllocBase(month === 1 ? 12 : month - 1);
+    setAllocBudget(0);
   };
 
 // ─── Actual mode: ghost plan value + delta helpers ──────────────────────────
@@ -2296,7 +2265,7 @@ export default function PlanningPage() {
                             visibleMetrics.map((metric) => {
                               const cellKey = `${brand.name}-${model}-${ch.name}-${metric}`;
                               const val = getCellValue(cellKey);
-                              const histVal = getHistoricalValue(cellKey, compareMode);
+                              const histVal = getRawHistoricalValue(cellKey, compareMode);
 
                               let isHighCpl = false;
                               if (metric === 'Ngân sách' && val > 0) {
@@ -2893,7 +2862,7 @@ export default function PlanningPage() {
                 {allocationModal.type === 'brand' ? <Wand2 size={15} color="var(--color-brand)" /> : <Zap size={15} color="var(--color-warning)" />}
                 {allocationModal.type === 'brand' ? `Phân bổ tổng: Dòng xe ${allocationModal.name}` : `Điều chỉnh hàng loạt: ${allocationModal.type === 'category' ? 'Nhóm kênh' : 'Kênh'} ${allocationModal.name} (${selectedShowroom === 'all' ? 'Lỗi: Chưa chọn SR' : selectedShowroom})`}
               </h3>
-              <button onClick={() => setAllocationModal(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)' }}>
+              <button onClick={() => { setAllocationModal(null); setAllocAction('weight'); setAllocChannel('all'); setAllocBase(month === 1 ? 12 : month - 1); setAllocBudget(0); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)' }}>
                 <X size={15} />
               </button>
             </div>
@@ -2905,11 +2874,11 @@ export default function PlanningPage() {
                 <>
                   <div>
                     <label style={{ display: 'block', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Ngân sách phân bổ (Trđ)</label>
-                    <input type="number" id="alloc-budget" className="form-input" style={{ width: '100%' }} placeholder="VD: 1500" autoFocus />
+                    <input type="number" className="form-input" value={allocBudget || ''} onChange={e => setAllocBudget(parseFloat(e.target.value) || 0)} style={{ width: '100%' }} placeholder="VD: 1500" autoFocus />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Kênh áp dụng</label>
-                    <select className="form-select" id="alloc-channel" style={{ width: '100%' }}>
+                    <select className="form-select" value={allocChannel} onChange={e => setAllocChannel(e.target.value)} style={{ width: '100%' }}>
                       <option value="all">Tất cả các kênh</option>
                       {CHANNELS.filter(c => c.name !== 'Tổng Digital').map(c => (
                         <option key={c.name} value={c.name}>Chỉ kênh {c.name}</option>
@@ -2918,14 +2887,14 @@ export default function PlanningPage() {
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Phương thức chia</label>
-                    <select className="form-select" id="alloc-action" style={{ width: '100%' }}>
+                    <select className="form-select" value={allocAction} onChange={e => setAllocAction(e.target.value as 'weight' | 'even')} style={{ width: '100%' }}>
                       <option value="weight">Chia theo tỷ trọng lịch sử</option>
                       <option value="even">Cào bằng (Chia đều)</option>
                     </select>
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Nguồn đối chiếu tỷ trọng</label>
-                    <select className="form-select" id="alloc-base" style={{ width: '100%', background: '#f8fafc' }} defaultValue={month === 1 ? 12 : month - 1}>
+                    <select className="form-select" value={String(allocBase)} onChange={e => setAllocBase(e.target.value === 'current' ? 'current' : parseInt(e.target.value, 10))} style={{ width: '100%', background: '#f8fafc' }}>
                       <option value="current">Tháng hiện hành (T{month})</option>
                       {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => (
                         m !== month && <option key={m} value={m}>Tháng {m}</option>
@@ -2947,7 +2916,7 @@ export default function PlanningPage() {
                     <label style={{ display: 'block', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
                       Bạn muốn lấy tháng nào làm cơ sở dữ liệu để mô phỏng?
                     </label>
-                    <select className="form-select" id="alloc-base" style={{ width: '100%', background: '#f8fafc' }} defaultValue={month === 1 ? 12 : month - 1}>
+                    <select className="form-select" value={String(allocBase)} onChange={e => setAllocBase(e.target.value === 'current' ? 'current' : parseInt(e.target.value, 10))} style={{ width: '100%', background: '#f8fafc' }}>
                       <option value="current">Sao chép tỷ lệ và CPL của Tháng hiện hành (T{month})</option>
                       {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => (
                         m !== month && <option key={m} value={m}>Sao chép tỷ lệ và CPL của Tháng {m}</option>
@@ -3014,7 +2983,7 @@ export default function PlanningPage() {
 
             {/* Footer */}
             <div style={{ padding: '12px 16px', background: '#f8fafc', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button className="button-erp-secondary" onClick={() => setAllocationModal(null)}>Hủy bỏ</button>
+              <button className="button-erp-secondary" onClick={() => { setAllocationModal(null); setAllocAction('weight'); setAllocChannel('all'); setAllocBase(month === 1 ? 12 : month - 1); setAllocBudget(0); }}>Hủy bỏ</button>
               <button className="button-erp-primary" onClick={handleExecuteAllocation}>Thực thi ngay</button>
             </div>
           </div>
