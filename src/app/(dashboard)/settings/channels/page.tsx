@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -252,9 +252,18 @@ function SortableChannelRow({ ch, groups, isSuperAdmin, editingChannelId, onEdit
         <div style={{ width: 14, flexShrink: 0 }} />
       )}
       <div style={{ width: 12, height: 12, borderRadius: '50%', background: ch.color, flexShrink: 0 }} />
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text)' }}>{ch.name}</div>
-        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>Code: {ch.code}</div>
+        {ch.code && (
+          <span style={{
+            fontSize: 10, fontFamily: 'monospace', fontWeight: 700,
+            color: 'var(--color-text-muted)', background: '#f1f5f9',
+            border: '1px solid var(--color-border)', borderRadius: 4,
+            padding: '1px 5px', letterSpacing: '0.05em',
+          }}>
+            {ch.code}
+          </span>
+        )}
       </div>
       {!ch.is_active && (
         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)' }}>[Đã Ẩn]</span>
@@ -363,7 +372,7 @@ function SortableGroupBlock({ group, children, isSuperAdmin, editingGroupId, onE
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ChannelsPage() {
-  const { isSuperAdmin } = useAuth();
+  const { effectiveIsSuperAdmin: isSuperAdmin } = useAuth();
   const { refreshChannels } = useChannels();
   const supabase = React.useMemo(() => createClient(), []);
   const [groups, setGroups] = useState<ChannelGroupRow[]>([]);
