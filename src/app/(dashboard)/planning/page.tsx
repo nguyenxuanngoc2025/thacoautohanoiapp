@@ -851,6 +851,32 @@ export default function PlanningPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataByMonth, actualDataByMonth, month, mounted, pageMode, activeUnitId, selectedShowroom, selectedShowroomId, year, retrySaveTrigger]);
 
+  // ─── Force Save (manual) ──────────────────────────────────────────────────
+  const handleForceSave = useCallback(async () => {
+    if (!selectedShowroomId || selectedShowroom === 'all') return;
+    const isActualMode = pageMode === 'actual';
+    const currentPayload = isActualMode ? actualDataByMonth[month] : dataByMonth[month];
+    if (!currentPayload || Object.keys(currentPayload).length === 0) return;
+    const srUnitId = showrooms.find(s => s.name === selectedShowroom)?.unit_id ?? '';
+    const unitIdForSave = (activeUnitId && activeUnitId !== 'all') ? activeUnitId : srUnitId;
+    if (!unitIdForSave) return;
+    setSaveStatus('saving');
+    try {
+      const entries = legacyCellDataToEntries(currentPayload, channelsRef.current, unitIdForSave, selectedShowroomId, year, month, isActualMode ? 'actual' : 'plan');
+      await upsertBudgetEntries(entries);
+      const payloadStr = JSON.stringify(currentPayload);
+      if (isActualMode) lastSavedActualPayload.current = payloadStr;
+      else lastSavedPayload.current = payloadStr;
+      hasPendingEdits.current = false;
+      setSaveStatus('saved');
+      setLastSavedAt(new Date());
+      invalidateBudgetCaches(unitIdForSave, selectedShowroomId, year, month);
+    } catch (err) {
+      console.error('[ForceSave] failed:', err);
+      setSaveStatus('error');
+    }
+  }, [selectedShowroomId, selectedShowroom, pageMode, actualDataByMonth, dataByMonth, month, showrooms, activeUnitId, year]);
+
   // Reset dirty flag khi chuyển tháng
   React.useEffect(() => {
     setIsDirtyActual(false);
@@ -1133,6 +1159,11 @@ export default function PlanningPage() {
         });
       }
       else if (e.ctrlKey || e.metaKey) {
+         if (e.key === 's' || e.key === 'S') {
+           e.preventDefault();
+           handleForceSave();
+           return;
+         }
          if (e.key === 'c' || e.key === 'C') {
              e.preventDefault();
              let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
@@ -1658,10 +1689,26 @@ export default function PlanningPage() {
             )}
             {!isAggregateView && (
               <>
+                {/* Manual save button */}
+                <button
+                  onClick={handleForceSave}
+                  disabled={saveStatus === 'saving'}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '2px 10px', height: 26, fontSize: 12, fontWeight: 600,
+                    border: '1px solid var(--color-border)', borderRadius: 4,
+                    background: hasPendingEdits.current ? '#eff6ff' : 'var(--color-surface)',
+                    color: hasPendingEdits.current ? '#1d4ed8' : 'var(--color-text-secondary)',
+                    cursor: saveStatus === 'saving' ? 'default' : 'pointer',
+                    opacity: saveStatus === 'saving' ? 0.6 : 1,
+                    transition: 'all 0.15s',
+                  }}
+                  title="Lưu ngay (Ctrl+S)"
+                >
+                  <Save size={12} />
+                  Lưu
+                </button>
                 {/* Save status indicator */}
-                {saveStatus === 'editing' && (
-                  <span style={{ fontSize: 11, color: '#d97706', fontWeight: 500 }}>● Chưa lưu...</span>
-                )}
                 {saveStatus === 'saving' && (
                   <span style={{ fontSize: 11, color: '#64748b' }}>Đang lưu...</span>
                 )}
@@ -1674,11 +1721,7 @@ export default function PlanningPage() {
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span style={{ fontSize: 11, color: '#ef4444' }}>Lỗi lưu!</span>
                     <button
-                      onClick={() => {
-                        if (pageMode === 'plan') lastSavedPayload.current = '';
-                        else lastSavedActualPayload.current = '';
-                        setRetrySaveTrigger(t => t + 1);
-                      }}
+                      onClick={handleForceSave}
                       style={{ fontSize: 10, color: '#ef4444', border: '1px solid #fca5a5', borderRadius: 3, padding: '1px 6px', background: '#fff1f2', cursor: 'pointer', lineHeight: 1.4 }}
                       title="Thử lại lưu dữ liệu"
                     >Thử lại</button>
