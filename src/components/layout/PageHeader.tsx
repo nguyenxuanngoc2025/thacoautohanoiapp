@@ -80,6 +80,7 @@ export default function PageHeader({
           {QUARTERS.map((q) => (
             <button
               key={q.value}
+              onClick={() => onPeriodChange?.(year, Math.min(q.value * 3, 12))}
               style={{
                 padding: '2px 10px',
                 border: '1px solid',
