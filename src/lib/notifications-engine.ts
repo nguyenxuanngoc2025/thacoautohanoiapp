@@ -518,9 +518,9 @@ export async function generateNotifications(
     // Step A: fetch showrooms (for unit filter + code lookup)
     const showroomsRaw = await supabase
       .from('thaco_showrooms')
-      .select('id, code, name')
+      .select('id, code, name, unit_id')
       .eq('is_active', true)
-      .then(r => r.data ?? []);
+      .then(r => { if (r.error) throw r.error; return r.data ?? []; });
 
     // Build maps
     const codeByShowroomId: Record<string, string> = {};
@@ -532,12 +532,7 @@ export async function generateNotifications(
 
     // Get showroom IDs for this unit (if unit_id provided)
     const unitShowroomIds = unit_id
-      ? (await supabase
-          .from('thaco_showrooms')
-          .select('id')
-          .eq('unit_id', unit_id)
-          .eq('is_active', true)
-          .then(r => (r.data ?? []).map((s: any) => s.id)))
+      ? showroomsRaw.filter((s: any) => s.unit_id === unit_id).map((s: any) => s.id)
       : null;
 
     // Step B: fetch plan_submissions
@@ -550,7 +545,7 @@ export async function generateNotifications(
       submissionsQuery = submissionsQuery.in('showroom_id', unitShowroomIds);
     }
 
-    const submissionsRaw = await submissionsQuery.then(r => r.data ?? []);
+    const submissionsRaw = await submissionsQuery.then(r => { if (r.error) throw r.error; return r.data ?? []; });
 
     // Map to PlanSubmissionRow
     const allSubmissions: PlanSubmissionRow[] = (submissionsRaw as any[]).map((s) => ({
