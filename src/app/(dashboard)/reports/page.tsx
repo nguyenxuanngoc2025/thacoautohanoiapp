@@ -1,12 +1,14 @@
 // app/src/app/(dashboard)/reports/page.tsx
 'use client';
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { FileText } from 'lucide-react';
-import { fetchAllBudgetPlans } from '@/lib/budget-data';
-import { fetchAllActualEntries } from '@/lib/actual-data';
-import { fetchEventsFromDB, type EventsByMonth } from '@/lib/events-data';
+import { type EventsByMonth } from '@/lib/events-data';
+import { useEventsData, useViewBudgetByBrand, useViewBudgetByChannel } from '@/lib/use-data';
 import { useBrands } from '@/contexts/BrandsContext';
 import { useShowrooms } from '@/contexts/ShowroomsContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUnit } from '@/contexts/UnitContext';
+import { useChannels } from '@/contexts/ChannelsContext';
 import PageHeader from '@/components/layout/PageHeader';
 import { ReportTabBar, type ReportTabId } from '@/components/reports/ReportTabBar';
 import { ReportFilters, type ReportFilterState } from '@/components/reports/ReportFilters';
@@ -14,14 +16,99 @@ import { BudgetSummaryTab } from '@/components/reports/tabs/BudgetSummaryTab';
 import { PlanVsActualTab } from '@/components/reports/tabs/PlanVsActualTab';
 import { ChannelEfficiencyTab } from '@/components/reports/tabs/ChannelEfficiencyTab';
 import { EventsReportTab } from '@/components/reports/tabs/EventsReportTab';
-import { mergePayloads, getMonthsForPeriod, type MonthlyPayloads } from '@/lib/report-data';
+import { getMonthsForPeriod, type MonthlyPayloads } from '@/lib/report-data';
+import type { ViewBudgetByBrand, ViewBudgetByChannel } from '@/types/database';
+
+// ── Convert view rows → MonthlyPayloads ──────────────────────────────────────
+//
+// Sentinel prefix used for channel rows so brand lookups don't clash:
+//   channel row key: "__ch__-{channel_code}-{metric}"   → sumByChannelMetric picks parts[-2]
+//   brand row key:   "{brand_name}-__all__-{metric}"    → sumByBrandMetric picks parts[0]
+//
+// The two key spaces don't overlap:
+//   sumByChannelMetric checks parts[-2] — won't match "__all__" brand rows
+//   sumByBrandMetric  checks parts[0]  — won't match "__ch__" channel rows
+// totalAllChannels (used by ChannelEfficiencyTab/BudgetSummaryTab) sums REPORT_CHANNELS
+//   using sumByChannelMetric so it only counts channel rows.
+
+const METRIC_SUFFIXES = ['ns', 'khqt', 'gdtd', 'khd'] as const;
+const METRIC_NAMES: Record<string, string> = { ns: 'Ngân sách', khqt: 'KHQT', gdtd: 'GDTD', khd: 'KHĐ' };
+
+function buildChannelPayloads(
+  rows: ViewBudgetByChannel[] | undefined,
+  type: 'plan' | 'actual',
+  codeToName: Map<string, string>,
+): MonthlyPayloads {
+  if (!rows) return {};
+  const pm: MonthlyPayloads = {};
+  const prefix = type === 'plan' ? 'plan_' : 'actual_';
+  for (const row of rows) {
+    // Resolve channel_code → display name (fallback to code if not found)
+    const chName = codeToName.get(row.channel_code) ?? row.channel_code;
+    if (!pm[row.month]) pm[row.month] = {};
+    const payload = pm[row.month];
+    for (const sfx of METRIC_SUFFIXES) {
+      const field = `${prefix}${sfx}` as keyof ViewBudgetByChannel;
+      // Key format: "__ch__-{channelName}-{metric}" — sentinel prefix avoids brand collisions
+      const key = `__ch__-${chName}-${METRIC_NAMES[sfx]}`;
+      payload[key] = (payload[key] ?? 0) + (row[field] as number);
+    }
+  }
+  return pm;
+}
+
+function buildBrandPayloads(
+  rows: ViewBudgetByBrand[] | undefined,
+  type: 'plan' | 'actual',
+): MonthlyPayloads {
+  if (!rows) return {};
+  const pm: MonthlyPayloads = {};
+  const prefix = type === 'plan' ? 'plan_' : 'actual_';
+  for (const row of rows) {
+    if (!pm[row.month]) pm[row.month] = {};
+    const payload = pm[row.month];
+    for (const sfx of METRIC_SUFFIXES) {
+      const field = `${prefix}${sfx}` as keyof ViewBudgetByBrand;
+      // Key format: "{brandName}-__all__-{metric}" — avoids channel collisions
+      const key = `${row.brand_name}-__all__-${METRIC_NAMES[sfx]}`;
+      payload[key] = (payload[key] ?? 0) + (row[field] as number);
+    }
+  }
+  return pm;
+}
+
+/** Merge channel + brand payloads into a single MonthlyPayloads map. */
+function mergeViewPayloads(
+  channelPm: MonthlyPayloads,
+  brandPm: MonthlyPayloads,
+): MonthlyPayloads {
+  const months = new Set([...Object.keys(channelPm), ...Object.keys(brandPm)].map(Number));
+  const merged: MonthlyPayloads = {};
+  for (const m of months) {
+    merged[m] = { ...(channelPm[m] ?? {}), ...(brandPm[m] ?? {}) };
+  }
+  return merged;
+}
 
 export default function ReportsPage() {
   const { brands } = useBrands();
   const { showrooms: showroomItems } = useShowrooms();
+  const { profile, effectiveRole } = useAuth();
+  const { activeUnitId } = useUnit();
+  const { channels } = useChannels();
+
+  // Map channel_code → display name (e.g. 'facebook' → 'Facebook')
+  const codeToName = useMemo(
+    () => new Map<string, string>(channels.map(c => [c.code, c.name])),
+    [channels],
+  );
+
   const [mounted, setMounted] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ReportTabId>('plan-vs-actual');
+
+  // ── Role-based Scope ──────────────────────────────────────────────────────────────────
+  const isRestrictedRole = ['mkt_showroom', 'gd_showroom'].includes(effectiveRole as string);
+  const allowedShowroomName = isRestrictedRole ? profile?.showroom?.name : null;
 
   const [compareMode, setCompareMode] = useState<'none' | 'prev' | 'prev_year'>('none');
 
@@ -31,46 +118,65 @@ export default function ReportsPage() {
     brand: '', showroom: '', channel: '',
   });
 
-  // Raw data
-  const [plansByMonth, setPlansByMonth] = useState<MonthlyPayloads>({});
-  const [actualsByMonth, setActualsByMonth] = useState<MonthlyPayloads>({});
-  const [prevYearActualsByMonth, setPrevYearActualsByMonth] = useState<MonthlyPayloads>({});
-  const [eventsByMonth, setEventsByMonth] = useState<EventsByMonth>({});
+  // ── Unit ID for views ─────────────────────────────────────────────────────────────────
+  const unitIdForViews = activeUnitId === 'all' ? null : activeUnitId;
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [plans, actuals, events] = await Promise.all([
-        fetchAllBudgetPlans(),
-        fetchAllActualEntries(filters.year),
-        fetchEventsFromDB(),
-      ]);
-      const pm: MonthlyPayloads = {};
-      plans.forEach(p => { pm[p.month] = p.payload || {}; });
-      const am: MonthlyPayloads = {};
-      actuals.forEach(a => { am[a.month] = a.payload || {}; });
-      setPlansByMonth(pm);
-      setActualsByMonth(am);
-      setEventsByMonth(events);
-    } finally {
-      setLoading(false);
-    }
-  }, [filters.year]);
+  // ── SWR view-based data ──────────────────────────────────────────────────────────────
+  const { data: viewBrandRows }   = useViewBudgetByBrand(unitIdForViews, filters.year);
+  const { data: viewChannelRows } = useViewBudgetByChannel(unitIdForViews, filters.year);
+  const { data: prevYearBrandRows }   = useViewBudgetByBrand(unitIdForViews, filters.year - 1);
+  const { data: prevYearChannelRows } = useViewBudgetByChannel(unitIdForViews, filters.year - 1);
+  const { data: eventsRaw }           = useEventsData();
 
-  useEffect(() => { loadData().then(() => setMounted(true)); }, [loadData]);
+  // ── Build MonthlyPayloads from views ─────────────────────────────────────────────────
+  const plansByMonth = useMemo<MonthlyPayloads>(
+    () => mergeViewPayloads(
+      buildChannelPayloads(viewChannelRows, 'plan', codeToName),
+      buildBrandPayloads(viewBrandRows, 'plan'),
+    ),
+    [viewChannelRows, viewBrandRows, codeToName],
+  );
 
-  // Lazy fetch prev year actuals khi cần so sánh cùng kỳ năm trước
+  const actualsByMonth = useMemo<MonthlyPayloads>(
+    () => mergeViewPayloads(
+      buildChannelPayloads(viewChannelRows, 'actual', codeToName),
+      buildBrandPayloads(viewBrandRows, 'actual'),
+    ),
+    [viewChannelRows, viewBrandRows, codeToName],
+  );
+
+  const prevYearActualsByMonth = useMemo<MonthlyPayloads>(() => {
+    if (compareMode !== 'prev_year') return {};
+    return mergeViewPayloads(
+      buildChannelPayloads(prevYearChannelRows, 'actual', codeToName),
+      buildBrandPayloads(prevYearBrandRows, 'actual'),
+    );
+  }, [prevYearChannelRows, prevYearBrandRows, compareMode, codeToName]);
+
+  const eventsByMonth = useMemo<EventsByMonth>(() => eventsRaw ?? {}, [eventsRaw]);
+
+  const loading = viewBrandRows === undefined || viewChannelRows === undefined || eventsRaw === undefined;
+
   useEffect(() => {
-    if (compareMode !== 'prev_year') return;
-    fetchAllActualEntries(filters.year - 1).then(actuals => {
-      const am: MonthlyPayloads = {};
-      actuals.forEach(a => { am[a.month] = a.payload || {}; });
-      setPrevYearActualsByMonth(am);
-    });
-  }, [compareMode, filters.year]);
+    if (!loading) setMounted(true);
+  }, [loading]);
 
   // Showroom names for filter dropdown (from context, not parsed from payload)
-  const showrooms = useMemo(() => showroomItems.map(s => s.name), [showroomItems]);
+  const showrooms = useMemo(() => {
+    let items = showroomItems;
+    if (isRestrictedRole && allowedShowroomName) {
+      items = items.filter(s => s.name === allowedShowroomName);
+    }
+    return items.map(s => s.name);
+  }, [showroomItems, isRestrictedRole, allowedShowroomName]);
+
+  const tableShowroomItems = useMemo(() => {
+    let items = showroomItems;
+    if (isRestrictedRole && allowedShowroomName) {
+      items = items.filter(s => s.name === allowedShowroomName);
+    }
+    return items.map(s => ({ name: s.name, weight: s.weight }));
+  }, [showroomItems, isRestrictedRole, allowedShowroomName]);
 
   const { cmpPlansByMonth, cmpActualsByMonth, cmpMonths } = useMemo(() => {
     if (compareMode === 'none') {
@@ -194,7 +300,7 @@ export default function ReportsPage() {
                 plansByMonth={plansByMonth}
                 actualsByMonth={actualsByMonth}
                 brands={brands}
-                showroomItems={showroomItems.map(s => ({ name: s.name, weight: s.weight }))}
+                showroomItems={tableShowroomItems}
               />
             )}
             {activeTab === 'plan-vs-actual' && (
@@ -207,7 +313,7 @@ export default function ReportsPage() {
                 cmpActualsByMonth={cmpActualsByMonth}
                 cmpMonths={cmpMonths}
                 compareLabel={compareLabel}
-                showroomItems={showroomItems.map(s => ({ name: s.name, weight: s.weight }))}
+                showroomItems={tableShowroomItems}
                 brands={brands}
               />
             )}
