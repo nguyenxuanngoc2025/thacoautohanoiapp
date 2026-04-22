@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { mutate as globalMutate } from 'swr';
 import PageHeader from '@/components/layout/PageHeader';
 import { formatNumber, cn } from '@/lib/utils';
@@ -10,6 +11,7 @@ import { Badge } from '@/components/reui/badge';
 import { type EventItem, EVENT_CPL, EVENT_CR1, EVENT_CR2 } from '@/lib/events-data';
 import { useBudgetEntriesByShowroom, useBudgetEntriesByShowroomIds, useEventsData, invalidateBudgetCaches } from '@/lib/use-data';
 import { upsertBudgetEntries, cellDataToEntries, makeCellKey } from '@/lib/db/budget-entries';
+import { createClient } from '@/lib/supabase/client';
 import type { BudgetEntryRow } from '@/types/database';
 import { useBrands } from '@/contexts/BrandsContext';
 import { useShowrooms } from '@/contexts/ShowroomsContext';
@@ -684,6 +686,7 @@ export default function PlanningPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const eventWarningRef = useRef<HTMLDivElement>(null);
   const cellInputRef = useRef<HTMLInputElement>(null);
+  const isSelfSaving = useRef(false);
   // Collapsed brand rows: Set of brand names
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
   // Hidden channel categories (chip filter): Set of category names
@@ -787,6 +790,30 @@ export default function PlanningPage() {
     setMounted(true);
   }, []);
 
+  // ─── Supabase Realtime — multi-user sync ─────────────────────────────────
+  useEffect(() => {
+    if (!selectedShowroomId || !activeUnitId) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`budget_rt_${selectedShowroomId}_${year}_${month}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'thaco_budget_entries',
+          filter: `showroom_id=eq.${selectedShowroomId}`,
+        },
+        () => {
+          // Bỏ qua event do chính mình vừa lưu hoặc đang có edits chưa commit
+          if (isSelfSaving.current || hasPendingEdits.current) return;
+          invalidateBudgetCaches(activeUnitId, selectedShowroomId, year, month);
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [selectedShowroomId, activeUnitId, year, month]);
+
   // ─── Auto-save (plan + actual) — debounce 1500ms ──────────────────────────
   const lastSavedPayload = useRef<string>('');
   const lastSavedActualPayload = useRef<string>('');
@@ -822,6 +849,7 @@ export default function PlanningPage() {
     const snapshot = currentPayload; // capture tại thời điểm effect chạy
     const timeout = setTimeout(() => {
       setSaveStatus('saving');
+      isSelfSaving.current = true;
       const entries = legacyCellDataToEntries(
         snapshot, channelsRef.current, unitIdForSave,
         selectedShowroomId, year, month, isActualMode ? 'actual' : 'plan'
@@ -838,7 +866,8 @@ export default function PlanningPage() {
         .catch((err) => {
           console.error('[AutoSave] upsertBudgetEntries failed:', err);
           setSaveStatus('error');
-        });
+        })
+        .finally(() => { setTimeout(() => { isSelfSaving.current = false; }, 500); });
     }, 1500);
     return () => clearTimeout(timeout);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -854,6 +883,7 @@ export default function PlanningPage() {
     const unitIdForSave = (activeUnitId && activeUnitId !== 'all') ? activeUnitId : srUnitId;
     if (!unitIdForSave) return;
     setSaveStatus('saving');
+    isSelfSaving.current = true;
     try {
       const entries = legacyCellDataToEntries(currentPayload, channelsRef.current, unitIdForSave, selectedShowroomId, year, month, isActualMode ? 'actual' : 'plan');
       await upsertBudgetEntries(entries);
@@ -867,6 +897,8 @@ export default function PlanningPage() {
     } catch (err) {
       console.error('[ForceSave] failed:', err);
       setSaveStatus('error');
+    } finally {
+      setTimeout(() => { isSelfSaving.current = false; }, 500);
     }
   }, [selectedShowroomId, selectedShowroom, pageMode, actualDataByMonth, dataByMonth, month, showrooms, activeUnitId, year]);
 
@@ -2516,15 +2548,19 @@ export default function PlanningPage() {
                                         defaultValue={editValue}
                                           onBlur={() => {
                                             const v = cellInputRef.current?.value ?? '';
-                                            if (v.trim() !== '') handleCellChange(cellKey, v);
-                                            setEditingCell(null);
+                                            flushSync(() => {
+                                              if (v.trim() !== '') handleCellChange(cellKey, v);
+                                              setEditingCell(null);
+                                            });
                                           }}
                                           onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
                                               e.preventDefault();
                                               const v = cellInputRef.current?.value ?? '';
-                                              if (v.trim() !== '') handleCellChange(cellKey, v);
-                                              setEditingCell(null);
+                                              flushSync(() => {
+                                                if (v.trim() !== '') handleCellChange(cellKey, v);
+                                                setEditingCell(null);
+                                              });
                                             }
                                             if (e.key === 'Escape') {
                                               setEditingCell(null);
