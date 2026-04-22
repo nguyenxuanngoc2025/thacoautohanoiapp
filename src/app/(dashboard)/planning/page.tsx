@@ -1004,6 +1004,18 @@ export default function PlanningPage() {
   
   const ALL_CELL_KEYS = useMemo(() => VISIBLE_GRID_KEYS.flat(), [VISIBLE_GRID_KEYS]);
 
+  // Position lookup: cellKey → { row, col } để onMouseEnter O(1) thay vì O(n²)
+  const cellPosMap = useMemo(() => {
+    const map = new Map<string, { row: number; col: number }>();
+    for (let r = 0; r < VISIBLE_GRID_KEYS.length; r++) {
+      for (let c = 0; c < VISIBLE_GRID_KEYS[r].length; c++) {
+        const k = VISIBLE_GRID_KEYS[r][c];
+        if (k) map.set(k, { row: r, col: c });
+      }
+    }
+    return map;
+  }, [VISIBLE_GRID_KEYS]);
+
   // mouseup listener is handled inside the global keyboard handler effect below
 
   
@@ -1127,16 +1139,12 @@ export default function PlanningPage() {
              e.preventDefault();
              let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
              selectedCells.forEach(key => {
-                 for(let r=0; r<VISIBLE_GRID_KEYS.length; r++) {
-                     let c = VISIBLE_GRID_KEYS[r].indexOf(key);
-                     if (c !== -1) {
-                         if (r < minR) minR = r;
-                         if (r > maxR) maxR = r;
-                         if (c < minC) minC = c;
-                         if (c > maxC) maxC = c;
-                         break;
-                     }
-                 }
+                 const pos = cellPosMap.get(key);
+                 if (!pos) return;
+                 if (pos.row < minR) minR = pos.row;
+                 if (pos.row > maxR) maxR = pos.row;
+                 if (pos.col < minC) minC = pos.col;
+                 if (pos.col > maxC) maxC = pos.col;
              });
              if (minR !== Infinity) {
                  const rows = [];
@@ -1167,16 +1175,12 @@ export default function PlanningPage() {
                 // Tìm bounding box đích (minR, maxR, minC, maxC)
                 let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
                 selectedCells.forEach(key => {
-                    for(let r=0; r<VISIBLE_GRID_KEYS.length; r++) {
-                        let c = VISIBLE_GRID_KEYS[r].indexOf(key);
-                        if (c !== -1) {
-                            if (r < minR) minR = r;
-                            if (r > maxR) maxR = r;
-                            if (c < minC) minC = c;
-                            if (c > maxC) maxC = c;
-                            break;
-                        }
-                    }
+                    const pos = cellPosMap.get(key);
+                    if (!pos) return;
+                    if (pos.row < minR) minR = pos.row;
+                    if (pos.row > maxR) maxR = pos.row;
+                    if (pos.col < minC) minC = pos.col;
+                    if (pos.col > maxC) maxC = pos.col;
                 });
                 
                 if (minR !== Infinity) {
@@ -1275,7 +1279,7 @@ export default function PlanningPage() {
       window.removeEventListener('keydown', handleGlobalKeyDown);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [selectedCells, ALL_CELL_KEYS, VISIBLE_GRID_KEYS, getCellValue]);
+  }, [selectedCells, ALL_CELL_KEYS, VISIBLE_GRID_KEYS, cellPosMap, getCellValue]);
 
   // Scroll shadow handler
   const handleScroll = useCallback(() => {
@@ -2402,20 +2406,15 @@ export default function PlanningPage() {
                                       onMouseEnter={() => {
                                          if (!isSelecting) return;
                                          const currentIdx = ALL_CELL_KEYS.indexOf(cellKey);
-                                         let startR = -1; let startC = -1; let curR = -1; let curC = -1;
-                                         const startKey = ALL_CELL_KEYS[selectionStartIdx];
+                                              const startKey = ALL_CELL_KEYS[selectionStartIdx];
                                          if (!startKey) return;
-                                         for(let r=0; r<VISIBLE_GRID_KEYS.length; r++) {
-                                             for(let c=0; c<VISIBLE_GRID_KEYS[r].length; c++) {
-                                                 if (VISIBLE_GRID_KEYS[r][c] === startKey) { startR = r; startC = c; }
-                                                 if (VISIBLE_GRID_KEYS[r][c] === cellKey) { curR = r; curC = c; }
-                                             }
-                                         }
-                                         if (startR !== -1 && curR !== -1) {
-                                             const minR = Math.min(startR, curR);
-                                             const maxR = Math.max(startR, curR);
-                                             const minC = Math.min(startC, curC);
-                                             const maxC = Math.max(startC, curC);
+                                         const startPos = cellPosMap.get(startKey);
+                                         const curPos   = cellPosMap.get(cellKey);
+                                         if (startPos && curPos) {
+                                             const minR = Math.min(startPos.row, curPos.row);
+                                             const maxR = Math.max(startPos.row, curPos.row);
+                                             const minC = Math.min(startPos.col, curPos.col);
+                                             const maxC = Math.max(startPos.col, curPos.col);
                                              const newSel = new Set<string>();
                                              for (let r = minR; r <= maxR; r++) {
                                                   for (let c = minC; c <= maxC; c++) {
