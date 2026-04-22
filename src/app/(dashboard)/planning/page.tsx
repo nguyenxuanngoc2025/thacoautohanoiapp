@@ -686,6 +686,7 @@ export default function PlanningPage() {
 
   const [isScrolled, setIsScrolled] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [eventCellWarning, setEventCellWarning] = useState(false);
   // Collapsed brand rows: Set of brand names
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
   // Hidden channel categories (chip filter): Set of category names
@@ -2080,7 +2081,8 @@ export default function PlanningPage() {
                           ) : (
                             ch.category
                           )}
-                          <span 
+                          {ch.category !== 'SỰ KIỆN' && (
+                          <span
                             onClick={() => {
                                if (pageMode === 'actual') return;
                                if (isDataLocked) {
@@ -2094,6 +2096,7 @@ export default function PlanningPage() {
                           >
                             <Zap size={12} style={{ verticalAlign: 'text-bottom', color: catColor }} />
                           </span>
+                        )}
                         </span>
                       </th>
                     );
@@ -2143,7 +2146,7 @@ export default function PlanningPage() {
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                         <span>{ch.name}</span>
-                        {ch.name !== 'Tổng Digital' && (
+                        {ch.name !== 'Tổng Digital' && ch.name !== 'Sự kiện' && (
                           <span 
                             onClick={() => {
                                if (pageMode === 'actual') return; // allocation chỉ dùng trong plan mode
@@ -2384,7 +2387,10 @@ export default function PlanningPage() {
                                     }}
                                     onMouseDown={(e) => {
                                          if (e.button !== 0) return;
-                                         if (ch.readonly || isComputedRow) return;
+                                         if (ch.readonly || isComputedRow) {
+                                           if (ch.name === 'Sự kiện') setEventCellWarning(true);
+                                           return;
+                                         }
                                          if (cellKey.includes('-Tổng Digital-') || isComputedRow) return;
                                          // Click vào cell đang chọn → vào edit ngay (giống Excel)
                                          if (selectedCells.size === 1 && selectedCells.has(cellKey) && !isDataLocked) {
@@ -2427,7 +2433,10 @@ export default function PlanningPage() {
                                         setAlertInfo({ type: 'warning', title: 'Chỉ xem tổng hợp', message: 'Vui lòng chọn một showroom cụ thể (không phải "Tất cả") để chỉnh sửa dữ liệu.' });
                                         return;
                                       }
-                                      if (ch.readonly || isComputedRow) return;
+                                      if (ch.readonly || isComputedRow) {
+                                        if (ch.name === 'Sự kiện') setEventCellWarning(true);
+                                        return;
+                                      }
                                       if (cellKey.includes('-Tổng Digital-') || isComputedRow) return;
                                       setUndoStack(us => [...us.slice(-19), cellData]); // Bug fix: dùng cellData (mode-aware) thay vì dataByMonth
                                       setEditingCell(cellKey);
@@ -2890,86 +2899,6 @@ export default function PlanningPage() {
             })()}
           </table>
 
-          {/* SỰ KIỆN — Read-only summary, quản lý tại trang Quản trị sự kiện */}
-          <div style={{ marginTop: 20, borderTop: '2px solid var(--color-border-dark)', paddingTop: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              {/* Left: title + stats */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <CalendarDays size={15} style={{ color: '#10B981' }} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-                    Sự kiện tháng {month}
-                  </span>
-                </div>
-                {/* Stats pills */}
-                {(() => {
-                  const evs = events.filter(ev =>
-                    selectedShowroom === 'all' ? true : ev.showroom === selectedShowroom
-                  );
-                  const totalBudget = evs.reduce((s, e) => s + (e.budget || 0), 0);
-                  const totalLeads  = evs.reduce((s, e) => s + (e.leads  || 0), 0);
-                  const totalDeals  = evs.reduce((s, e) => s + (e.deals  || 0), 0);
-                  if (evs.length === 0) return (
-                    <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
-                      Chưa có sự kiện nào được lập kế hoạch
-                    </span>
-                  );
-                  return (
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <span style={{ padding: '2px 8px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 12, fontSize: 11, fontWeight: 700, color: '#059669' }}>
-                        {evs.length} sự kiện
-                      </span>
-                      <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                        NS: <strong style={{ color: 'var(--color-brand)' }}>{formatNumber(totalBudget)} tr</strong>
-                      </span>
-                      <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                        KHQT: <strong style={{ color: '#3b82f6' }}>{formatNumber(totalLeads)}</strong>
-                      </span>
-                      <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                        KHĐ: <strong style={{ color: '#10b981' }}>{formatNumber(totalDeals)}</strong>
-                      </span>
-                      {/* Mini event list */}
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: 400 }}>
-                        {evs.slice(0, 4).map(ev => (
-                          <span key={ev.id} style={{
-                            fontSize: 10, padding: '1px 7px', borderRadius: 10,
-                            background: ev.status === 'completed' ? '#f0fdf4' : ev.status === 'overdue' ? '#fef2f2' : '#eff6ff',
-                            color: ev.status === 'completed' ? '#059669' : ev.status === 'overdue' ? '#dc2626' : '#2563eb',
-                            border: `1px solid ${ev.status === 'completed' ? '#86efac' : ev.status === 'overdue' ? '#fecaca' : '#93c5fd'}`,
-                            whiteSpace: 'nowrap',
-                          }}>
-                            {ev.name.length > 20 ? ev.name.slice(0, 20) + '…' : ev.name}
-                          </span>
-                        ))}
-                        {evs.length > 4 && (
-                          <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10, background: '#f1f5f9', color: '#64748b', border: '1px solid #e2e8f0' }}>
-                            +{evs.length - 4} khác
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-              {/* Right: link button */}
-              <a
-                href={`/events?month=${month}`}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '5px 14px', borderRadius: 7,
-                  background: '#eff6ff', border: '1px solid #93c5fd',
-                  color: '#1d4ed8', fontSize: 12, fontWeight: 600,
-                  textDecoration: 'none', whiteSpace: 'nowrap',
-                  transition: 'all 0.15s',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#dbeafe'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#eff6ff'; }}
-              >
-                <CalendarDays size={13} />
-                Quản trị sự kiện →
-              </a>
-            </div>
-          </div>
         </div>
 
         {/* Status bar */}
@@ -3020,6 +2949,37 @@ export default function PlanningPage() {
           </div>
         </div>
       </div>
+
+      {/* Event Cell Warning Modal */}
+      {eventCellWarning && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(15,23,42,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEventCellWarning(false)}>
+          <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--border-radius-lg)', width: 420, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.2)', overflow: 'hidden', border: '1px solid var(--color-border-dark)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ background: '#fffbeb', padding: '12px 16px', borderBottom: '1px solid #fde68a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#92400e', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <CalendarDays size={15} color="#d97706" />
+                Cột Sự kiện — Chỉ đọc
+              </span>
+              <button onClick={() => setEventCellWarning(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)' }}>
+                <X size={15} />
+              </button>
+            </div>
+            <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text)', lineHeight: 1.6 }}>
+                Ngân sách sự kiện được quản lý tập trung tại trang <strong>Quản trị sự kiện</strong>. Dữ liệu sẽ tự động đồng bộ vào bảng kế hoạch.
+              </p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button onClick={() => setEventCellWarning(false)} style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                  Đóng
+                </button>
+                <a href={`/events?month=${month}`} style={{ padding: '6px 14px', borderRadius: 6, background: '#1d4ed8', color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <CalendarDays size={13} />
+                  Đến trang Sự kiện →
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Allocation Modal */}
       {allocationModal?.open && (
