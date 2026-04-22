@@ -1395,7 +1395,7 @@ export default function PlanningPage() {
     return subtotals;
   }, [cellData, compareMode, getHistoricalValue, selectedBrand, selectedModels, getUnroundedCellValue]);
 
-  // Compute grand total
+  // Compute grand total — derived from brandSubtotals in O(brands) instead of O(B×M×C×K)
   const grandTotal = useMemo(() => {
     let budget = 0, khqt = 0, gdtd = 0, khd = 0;
     let histBudget = 0, histKhqt = 0, histGdtd = 0, histKhd = 0;
@@ -1408,53 +1408,28 @@ export default function PlanningPage() {
     }
 
     const filteredBrandsForTotal = brands.filter(b => selectedBrand === 'all' || b.name === selectedBrand);
-
     for (const brand of filteredBrandsForTotal) {
-      const filteredModels = brand.models.filter(m => selectedModels.length === 0 || selectedModels.includes(m));
-      for (const model of filteredModels) {
-        const isAgg = brand.modelData?.find((x: any) => x.name === model)?.is_aggregate;
-        if (isAgg) continue; // Prevent double counting in Grand Total as well
-        for (const ch of CHANNELS) {
-          for (const metric of METRICS) {
-            const cellKey = `${brand.name}-${model}-${ch.name}-${metric}`;
-            const val = getUnroundedCellValue(cellKey);
-            const histVal = getHistoricalValue(cellKey, compareMode);
-            
-            channelTotals[ch.name][metric] += val;
-            if (histVal !== null) histChannelTotals[ch.name][metric] += histVal;
-            if (ch.name !== 'Tổng Digital') {
-              if (metric === 'Ngân sách') { budget += val; if (histVal !== null) histBudget += histVal; }
-              if (metric === 'KHQT') { khqt += val; if (histVal !== null) histKhqt += histVal; }
-              if (metric === 'GDTD') { gdtd += val; if (histVal !== null) histGdtd += histVal; }
-              if (metric === 'KHĐ') { khd += val; if (histVal !== null) histKhd += histVal; }
-            }
-          }
+      const sub = brandSubtotals[brand.name];
+      if (!sub) continue;
+      budget += sub.budget; khqt += sub.khqt; gdtd += sub.gdtd; khd += sub.khd;
+      histBudget += sub.histBudget; histKhqt += sub.histKhqt;
+      histGdtd += sub.histGdtd; histKhd += sub.histKhd;
+      for (const ch of CHANNELS) {
+        for (const m of METRICS) {
+          channelTotals[ch.name][m] = (channelTotals[ch.name][m] || 0) + (sub.channelTotals[ch.name]?.[m] || 0);
+          histChannelTotals[ch.name][m] = (histChannelTotals[ch.name][m] || 0) + (sub.histChannelTotals[ch.name]?.[m] || 0);
         }
       }
     }
 
-    // Round aggregated values
-    for (const ch in channelTotals) {
-      for (const m in channelTotals[ch]) {
-        channelTotals[ch][m] = m === 'Ngân sách' ? Math.round(channelTotals[ch][m] * 10) / 10 : Math.round(channelTotals[ch][m]);
-      }
-    }
-    for (const ch in histChannelTotals) {
-      for (const m in histChannelTotals[ch]) {
-        histChannelTotals[ch][m] = m === 'Ngân sách' ? Math.round(histChannelTotals[ch][m] * 10) / 10 : Math.round(histChannelTotals[ch][m]);
-      }
-    }
     budget = Math.round(budget * 10) / 10;
     histBudget = Math.round(histBudget * 10) / 10;
-    khqt = Math.round(khqt);
-    histKhqt = Math.round(histKhqt);
-    gdtd = Math.round(gdtd);
-    histGdtd = Math.round(histGdtd);
-    khd = Math.round(khd);
-    histKhd = Math.round(histKhd);
+    khqt = Math.round(khqt); histKhqt = Math.round(histKhqt);
+    gdtd = Math.round(gdtd); histGdtd = Math.round(histGdtd);
+    khd = Math.round(khd); histKhd = Math.round(histKhd);
 
     return { budget, khqt, gdtd, khd, histBudget, histKhqt, histGdtd, histKhd, channelTotals, histChannelTotals };
-  }, [cellData, compareMode, getHistoricalValue, selectedBrand, selectedModels, getUnroundedCellValue]);
+  }, [brandSubtotals, brands, selectedBrand, CHANNELS]);
 
   const summary = useMemo(() => {
     return {
