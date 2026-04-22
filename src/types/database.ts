@@ -284,6 +284,7 @@ export interface BudgetEntryRow {
   actual_status: 'draft' | 'submitted' | 'approved';
   updated_by: string | null;
   updated_at: string;
+  created_at: string;
 }
 
 export interface ViewBudgetByShowroom {
