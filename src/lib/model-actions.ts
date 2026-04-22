@@ -3,47 +3,53 @@
 import { createClient } from '@/lib/supabase/server';
 
 export async function mergeAndDeleteModelAction(
-  sourceId: number, 
-  targetId: number, 
-  brandName: string, 
-  sourceName: string, 
+  sourceId: number,
+  targetId: number,
+  brandName: string,
+  sourceName: string,
   targetName: string
 ) {
   const supabase = await createClient();
 
-  // 1. Dữ liệu Kế hoạch Ngân sách (thaco_budget_plans)
-  const { data: plans } = await supabase.from('thaco_budget_plans').select('*');
-  
-  if (plans) {
-    for (const plan of plans) {
-      if (!plan.payload) continue;
-      let hasChanges = false;
-      const newPayload = { ...plan.payload };
-      
-      const sourcePrefix = `${brandName}-${sourceName}-`;
-      const targetPrefix = `${brandName}-${targetName}-`;
+  // 1. Merge model trong thaco_budget_entries (normalized rows)
+  const { data: sourceEntries } = await supabase
+    .from('thaco_budget_entries')
+    .select('id, unit_id, showroom_id, year, month, channel_code, plan_ns, plan_khqt, plan_gdtd, plan_khd, actual_ns, actual_khqt, actual_gdtd, actual_khd')
+    .eq('brand_name', brandName)
+    .eq('model_name', sourceName);
 
-      for (const key of Object.keys(newPayload)) {
-        if (key.startsWith(sourcePrefix)) {
-          // Ví dụ: "KIA-K3-Facebook-GDTD" -> "KIA-Cerato-Facebook-GDTD"
-          const suffix = key.substring(sourcePrefix.length);
-          const newKey = `${targetPrefix}${suffix}`;
-          
-          // Cộng dồn giá trị
-          const sourceValue = newPayload[key] || 0;
-          const targetValue = newPayload[newKey] || 0;
-          
-          newPayload[newKey] = sourceValue + targetValue;
-          delete newPayload[key];
-          hasChanges = true;
-        }
-      }
+  if (sourceEntries && sourceEntries.length > 0) {
+    for (const row of sourceEntries) {
+      // Kiểm tra xem đã có row target chưa
+      const { data: targetRow } = await supabase
+        .from('thaco_budget_entries')
+        .select('id, plan_ns, plan_khqt, plan_gdtd, plan_khd, actual_ns, actual_khqt, actual_gdtd, actual_khd')
+        .eq('unit_id', row.unit_id)
+        .eq('showroom_id', row.showroom_id)
+        .eq('year', row.year)
+        .eq('month', row.month)
+        .eq('brand_name', brandName)
+        .eq('model_name', targetName)
+        .eq('channel_code', row.channel_code)
+        .maybeSingle();
 
-      if (hasChanges) {
-        await supabase
-          .from('thaco_budget_plans')
-          .update({ payload: newPayload })
-          .eq('month', plan.month);
+      if (targetRow) {
+        // Merge: cộng dồn giá trị vào target row
+        await supabase.from('thaco_budget_entries').update({
+          plan_ns:     (targetRow.plan_ns     || 0) + (row.plan_ns     || 0),
+          plan_khqt:   (targetRow.plan_khqt   || 0) + (row.plan_khqt   || 0),
+          plan_gdtd:   (targetRow.plan_gdtd   || 0) + (row.plan_gdtd   || 0),
+          plan_khd:    (targetRow.plan_khd    || 0) + (row.plan_khd    || 0),
+          actual_ns:   (targetRow.actual_ns   || 0) + (row.actual_ns   || 0),
+          actual_khqt: (targetRow.actual_khqt || 0) + (row.actual_khqt || 0),
+          actual_gdtd: (targetRow.actual_gdtd || 0) + (row.actual_gdtd || 0),
+          actual_khd:  (targetRow.actual_khd  || 0) + (row.actual_khd  || 0),
+        }).eq('id', targetRow.id);
+        // Xóa source row đã merge xong
+        await supabase.from('thaco_budget_entries').delete().eq('id', row.id);
+      } else {
+        // Không có conflict → đổi tên trực tiếp
+        await supabase.from('thaco_budget_entries').update({ model_name: targetName }).eq('id', row.id);
       }
     }
   }
