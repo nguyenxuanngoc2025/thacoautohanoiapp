@@ -1612,81 +1612,6 @@ export default function PlanningPage() {
         }}
         actions={
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <button
-              className="button-erp-secondary"
-              style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4 }}
-              title="Export Excel"
-              onClick={async () => {
-                try {
-                  setAlertInfo({ type: 'info', title: 'Đang xuất...', message: 'Đang tạo file Excel, vui lòng đợi.' });
-                  // Build headers
-                  const metricList = METRICS.filter(m => !hiddenMetrics.has(m));
-                  const channelHeaders = CHANNELS.filter(c => !hiddenChannels.has(c.category)).map(c => c.name);
-                  const headerRow1 = ['Thương hiệu', 'Model', ...channelHeaders.flatMap(ch => metricList.map(() => ch))];
-                  const headerRow2 = ['', '', ...channelHeaders.flatMap(() => metricList)];
-                  // Build data rows — Brand table
-                  const dataRows: (string | number)[][] = [];
-                  for (const brand of visibleBrands) {
-                    const modelList = brand.models.filter(m => selectedModels.length === 0 || selectedModels.includes(m));
-                    for (const model of modelList) {
-                      const row: (string | number)[] = [brand.name, model];
-                      for (const ch of channelHeaders) {
-                        for (const metric of metricList) {
-                          const key = `${brand.name}-${model}-${ch}-${metric}`;
-                          row.push(cellData[key] || 0);
-                        }
-                      }
-                      dataRows.push(row);
-                    }
-                  }
-                  // Showroom table section
-                  const exportSRs = isAggregateView
-                    ? showrooms.filter(s => !s.id.startsWith('fallback'))
-                    : showrooms.filter(s => s.name === selectedShowroom);
-                  if (exportSRs.length > 0) {
-                    dataRows.push([]); // blank separator
-                    dataRows.push(['CHI TIẾT THEO SHOWROOM', ...channelHeaders.flatMap(() => metricList.map(() => ''))]);
-                    for (const srObj of exportSRs) {
-                      const srData = (pageMode === 'plan' ? showroomDataByMonth : showroomActualDataByMonth)[month]?.[srObj.id] || {};
-                      const getChSum = (chName: string, metric: string) => {
-                        let s = 0;
-                        const suffix = `-${chName}-${metric}`;
-                        for (const [k, v] of Object.entries(srData)) { if (k.endsWith(suffix)) s += (v as number) || 0; }
-                        return s;
-                      };
-                      const srRow: (string | number)[] = [srObj.name, ''];
-                      for (const ch of channelHeaders) {
-                        for (const metric of metricList) {
-                          const ch_ = CHANNELS.find(c => c.name === ch);
-                          if (ch_?.isAggregate) {
-                            srRow.push(digitalChannelNames.reduce((acc, dcName) => acc + getChSum(dcName, metric), 0));
-                          } else {
-                            srRow.push(getChSum(ch, metric));
-                          }
-                        }
-                      }
-                      dataRows.push(srRow);
-                    }
-                  }
-                  const res = await fetch('/api/export/planning', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title: `Kế hoạch ngân sách T${month}/${year} — ${selectedShowroom}`, headers: [headerRow1, headerRow2], rows: dataRows, month, year }),
-                  });
-                  if (!res.ok) throw new Error('Export failed');
-                  const blob = await res.blob();
-                  const url = window.URL.createObjectURL(blob);
-                  const a = document.createElement('a'); a.href = url; a.download = `KH_Thang${month}_${year}.xlsx`; a.click();
-                  window.URL.revokeObjectURL(url);
-                  setAlertInfo({ type: 'success', title: 'Xuất thành công', message: `File Excel đã được tải về.` });
-                } catch {
-                  setAlertInfo({ type: 'warning', title: 'Lỗi xuất', message: 'Không thể tạo file Excel. Kiểm tra lại.' });
-                }
-              }}
-            >
-              <DownloadCloud size={14} /> <span style={{ fontSize: 12 }}>Export</span>
-            </button>
-            <div style={{ width: 1, height: 16, background: 'var(--color-border)', margin: '0 4px' }}></div>
             {/* Lock badge */}
             {!isAggregateView && periodLocked && (
               <span style={{
@@ -1957,6 +1882,74 @@ export default function PlanningPage() {
             />
             Ẩn dòng trống
           </label>
+
+          <div className="toolbar-sep" style={{ height: 14, flexShrink: 0 }} />
+          {/* Export Excel */}
+          <button
+            className="button-erp-secondary"
+            style={{ padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}
+            title="Export Excel"
+            onClick={async () => {
+              try {
+                setAlertInfo({ type: 'info', title: 'Đang xuất...', message: 'Đang tạo file Excel, vui lòng đợi.' });
+                const metricList = METRICS.filter(m => !hiddenMetrics.has(m));
+                const channelHeaders = CHANNELS.filter(c => !hiddenChannels.has(c.category)).map(c => c.name);
+                const headerRow1 = ['Thương hiệu', 'Model', ...channelHeaders.flatMap(ch => metricList.map(() => ch))];
+                const headerRow2 = ['', '', ...channelHeaders.flatMap(() => metricList)];
+                const dataRows: (string | number)[][] = [];
+                for (const brand of visibleBrands) {
+                  const modelList = brand.models.filter(m => selectedModels.length === 0 || selectedModels.includes(m));
+                  for (const model of modelList) {
+                    const row: (string | number)[] = [brand.name, model];
+                    for (const ch of channelHeaders) {
+                      for (const metric of metricList) {
+                        row.push(cellData[`${brand.name}-${model}-${ch}-${metric}`] || 0);
+                      }
+                    }
+                    dataRows.push(row);
+                  }
+                }
+                const exportSRs = isAggregateView
+                  ? showrooms.filter(s => !s.id.startsWith('fallback'))
+                  : showrooms.filter(s => s.name === selectedShowroom);
+                if (exportSRs.length > 0) {
+                  dataRows.push([]);
+                  dataRows.push(['CHI TIẾT THEO SHOWROOM', ...channelHeaders.flatMap(() => metricList.map(() => ''))]);
+                  for (const srObj of exportSRs) {
+                    const srData = (pageMode === 'plan' ? showroomDataByMonth : showroomActualDataByMonth)[month]?.[srObj.id] || {};
+                    const getChSum = (chName: string, metric: string) => {
+                      let s = 0; const suffix = `-${chName}-${metric}`;
+                      for (const [k, v] of Object.entries(srData)) { if (k.endsWith(suffix)) s += (v as number) || 0; }
+                      return s;
+                    };
+                    const srRow: (string | number)[] = [srObj.name, ''];
+                    for (const ch of channelHeaders) {
+                      for (const metric of metricList) {
+                        const ch_ = CHANNELS.find(c => c.name === ch);
+                        srRow.push(ch_?.isAggregate ? digitalChannelNames.reduce((acc, dcName) => acc + getChSum(dcName, metric), 0) : getChSum(ch, metric));
+                      }
+                    }
+                    dataRows.push(srRow);
+                  }
+                }
+                const res = await fetch('/api/export/planning', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ title: `Kế hoạch ngân sách T${month}/${year} — ${selectedShowroom}`, headers: [headerRow1, headerRow2], rows: dataRows, month, year }),
+                });
+                if (!res.ok) throw new Error('Export failed');
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = `KH_Thang${month}_${year}.xlsx`; a.click();
+                window.URL.revokeObjectURL(url);
+                setAlertInfo({ type: 'success', title: 'Xuất thành công', message: `File Excel đã được tải về.` });
+              } catch {
+                setAlertInfo({ type: 'warning', title: 'Lỗi xuất', message: 'Không thể tạo file Excel. Kiểm tra lại.' });
+              }
+            }}
+          >
+            <DownloadCloud size={14} /> <span style={{ fontSize: 12 }}>Export</span>
+          </button>
 
           {/* Xem tổng hợp (chỉ đọc) — hiện khi đang ở aggregate view */}
           {pageMode === 'plan' && isAggregateView && (
