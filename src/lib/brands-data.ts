@@ -12,6 +12,7 @@ import { MASTER_BRANDS } from '@/lib/master-data';
 export interface MasterBrand {
   id: number;
   name: string;
+  code?: string;
   sort_order: number;
   is_active: boolean;
   color: string | null;
@@ -23,6 +24,7 @@ export interface MasterModel {
   id: number;
   brand_name: string;
   name: string;
+  code?: string;
   sort_order: number;
   is_active: boolean;
   is_aggregate: boolean;
