@@ -687,6 +687,7 @@ export default function PlanningPage() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const eventWarningRef = useRef<HTMLDivElement>(null);
+  const cellInputRef = useRef<HTMLInputElement>(null);
   // Collapsed brand rows: Set of brand names
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
   // Hidden channel categories (chip filter): Set of category names
@@ -2462,29 +2463,25 @@ export default function PlanningPage() {
                                     )}
                                     {editingCell === cellKey && (
                                       <input
+                                        ref={cellInputRef}
                                         type="text"
                                         autoFocus
-                                        value={editValue}
-                                          onChange={(e) => setEditValue(e.target.value)}
+                                        defaultValue={editValue}
                                           onBlur={() => {
-                                            if (editValue.trim() !== '') {
-                                              handleCellChange(cellKey, editValue);
-                                            }
+                                            const v = cellInputRef.current?.value ?? '';
+                                            if (v.trim() !== '') handleCellChange(cellKey, v);
                                             setEditingCell(null);
                                           }}
                                           onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
                                               e.preventDefault();
-                                              // Khi enter hoàn tất quá trình lưu để goalseek chạy
-                                              if (editValue.trim() !== '') {
-                                                handleCellChange(cellKey, editValue);
-                                              }
+                                              const v = cellInputRef.current?.value ?? '';
+                                              if (v.trim() !== '') handleCellChange(cellKey, v);
                                               setEditingCell(null);
                                             }
                                             if (e.key === 'Escape') {
                                               setEditingCell(null);
                                             }
-                                            // Cho phép các mũi tên navigate
                                             e.stopPropagation();
                                           }}
                                           className="cell-input"
