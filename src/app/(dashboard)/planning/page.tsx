@@ -501,13 +501,16 @@ export default function PlanningPage() {
   // ─── Refresh dữ liệu ───────────────────────────────────────────────────────
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
-    // Revalidate all budget entry caches (single showroom + aggregate)
+    // Cho phép DB data ghi đè local state (xóa pending flag + reset saved payloads)
+    hasPendingEdits.current = false;
+    lastSavedPayload.current = '';
+    lastSavedActualPayload.current = '';
     globalMutate(
       (key: unknown) => Array.isArray(key) && (key[0] === 'budget_entries' || key[0] === 'budget_entries_unit' || key[0] === 'budget_entries_srs'),
       undefined,
       { revalidate: true }
     );
-    setTimeout(() => setIsRefreshing(false), 1200);
+    setTimeout(() => setIsRefreshing(false), 1500);
   }, []);
 
   // ─── Gửi kế hoạch ─────────────────────────────────────────────────────────
@@ -791,9 +794,12 @@ export default function PlanningPage() {
     setMounted(true);
   }, []);
 
-  // ─── Auto-save (plan + actual) — debounce 400ms ───────────────────────────
+  // ─── Auto-save (plan + actual) — debounce 1500ms ──────────────────────────
   const lastSavedPayload = useRef<string>('');
   const lastSavedActualPayload = useRef<string>('');
+  // Dùng ref cho CHANNELS để tránh CHANNELS (context) làm hủy debounce timeout
+  const channelsRef = useRef(CHANNELS);
+  useEffect(() => { channelsRef.current = CHANNELS; }, [CHANNELS]);
 
   React.useEffect(() => {
     if (!mounted) return;
@@ -819,11 +825,12 @@ export default function PlanningPage() {
     const unitIdForSave = (activeUnitId && activeUnitId !== 'all') ? activeUnitId : srUnitId;
     if (!unitIdForSave) { setSaveStatus('error'); return; }
 
-    // Debounce 1500ms — giống Google Sheets: chờ idle sau lần commit cuối mới save
+    // Debounce 1500ms — chờ idle sau lần commit cuối mới save (giống Google Sheets)
+    const snapshot = currentPayload; // capture tại thời điểm effect chạy
     const timeout = setTimeout(() => {
       setSaveStatus('saving');
       const entries = legacyCellDataToEntries(
-        currentPayload, CHANNELS, unitIdForSave,
+        snapshot, channelsRef.current, unitIdForSave,
         selectedShowroomId, year, month, isActualMode ? 'actual' : 'plan'
       );
       upsertBudgetEntries(entries)
@@ -835,10 +842,14 @@ export default function PlanningPage() {
           if (isActualMode) setIsDirtyActual(false);
           invalidateBudgetCaches(unitIdForSave, selectedShowroomId, year, month);
         })
-        .catch(() => setSaveStatus('error'));
+        .catch((err) => {
+          console.error('[AutoSave] upsertBudgetEntries failed:', err);
+          setSaveStatus('error');
+        });
     }, 1500);
     return () => clearTimeout(timeout);
-  }, [dataByMonth, actualDataByMonth, month, mounted, pageMode, activeUnitId, selectedShowroom, selectedShowroomId, year, retrySaveTrigger, CHANNELS]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataByMonth, actualDataByMonth, month, mounted, pageMode, activeUnitId, selectedShowroom, selectedShowroomId, year, retrySaveTrigger]);
 
   // Reset dirty flag khi chuyển tháng
   React.useEffect(() => {
