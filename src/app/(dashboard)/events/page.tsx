@@ -192,6 +192,7 @@ export default function EventsPage() {
     
     // Role-based filtering — ưu tiên showroom_code (Phase 1), fallback showroom name
     if (isRestrictedRole && allowedShowroomCodes.length > 0) {
+      // mkt_showroom / gd_showroom: chỉ thấy event của showroom mình
       raw = raw.filter(ev =>
         ev.showroom_code
           ? allowedShowroomCodes.includes(ev.showroom_code)
@@ -200,6 +201,9 @@ export default function EventsPage() {
               return sr?.name === ev.showroom;
             })
       );
+    } else if (effectiveRole === 'mkt_brand' && profile?.brands && profile.brands.length > 0) {
+      // mkt_brand: chỉ thấy event có ít nhất 1 brand mình phụ trách
+      raw = raw.filter(ev => ev.brands.some(b => profile.brands!.includes(b)));
     }
     
     // User-selected filters
@@ -207,7 +211,7 @@ export default function EventsPage() {
     if (filterShowroom) raw = raw.filter(ev => ev.showroom === filterShowroom || ev.showroom_code === filterShowroom);
 
     return raw.map(ev => ({ ...ev, status: inferEventStatus(ev, today) }));
-  }, [eventsByMonth, month, viewMode, isRestrictedRole, allowedShowroomCodes, showrooms, filterBrand, filterShowroom]);
+  }, [eventsByMonth, month, viewMode, isRestrictedRole, allowedShowroomCodes, showrooms, effectiveRole, profile, filterBrand, filterShowroom]);
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
