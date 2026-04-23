@@ -42,11 +42,14 @@ export async function POST(request: Request) {
     }, { onConflict: 'showroom_id,year,month,entry_type' });
 
     const typeLabel = entry_type === 'plan' ? 'Kế hoạch' : 'Thực hiện';
-    const roleLabel = ROLE_LABELS[sender_role] || sender_role || 'Nhân viên';
-    const brandsInfo = brands ? ` · ${brands}` : '';
+    // mkt_brand: ghi rõ thương hiệu vào chức danh, VD: "MKT Thương hiệu · Tải Bus"
+    const baseRoleLabel = ROLE_LABELS[sender_role] || sender_role || 'Nhân viên';
+    const roleLabel = (sender_role === 'mkt_brand' && brands)
+      ? `${baseRoleLabel} · ${brands}`
+      : baseRoleLabel;
 
-    // Message chi tiết: tên + chức vụ + showroom + thương hiệu + kỳ
-    const message = `${sender_name || 'Không rõ'} (${roleLabel}) vừa gửi ${typeLabel} tháng ${month}/${year} — Showroom ${showroom_name}${brandsInfo}`;
+    // Message chi tiết: tên + chức vụ (+ thương hiệu nếu mkt_brand) + showroom + kỳ
+    const message = `${sender_name || 'Không rõ'} (${roleLabel}) vừa gửi ${typeLabel} tháng ${month}/${year} — Showroom ${showroom_name}`;
 
     await supabase.from('thaco_notifications').insert({
       unit_id: unit_id || null,
