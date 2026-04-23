@@ -271,12 +271,20 @@ export default function PlanningPage() {
   }, [selectedShowroom, showrooms]);
 
   // Brands hiển thị — lọc theo brands của showroom đang chọn (nếu có)
+  // mkt_brand: chỉ thấy brand được giao trong profile.brands
   const visibleBrands = useMemo(() => {
-    if (selectedShowroom === 'all') return brands;
-    const sr = showrooms.find(s => s.name === selectedShowroom);
-    if (!sr || !sr.brands || sr.brands.length === 0) return brands;
-    return brands.filter(b => sr.brands.includes(b.name));
-  }, [brands, selectedShowroom, showrooms]);
+    let result = brands;
+    if (selectedShowroom !== 'all') {
+      const sr = showrooms.find(s => s.name === selectedShowroom);
+      if (sr && sr.brands && sr.brands.length > 0) {
+        result = result.filter(b => sr.brands.includes(b.name));
+      }
+    }
+    if (effectiveRole === 'mkt_brand' && profile?.brands && profile.brands.length > 0) {
+      result = result.filter(b => profile.brands!.includes(b.name));
+    }
+    return result;
+  }, [brands, selectedShowroom, showrooms, effectiveRole, profile]);
   const [selectedBrand, setSelectedBrand] = useState('all');
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
   const [compareMode, setCompareMode] = useState('none');
