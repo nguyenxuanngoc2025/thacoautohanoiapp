@@ -1,35 +1,30 @@
 // app/src/app/(dashboard)/reports/page.tsx
 'use client';
 import React, { useState, useMemo, useEffect } from 'react';
-import { FileText } from 'lucide-react';
 import { type EventsByMonth } from '@/lib/events-data';
-import { useEventsData, useViewBudgetByBrand, useViewBudgetByChannel } from '@/lib/use-data';
+import {
+  useEventsData, useViewBudgetByBrand, useViewBudgetByChannel, useViewBudgetMaster,
+} from '@/lib/use-data';
 import { useBrands } from '@/contexts/BrandsContext';
 import { useShowrooms } from '@/contexts/ShowroomsContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnit } from '@/contexts/UnitContext';
 import { useChannels } from '@/contexts/ChannelsContext';
 import PageHeader from '@/components/layout/PageHeader';
+import { FilterDropdown } from '@/components/erp/FilterDropdown';
 import { ReportTabBar, type ReportTabId } from '@/components/reports/ReportTabBar';
-import { ReportFilters, type ReportFilterState } from '@/components/reports/ReportFilters';
 import { BudgetSummaryTab } from '@/components/reports/tabs/BudgetSummaryTab';
 import { PlanVsActualTab } from '@/components/reports/tabs/PlanVsActualTab';
 import { ChannelEfficiencyTab } from '@/components/reports/tabs/ChannelEfficiencyTab';
 import { EventsReportTab } from '@/components/reports/tabs/EventsReportTab';
-import { getMonthsForPeriod, type MonthlyPayloads } from '@/lib/report-data';
-import type { ViewBudgetByBrand, ViewBudgetByChannel } from '@/types/database';
+import { getMonthsForPeriod, mergePayloads, type MonthlyPayloads } from '@/lib/report-data';
+import type { ViewBudgetByBrand, ViewBudgetByChannel, ViewBudgetMaster } from '@/types/database';
 
 // ── Convert view rows → MonthlyPayloads ──────────────────────────────────────
 //
 // Sentinel prefix used for channel rows so brand lookups don't clash:
 //   channel row key: "__ch__-{channel_code}-{metric}"   → sumByChannelMetric picks parts[-2]
 //   brand row key:   "{brand_name}-__all__-{metric}"    → sumByBrandMetric picks parts[0]
-//
-// The two key spaces don't overlap:
-//   sumByChannelMetric checks parts[-2] — won't match "__all__" brand rows
-//   sumByBrandMetric  checks parts[0]  — won't match "__ch__" channel rows
-// totalAllChannels (used by ChannelEfficiencyTab/BudgetSummaryTab) sums REPORT_CHANNELS
-//   using sumByChannelMetric so it only counts channel rows.
 
 const METRIC_SUFFIXES = ['ns', 'khqt', 'gdtd', 'khd'] as const;
 const METRIC_NAMES: Record<string, string> = { ns: 'Ngân sách', khqt: 'KHQT', gdtd: 'GDTD', khd: 'KHĐ' };
@@ -43,13 +38,11 @@ function buildChannelPayloads(
   const pm: MonthlyPayloads = {};
   const prefix = type === 'plan' ? 'plan_' : 'actual_';
   for (const row of rows) {
-    // Resolve channel_code → display name (fallback to code if not found)
     const chName = codeToName.get(row.channel_code) ?? row.channel_code;
     if (!pm[row.month]) pm[row.month] = {};
     const payload = pm[row.month];
     for (const sfx of METRIC_SUFFIXES) {
       const field = `${prefix}${sfx}` as keyof ViewBudgetByChannel;
-      // Key format: "__ch__-{channelName}-{metric}" — sentinel prefix avoids brand collisions
       const key = `__ch__-${chName}-${METRIC_NAMES[sfx]}`;
       payload[key] = (payload[key] ?? 0) + (row[field] as number);
     }
@@ -69,7 +62,6 @@ function buildBrandPayloads(
     const payload = pm[row.month];
     for (const sfx of METRIC_SUFFIXES) {
       const field = `${prefix}${sfx}` as keyof ViewBudgetByBrand;
-      // Key format: "{brandName}-__all__-{metric}" — avoids channel collisions
       const key = `${row.brand_name}-__all__-${METRIC_NAMES[sfx]}`;
       payload[key] = (payload[key] ?? 0) + (row[field] as number);
     }
@@ -77,7 +69,66 @@ function buildBrandPayloads(
   return pm;
 }
 
-/** Merge channel + brand payloads into a single MonthlyPayloads map. */
+// Build channel payloads from v_budget_master (used when any filter is active)
+function buildChannelPayloadsFromMaster(
+  rows: ViewBudgetMaster[],
+  type: 'plan' | 'actual',
+  codeToName: Map<string, string>,
+): MonthlyPayloads {
+  const pm: MonthlyPayloads = {};
+  const prefix = type === 'plan' ? 'plan_' : 'actual_';
+  for (const row of rows) {
+    const chName = codeToName.get(row.channel_code) ?? row.channel_code;
+    if (!pm[row.month]) pm[row.month] = {};
+    const payload = pm[row.month];
+    for (const sfx of METRIC_SUFFIXES) {
+      const field = `${prefix}${sfx}` as keyof ViewBudgetMaster;
+      const key = `__ch__-${chName}-${METRIC_NAMES[sfx]}`;
+      payload[key] = (payload[key] ?? 0) + (row[field] as number);
+    }
+  }
+  return pm;
+}
+
+// Build brand payloads from v_budget_master (used when any filter is active)
+function buildBrandPayloadsFromMaster(
+  rows: ViewBudgetMaster[],
+  type: 'plan' | 'actual',
+): MonthlyPayloads {
+  const pm: MonthlyPayloads = {};
+  const prefix = type === 'plan' ? 'plan_' : 'actual_';
+  for (const row of rows) {
+    if (!pm[row.month]) pm[row.month] = {};
+    const payload = pm[row.month];
+    for (const sfx of METRIC_SUFFIXES) {
+      const field = `${prefix}${sfx}` as keyof ViewBudgetMaster;
+      const key = `${row.brand_name}-__all__-${METRIC_NAMES[sfx]}`;
+      payload[key] = (payload[key] ?? 0) + (row[field] as number);
+    }
+  }
+  return pm;
+}
+
+// Build model payloads from v_budget_master — key: {brand}-{model}-__total__-{metric}
+// sumByModelMetric expects: parts.slice(0, -2).join('-') === brand-model
+function buildModelPayloadsFromMaster(
+  rows: ViewBudgetMaster[],
+  type: 'plan' | 'actual',
+): MonthlyPayloads {
+  const pm: MonthlyPayloads = {};
+  const prefix = type === 'plan' ? 'plan_' : 'actual_';
+  for (const row of rows) {
+    if (!pm[row.month]) pm[row.month] = {};
+    const payload = pm[row.month];
+    for (const sfx of METRIC_SUFFIXES) {
+      const field = `${prefix}${sfx}` as keyof ViewBudgetMaster;
+      const key = `${row.brand_name}-${row.model_name}-__total__-${METRIC_NAMES[sfx]}`;
+      payload[key] = (payload[key] ?? 0) + (row[field] as number);
+    }
+  }
+  return pm;
+}
+
 function mergeViewPayloads(
   channelPm: MonthlyPayloads,
   brandPm: MonthlyPayloads,
@@ -97,90 +148,194 @@ export default function ReportsPage() {
   const { activeUnitId } = useUnit();
   const { channels } = useChannels();
 
-  // Map channel_code → display name (e.g. 'facebook' → 'Facebook')
+  // Map channel_code ↔ display name
   const codeToName = useMemo(
     () => new Map<string, string>(channels.map(c => [c.code, c.name])),
+    [channels],
+  );
+  const nameToCode = useMemo(
+    () => new Map<string, string>(channels.filter(c => !c.isAggregate).map(c => [c.name, c.code])),
     [channels],
   );
 
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<ReportTabId>('plan-vs-actual');
 
-  // ── Role-based Scope ──────────────────────────────────────────────────────────────────
+  // ── Role-based Scope ──────────────────────────────────────────────────────
   const isRestrictedRole = ['mkt_showroom', 'gd_showroom'].includes(effectiveRole as string);
   const allowedShowroomName = isRestrictedRole ? profile?.showroom?.name : null;
 
   const [compareMode, setCompareMode] = useState<'none' | 'prev' | 'prev_year'>('none');
 
   // Shared filter state
-  const [filters, setFilters] = useState<ReportFilterState>({
-    year: 2026, viewMode: 'month', month: new Date().getMonth() + 1,
-    brand: '', showroom: '', channel: '',
+  const [filters, setFilters] = useState({
+    year: 2026,
+    viewMode: 'month' as 'month' | 'quarter' | 'year',
+    month: new Date().getMonth() + 1,
+    brand: '',
+    showroom: '',
+    channel: '',
   });
 
-  // ── Unit ID for views ─────────────────────────────────────────────────────────────────
+  const updateFilters = (partial: Partial<typeof filters>) =>
+    setFilters(prev => ({ ...prev, ...partial }));
+
+  // ── Unit ID for views ─────────────────────────────────────────────────────
   const unitIdForViews = activeUnitId === 'all' ? null : activeUnitId;
 
-  // ── SWR view-based data ──────────────────────────────────────────────────────────────
-  const { data: viewBrandRows }   = useViewBudgetByBrand(unitIdForViews, filters.year);
-  const { data: viewChannelRows } = useViewBudgetByChannel(unitIdForViews, filters.year);
-  const { data: prevYearBrandRows }   = useViewBudgetByBrand(unitIdForViews, filters.year - 1);
-  const { data: prevYearChannelRows } = useViewBudgetByChannel(unitIdForViews, filters.year - 1);
-  const { data: eventsRaw }           = useEventsData();
+  // ── SWR view-based data ───────────────────────────────────────────────────
+  const { data: viewBrandRows }         = useViewBudgetByBrand(unitIdForViews, filters.year);
+  const { data: viewChannelRows }       = useViewBudgetByChannel(unitIdForViews, filters.year);
+  const { data: prevYearBrandRows }     = useViewBudgetByBrand(unitIdForViews, filters.year - 1);
+  const { data: prevYearChannelRows }   = useViewBudgetByChannel(unitIdForViews, filters.year - 1);
+  const { data: viewMasterRows }        = useViewBudgetMaster(unitIdForViews, filters.year);
+  const { data: prevYearMasterRows }    = useViewBudgetMaster(unitIdForViews, filters.year - 1);
+  const { data: eventsRaw }             = useEventsData();
 
-  // ── Build MonthlyPayloads from views ─────────────────────────────────────────────────
-  const plansByMonth = useMemo<MonthlyPayloads>(
-    () => mergeViewPayloads(
+  // ── Filter resolution ─────────────────────────────────────────────────────
+  const hasAnyFilter = !!(filters.brand || filters.showroom || filters.channel);
+
+  const filterShowroomId = useMemo(() => {
+    if (!filters.showroom) return null;
+    return showroomItems.find(s => s.name === filters.showroom)?.id ?? null;
+  }, [filters.showroom, showroomItems]);
+
+  const filterChannelCode = useMemo(() => {
+    if (!filters.channel) return null;
+    return nameToCode.get(filters.channel) ?? filters.channel;
+  }, [filters.channel, nameToCode]);
+
+  // ── Filtered master rows — áp dụng tất cả filters lên v_budget_master ─────
+  const filteredMasterRows = useMemo<ViewBudgetMaster[] | null>(() => {
+    if (!hasAnyFilter || !viewMasterRows) return null;
+    return viewMasterRows.filter(r => {
+      if (filterShowroomId && r.showroom_id !== filterShowroomId) return false;
+      if (filters.brand && r.brand_name !== filters.brand) return false;
+      if (filterChannelCode && r.channel_code !== filterChannelCode) return false;
+      return true;
+    });
+  }, [viewMasterRows, hasAnyFilter, filterShowroomId, filters.brand, filterChannelCode]);
+
+  const filteredPrevYearMasterRows = useMemo<ViewBudgetMaster[] | null>(() => {
+    if (!hasAnyFilter || !prevYearMasterRows) return null;
+    return prevYearMasterRows.filter(r => {
+      if (filterShowroomId && r.showroom_id !== filterShowroomId) return false;
+      if (filters.brand && r.brand_name !== filters.brand) return false;
+      if (filterChannelCode && r.channel_code !== filterChannelCode) return false;
+      return true;
+    });
+  }, [prevYearMasterRows, hasAnyFilter, filterShowroomId, filters.brand, filterChannelCode]);
+
+  // ── Build MonthlyPayloads — ưu tiên master rows (kèm model data) ─────────
+  // QUAN TRỌNG: CHỈ dùng channel keys + model keys.
+  // KHÔNG dùng buildBrandPayloadsFromMaster (tạo __all__ keys) cùng lúc với
+  // buildModelPayloadsFromMaster (tạo __total__ keys) — vì sumByBrandMetric
+  // match cả hai → brand totals bị nhân đôi.
+  // Model __total__ keys đã đủ để sumByBrandMetric aggregate lên brand level.
+  function buildFromMaster(rows: ViewBudgetMaster[], type: 'plan' | 'actual'): MonthlyPayloads {
+    const ch    = buildChannelPayloadsFromMaster(rows, type, codeToName);
+    const model = buildModelPayloadsFromMaster(rows, type);
+    return mergeViewPayloads(ch, model);
+  }
+
+  const plansByMonth = useMemo<MonthlyPayloads>(() => {
+    const rows = filteredMasterRows ?? viewMasterRows;
+    if (rows) return buildFromMaster(rows, 'plan');
+    return mergeViewPayloads(
       buildChannelPayloads(viewChannelRows, 'plan', codeToName),
       buildBrandPayloads(viewBrandRows, 'plan'),
-    ),
-    [viewChannelRows, viewBrandRows, codeToName],
-  );
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredMasterRows, viewMasterRows, viewChannelRows, viewBrandRows, codeToName]);
 
-  const actualsByMonth = useMemo<MonthlyPayloads>(
-    () => mergeViewPayloads(
+  const actualsByMonth = useMemo<MonthlyPayloads>(() => {
+    const rows = filteredMasterRows ?? viewMasterRows;
+    if (rows) return buildFromMaster(rows, 'actual');
+    return mergeViewPayloads(
       buildChannelPayloads(viewChannelRows, 'actual', codeToName),
       buildBrandPayloads(viewBrandRows, 'actual'),
-    ),
-    [viewChannelRows, viewBrandRows, codeToName],
-  );
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredMasterRows, viewMasterRows, viewChannelRows, viewBrandRows, codeToName]);
 
   const prevYearActualsByMonth = useMemo<MonthlyPayloads>(() => {
     if (compareMode !== 'prev_year') return {};
+    const rows = filteredPrevYearMasterRows ?? prevYearMasterRows;
+    if (rows) return buildFromMaster(rows, 'actual');
     return mergeViewPayloads(
       buildChannelPayloads(prevYearChannelRows, 'actual', codeToName),
       buildBrandPayloads(prevYearBrandRows, 'actual'),
     );
-  }, [prevYearChannelRows, prevYearBrandRows, compareMode, codeToName]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredPrevYearMasterRows, prevYearMasterRows, prevYearChannelRows, prevYearBrandRows, compareMode, codeToName]);
 
   const eventsByMonth = useMemo<EventsByMonth>(() => eventsRaw ?? {}, [eventsRaw]);
 
   // When unitIdForViews is null (super_admin "all" mode), views are skipped — treat as ready
   const viewsReady = unitIdForViews === null
     ? true
-    : viewBrandRows !== undefined && viewChannelRows !== undefined;
+    : viewMasterRows !== undefined;
   const loading = !viewsReady || eventsRaw === undefined;
 
   useEffect(() => {
     if (!loading) setMounted(true);
   }, [loading]);
 
-  // Showroom names for filter dropdown (from context, not parsed from payload)
+  // Showroom list for dropdowns (role-filtered)
   const showrooms = useMemo(() => {
     let items = showroomItems;
     if (isRestrictedRole && allowedShowroomName) {
       items = items.filter(s => s.name === allowedShowroomName);
+    } else if (effectiveRole === 'mkt_brand' && profile?.brands && profile.brands.length > 0) {
+      items = items.filter(s => s.brands.some(b => profile.brands!.includes(b)));
     }
     return items.map(s => s.name);
-  }, [showroomItems, isRestrictedRole, allowedShowroomName]);
+  }, [showroomItems, isRestrictedRole, allowedShowroomName, effectiveRole, profile]);
 
+  // showroomItems passed to tabs — filtered by both role + user filter
   const tableShowroomItems = useMemo(() => {
     let items = showroomItems;
     if (isRestrictedRole && allowedShowroomName) {
       items = items.filter(s => s.name === allowedShowroomName);
+    } else if (effectiveRole === 'mkt_brand' && profile?.brands && profile.brands.length > 0) {
+      items = items.filter(s => s.brands.some(b => profile.brands!.includes(b)));
+    }
+    if (filters.showroom) {
+      items = items.filter(s => s.name === filters.showroom);
     }
     return items.map(s => ({ name: s.name, weight: s.weight }));
-  }, [showroomItems, isRestrictedRole, allowedShowroomName]);
+  }, [showroomItems, isRestrictedRole, allowedShowroomName, effectiveRole, profile, filters.showroom]);
+
+  // ── Per-showroom MonthlyPayloads (real data from v_budget_master) ────────────
+  const reportMonths = useMemo(
+    () => getMonthsForPeriod(filters.viewMode, filters.month),
+    [filters.viewMode, filters.month],
+  );
+
+  const showroomPayloadsByMonth = useMemo<Record<string, { plan: MonthlyPayloads; actual: MonthlyPayloads }>>(() => {
+    if (!viewMasterRows) return {};
+    const result: Record<string, { plan: MonthlyPayloads; actual: MonthlyPayloads }> = {};
+    for (const sr of showroomItems) {
+      const srRows = viewMasterRows.filter(r => r.showroom_id === sr.id);
+      result[sr.name] = {
+        plan:   buildChannelPayloadsFromMaster(srRows, 'plan',   codeToName),
+        actual: buildChannelPayloadsFromMaster(srRows, 'actual', codeToName),
+      };
+    }
+    return result;
+  }, [viewMasterRows, showroomItems, codeToName]);
+
+  // Pre-merge per-showroom data for current period (passed to PlanVsActualTab)
+  const showroomMergedData = useMemo<Record<string, { plan: Record<string, number>; actual: Record<string, number> }>>(() => {
+    const result: Record<string, { plan: Record<string, number>; actual: Record<string, number> }> = {};
+    for (const [name, payloads] of Object.entries(showroomPayloadsByMonth)) {
+      result[name] = {
+        plan:   mergePayloads(payloads.plan,   reportMonths),
+        actual: mergePayloads(payloads.actual, reportMonths),
+      };
+    }
+    return result;
+  }, [showroomPayloadsByMonth, reportMonths]);
 
   const { cmpPlansByMonth, cmpActualsByMonth, cmpMonths } = useMemo(() => {
     if (compareMode === 'none') {
@@ -213,58 +368,77 @@ export default function ReportsPage() {
 
   const brandNames = useMemo(() => brands.map(b => b.name), [brands]);
 
-  const updateFilters = (partial: Partial<ReportFilterState>) =>
-    setFilters(prev => ({ ...prev, ...partial }));
+  const channelOptions = useMemo(
+    () => channels.filter(c => !c.isAggregate).map(c => ({ value: c.name, label: c.name })),
+    [channels],
+  );
+
+  // Tab-specific filter visibility
+  const showBrandFilter    = ['budget-summary', 'plan-vs-actual'].includes(activeTab);
+  const showShowroomFilter = ['plan-vs-actual', 'events'].includes(activeTab);
+  const showChannelFilter  = activeTab === 'budget-summary';
+  const showAnyFilter      = showBrandFilter || showShowroomFilter || showChannelFilter;
 
   if (!mounted) return null;
 
-  // Tab-specific visible filter fields
-  const filterFields: Record<ReportTabId, string[]> = {
-    'budget-summary':     ['viewMode', 'period', 'brand', 'channel'],
-    'plan-vs-actual':     ['viewMode', 'period', 'brand', 'showroom'],
-    'channel-efficiency': ['viewMode', 'period'],
-    'events':             ['period', 'showroom'],
-  };
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* PageHeader — period only */}
       <PageHeader
         year={filters.year}
         month={filters.month}
         viewMode={filters.viewMode}
         onPeriodChange={(y, m) => updateFilters({ year: y, month: m })}
         onViewModeChange={(mode) => updateFilters({ viewMode: mode })}
+        filters={showAnyFilter ? (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {showBrandFilter && (
+              <FilterDropdown
+                value={filters.brand || 'all'}
+                options={[{ value: 'all', label: 'Tất cả Thương hiệu' }, ...brandNames.map(b => ({ value: b, label: b }))]}
+                onChange={(v: string) => updateFilters({ brand: v === 'all' ? '' : v })}
+                placeholder="Tất cả Thương hiệu"
+                width={150}
+              />
+            )}
+            {showShowroomFilter && (
+              <FilterDropdown
+                value={filters.showroom || 'all'}
+                options={[{ value: 'all', label: 'Tất cả Showroom' }, ...showrooms.map(s => ({ value: s, label: s }))]}
+                onChange={(v: string) => updateFilters({ showroom: v === 'all' ? '' : v })}
+                placeholder="Tất cả Showroom"
+                width={150}
+              />
+            )}
+            {showChannelFilter && (
+              <FilterDropdown
+                value={filters.channel || 'all'}
+                options={[{ value: 'all', label: 'Tất cả Kênh' }, ...channelOptions]}
+                onChange={(v: string) => updateFilters({ channel: v === 'all' ? '' : v })}
+                placeholder="Tất cả Kênh"
+                width={130}
+              />
+            )}
+            {hasAnyFilter && (
+              <button
+                onClick={() => updateFilters({ brand: '', showroom: '', channel: '' })}
+                style={{ fontSize: 11, padding: '3px 8px', border: '1px solid #fecaca', borderRadius: 4, background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontWeight: 600 }}
+              >✕ Bỏ lọc</button>
+            )}
+          </div>
+        ) : undefined}
       />
 
       {/* Body */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
-        {/* Page title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-          <FileText size={18} color="var(--color-primary)" />
-          <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-text)' }}>Báo cáo</span>
-          {loading && (
-            <span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)' }}>Đang tải...</span>
-          )}
-        </div>
-
         {/* Tab bar */}
-        <ReportTabBar activeTab={activeTab} onTabChange={setActiveTab} />
-
-        {/* Filter bar */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '10px 0', borderBottom: '1px solid var(--color-border-light)', marginBottom: 16,
-          flexWrap: 'wrap', gap: 8,
-        }}>
-          <ReportFilters
-            filters={filters}
-            showrooms={showrooms}
-            brands={brandNames}
-            onChange={updateFilters}
-            visibleFields={filterFields[activeTab]}
-          />
-        </div>
+        <ReportTabBar
+          activeTab={activeTab}
+          onTabChange={(tab) => {
+            setActiveTab(tab);
+            // Reset filters khi đổi tab vì mỗi tab có bộ lọc khác nhau
+            updateFilters({ brand: '', showroom: '', channel: '' });
+          }}
+        />
 
         {/* Comparison toolbar — plan-vs-actual tab only */}
         {activeTab === 'plan-vs-actual' && (
@@ -305,6 +479,7 @@ export default function ReportsPage() {
                 actualsByMonth={actualsByMonth}
                 brands={brands}
                 showroomItems={tableShowroomItems}
+                showroomPayloadsByMonth={showroomPayloadsByMonth}
               />
             )}
             {activeTab === 'plan-vs-actual' && (
@@ -319,6 +494,7 @@ export default function ReportsPage() {
                 compareLabel={compareLabel}
                 showroomItems={tableShowroomItems}
                 brands={brands}
+                showroomMergedData={showroomMergedData}
               />
             )}
             {activeTab === 'channel-efficiency' && (

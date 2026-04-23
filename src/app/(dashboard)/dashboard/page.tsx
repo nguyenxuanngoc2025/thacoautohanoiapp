@@ -6,14 +6,13 @@ import * as xlsx from 'xlsx';
 import PageHeader from '@/components/layout/PageHeader';
 import { formatNumber } from '@/lib/utils';
 import { inferEventStatus } from '@/lib/events-data';
-import {
-  useActualEntries, useEventsData,
-  useViewBudgetByShowroom, useViewBudgetByBrand, useViewBudgetByChannel,
-} from '@/lib/use-data';
+import { useEventsData } from '@/lib/use-data';
+import { useFilteredBudget } from '@/lib/use-filtered-budget';
 import { useShowrooms } from '@/contexts/ShowroomsContext';
 import { useUnit } from '@/contexts/UnitContext';
 import { useBrands } from '@/contexts/BrandsContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useChannels } from '@/contexts/ChannelsContext';
 import {
   Users, UserCheck, FileSignature, TrendingDown,
   AlertTriangle, CheckCircle, ChevronUp, ChevronDown,
@@ -45,7 +44,6 @@ import { DataGrid, DataGridContainer } from '@/components/reui/data-grid/data-gr
 import { DataGridTable } from '@/components/reui/data-grid/data-grid-table';
 import { DataGridColumnHeader } from '@/components/reui/data-grid/data-grid-column-header';
 
-const DONUT_COLORS = ['#3b82f6','#10b981','#f59e0b','#6366f1','#ec4899','#06b6d4'];
 const CHANNELS = ['Google', 'Facebook', 'Khác', 'CSKH', 'Nhận diện'];
 
 // ── Column Types ──────────────────────────────────────────────────────────────
@@ -100,164 +98,48 @@ export default function DashboardReuiPage() {
   // ── Role-based Scope ──────────────────────────────────────────────────────
   const isRestrictedRole = ['mkt_showroom', 'gd_showroom'].includes(effectiveRole as string);
   const allowedShowroomName = isRestrictedRole ? (profile?.showroom?.name ?? null) : null;
-  const isCompanyLevel = showrooms.length > 1;
 
-  // ── Data fetching via SWR (cached — chuyển trang không fetch lại) ──────────
-  // View hooks — pre-aggregated data (no JS payload iteration needed)
+  // mkt_brand: chỉ thấy showroom có brand được giao
+  const visibleShowrooms = useMemo(() => {
+    if (effectiveRole === 'mkt_brand' && profile?.brands && profile.brands.length > 0) {
+      return showrooms.filter(s => s.brands.some(b => profile.brands!.includes(b)));
+    }
+    return showrooms;
+  }, [effectiveRole, profile, showrooms]);
+
+  const isCompanyLevel = visibleShowrooms.length > 1;
+
   const unitIdForViews = activeUnitId === 'all' ? null : activeUnitId;
-  const { data: viewByShowroom } = useViewBudgetByShowroom(unitIdForViews, year);
-  const { data: viewByBrand }    = useViewBudgetByBrand(unitIdForViews, year);
-  const { data: viewByChannel }  = useViewBudgetByChannel(unitIdForViews, year);
 
-  // Legacy hooks — actualsRaw for sparkData (5-month sparkline), eventsRaw for upcoming events
-  const { data: actualsRaw } = useActualEntries(year, activeUnitId);
-  const { data: eventsRaw }  = useEventsData(activeUnitId);
-
-  // Transform: EventsByMonth → flat array
+  // ── Events (chỉ dùng cho upcoming timeline) ───────────────────────────────
+  const { data: eventsRaw } = useEventsData(activeUnitId);
   const eventsData = useMemo<any[]>(() =>
     eventsRaw ? Object.values(eventsRaw).flat() : [],
   [eventsRaw]);
 
-  // mounted when view + actuals + events are all ready for first render
-  // When unitIdForViews is null (super_admin "all" mode), views are skipped — treat as ready
-  useEffect(() => {
-    const viewsReady = unitIdForViews === null
-      ? true
-      : viewByShowroom !== undefined && viewByBrand !== undefined && viewByChannel !== undefined;
-    if (viewsReady && actualsRaw !== undefined && eventsRaw !== undefined) {
-      setMounted(true);
-    }
-  }, [viewByShowroom, viewByBrand, viewByChannel, actualsRaw, eventsRaw, unitIdForViews]);
-
-  // ── Derived data (identical logic to original dashboard) ──────────────────
+  // ── Period ────────────────────────────────────────────────────────────────
   const monthsInView = useMemo(() => {
     if (viewMode === 'month') return [month];
     if (viewMode === 'quarter') { const q0 = (Math.ceil(month / 3) - 1) * 3 + 1; return [q0, q0 + 1, q0 + 2]; }
     return Array.from({ length: 12 }, (_, i) => i + 1);
   }, [viewMode, month]);
 
-  // FIX BUG #4: Bỏ selectedWeight — không còn dùng để nhân vào data
-  // Filter showroom giờ lọc trực tiếp theo showroom_code
-  const filterShowroomCodes = useMemo(() => {
-    if (filterShowroom.length === 0) return null; // null = tất cả
-    return filterShowroom
-      .map(name => showrooms.find(s => s.name === name)?.code)
-      .filter(Boolean) as string[];
-  }, [filterShowroom, showrooms]);
+  // ── Chuẩn hóa filter — 1 hook xử lý tất cả ───────────────────────────────
+  const {
+    showroomBreakdown, brandBreakdown, channelBreakdown,
+    barChartData, totals, planKpis, sparkData, isLoading,
+  } = useFilteredBudget({
+    unitId: unitIdForViews, year, monthsInView, activeMonth: month,
+    filterShowroom, filterBrand, filterChannel,
+  });
 
-  // NOTE: eventsData chỉ dùng cho timeline nhắc tiến độ (upcomingEvents).
-  // Toàn bộ ngân sách/KPI được đọc từ view hooks (v_budget_by_showroom, v_budget_by_brand, v_budget_by_channel).
+  const { totalPlan, totalActual, totalKhqt, totalGdtd, totalKhd, cpl, budgetPct } = totals;
+  const { pBudget, pKhqt, pGdtd, pKhd } = planKpis;
 
-  // showroomBreakdown — driven by v_budget_by_showroom view (pre-aggregated, no JS payload iteration)
-  const showroomBreakdown = useMemo(() => {
-    const filteredSR = filterShowroom.length === 0
-      ? showrooms
-      : showrooms.filter(s => filterShowroom.includes(s.name));
-
-    return filteredSR.map(sr => {
-      let plan = 0, actual = 0, khqt = 0, gdtd = 0, khd = 0;
-      const rows = viewByShowroom?.filter(r => r.showroom_id === sr.id && monthsInView.includes(r.month)) ?? [];
-      for (const r of rows) {
-        plan   += r.plan_ns   ?? 0;
-        actual += r.actual_ns ?? 0;
-        khqt   += r.actual_khqt ?? 0;
-        gdtd   += r.actual_gdtd ?? 0;
-        khd    += r.actual_khd  ?? 0;
-      }
-      return { name: sr.name, plan, actual, khqt, gdtd, khd };
-    });
-  }, [viewByShowroom, showrooms, filterShowroom, monthsInView]);
-
-  // brandBreakdown — driven by v_budget_by_brand view (pre-aggregated, no JS payload iteration)
-  const brandBreakdown = useMemo(() => {
-    const filteredBrands = filterBrand.length === 0
-      ? brands
-      : brands.filter(b => filterBrand.includes(b.name));
-
-    return filteredBrands.map(br => {
-      let plan = 0, actual = 0, khqt = 0, gdtd = 0, khd = 0;
-      const rows = viewByBrand?.filter(r => r.brand_name === br.name && monthsInView.includes(r.month)) ?? [];
-      for (const r of rows) {
-        plan   += r.plan_ns      ?? 0;
-        actual += r.actual_ns    ?? 0;
-        khqt   += r.actual_khqt  ?? 0;
-        gdtd   += r.actual_gdtd  ?? 0;
-        khd    += r.actual_khd   ?? 0;
-      }
-      return { name: br.name, plan, actual, khqt, gdtd, khd };
-    });
-  }, [viewByBrand, brands, filterBrand, monthsInView]);
-
-  // FIX BUG #4: sparkData không còn nhân selectedWeight
-  const sparkData = useMemo(() => {
-    const last5 = Array.from({ length: 5 }, (_, i) => { const m = month - 4 + i; return m < 1 ? m + 12 : m; });
-
-    const sumMetricForMonth = (m: number, metric: string): number => {
-      const actualsInMonth = actualsRaw?.filter(a => a.month === m) ?? [];
-      const filtered = filterShowroomCodes
-        ? actualsInMonth.filter(a => filterShowroomCodes.includes(a.showroom_code))
-        : actualsInMonth;
-      let total = 0;
-      filtered.forEach(a => {
-        Object.entries(a.payload || {}).forEach(([k, v]) => {
-          if (!k.endsWith(`-${metric}`)) return;
-          if (filterBrand.length > 0 && !filterBrand.some(b => k.startsWith(`${b}-`))) return;
-          if (filterModel.length > 0 && !filterModel.some(mod => k.includes(`-${mod}-`))) return;
-          if (!isChannelMatch(k, filterChannel)) return;
-          total += v;
-        });
-      });
-      return total;
-    };
-
-    return {
-      budget: last5.map(m => sumMetricForMonth(m, 'Ngân sách')),
-      khqt:   last5.map(m => sumMetricForMonth(m, 'KHQT')),
-      gdtd:   last5.map(m => sumMetricForMonth(m, 'GDTD')),
-      khd:    last5.map(m => sumMetricForMonth(m, 'KHĐ')),
-    };
-  }, [actualsRaw, month, filterShowroomCodes, filterBrand, filterModel, filterChannel]);
-
-  // channelBreakdown — driven by v_budget_by_channel view (pre-aggregated, no JS payload iteration)
-  const channelBreakdown = useMemo(() => {
-    const allChannels = [...CHANNELS, 'Sự kiện'];
-    const list = allChannels.map(name => {
-      const rows = viewByChannel?.filter(r => r.channel_code === name && monthsInView.includes(r.month)) ?? [];
-      let actual = 0;
-      let plan = 0;
-      for (const r of rows) {
-        actual += r.actual_ns ?? 0;
-        plan   += r.plan_ns   ?? 0;
-      }
-      // Fallback: if no actual, show plan amount
-      const amount = actual > 0 ? actual : plan;
-      return { name, amount };
-    });
-
-    const total = list.reduce((s, c) => s + c.amount, 0);
-    return list
-      .map((ch, i) => ({ ...ch, color: DONUT_COLORS[i % DONUT_COLORS.length], pct: total > 0 ? Math.round((ch.amount / total) * 100) : 0 }))
-      .sort((a, b) => b.amount - a.amount);
-  }, [viewByChannel, monthsInView]);
-
-  // barChartData — driven by v_budget_by_showroom view, summed across all showrooms per month
-  const barChartData = useMemo(() => Array.from({ length: 12 }, (_, i) => {
-    const m = i + 1;
-    const rows = viewByShowroom?.filter(r => r.month === m) ?? [];
-    // Apply showroom filter if active
-    const filtered = filterShowroomCodes
-      ? rows.filter(r => {
-          const sr = showrooms.find(s => s.id === r.showroom_id);
-          return sr ? filterShowroomCodes.includes(sr.code) : false;
-        })
-      : rows;
-    let plan = 0, actual = 0;
-    for (const r of filtered) {
-      plan   += r.plan_ns   ?? 0;
-      actual += r.actual_ns ?? 0;
-    }
-    return { name: `T${m}`, plan: Math.round(plan), actual: Math.round(actual), isActive: m === month };
-  }), [viewByShowroom, showrooms, month, filterShowroomCodes]);
+  // ── Mounted ───────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isLoading && eventsRaw !== undefined) setMounted(true);
+  }, [isLoading, eventsRaw]);
 
 // ── Sortable Header ────────────────────────────────────────────────────────
 const SortableHeader = ({ column, title, align = 'left' }: { column: any, title: string, align?: 'left'|'right'|'center' }) => {
@@ -278,13 +160,22 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
   );
 };
 
+  // mkt_brand: lọc bảng SR theo showroom được phép
+  const visibleShowroomBreakdown = useMemo(() => {
+    if (effectiveRole === 'mkt_brand' && visibleShowrooms.length < showrooms.length) {
+      const allowed = new Set(visibleShowrooms.map(s => s.name));
+      return showroomBreakdown.filter(r => allowed.has(r.name));
+    }
+    return showroomBreakdown;
+  }, [showroomBreakdown, effectiveRole, visibleShowrooms, showrooms]);
+
   // ── REUI Table Columns (Showroom) ───────────────────────────────
   const showroomColumns = useMemo(() => {
-    const totalPlan   = showroomBreakdown.reduce((s, r) => s + r.plan, 0);
-    const totalActual = showroomBreakdown.reduce((s, r) => s + r.actual, 0);
-    const totalKhqt   = showroomBreakdown.reduce((s, r) => s + r.khqt, 0);
-    const totalGdtd   = showroomBreakdown.reduce((s, r) => s + r.gdtd, 0);
-    const totalKhd    = showroomBreakdown.reduce((s, r) => s + r.khd, 0);
+    const totalPlan   = visibleShowroomBreakdown.reduce((s, r) => s + r.plan, 0);
+    const totalActual = visibleShowroomBreakdown.reduce((s, r) => s + r.actual, 0);
+    const totalKhqt   = visibleShowroomBreakdown.reduce((s, r) => s + r.khqt, 0);
+    const totalGdtd   = visibleShowroomBreakdown.reduce((s, r) => s + r.gdtd, 0);
+    const totalKhd    = visibleShowroomBreakdown.reduce((s, r) => s + r.khd, 0);
     const cpl         = totalKhqt > 0 ? (totalActual / totalKhqt) : 0;
     const budgetPct   = totalPlan > 0 ? (totalActual / totalPlan * 100) : 0;
 
@@ -348,10 +239,10 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
         meta: { headerClassName: 'text-center', cellClassName: 'text-center', footerClassName: 'text-center' } as any,
       }),
     ];
-  }, [showroomBreakdown]);
+  }, [visibleShowroomBreakdown]);
 
   const showroomTable = useReactTable({
-    data: showroomBreakdown,
+    data: visibleShowroomBreakdown,
     columns: showroomColumns,
     state: { sorting },
     onSortingChange: setSorting,
@@ -440,30 +331,6 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
     getSortedRowModel: getSortedRowModel(),
   });
 
-  // ── Totals — hooks phải đặt TRƯỚC early return (Rules of Hooks) ─────────────
-  const { totalPlan, totalActual, totalKhqt, totalGdtd, totalKhd, cpl, budgetPct } = useMemo(() => {
-    const tp   = showroomBreakdown.reduce((s, r) => s + r.plan, 0);
-    const ta   = showroomBreakdown.reduce((s, r) => s + r.actual, 0);
-    const tkq  = showroomBreakdown.reduce((s, r) => s + r.khqt, 0);
-    const tgd  = showroomBreakdown.reduce((s, r) => s + r.gdtd, 0);
-    const tkd  = showroomBreakdown.reduce((s, r) => s + r.khd, 0);
-    return { totalPlan: tp, totalActual: ta, totalKhqt: tkq, totalGdtd: tgd, totalKhd: tkd,
-      cpl: tkq > 0 ? ta / tkq : 0,
-      budgetPct: tp > 0 ? ta / tp * 100 : 0 };
-  }, [showroomBreakdown]);
-
-  // Plan KPIs — derived from v_budget_by_showroom view
-  const { pKhqt, pGdtd, pKhd, pBudget } = useMemo(() => {
-    const rows = viewByShowroom?.filter(r => monthsInView.includes(r.month)) ?? [];
-    let khqt = 0, gdtd = 0, khd = 0, ns = 0;
-    for (const r of rows) {
-      khqt += r.plan_khqt ?? 0;
-      gdtd += r.plan_gdtd ?? 0;
-      khd  += r.plan_khd  ?? 0;
-      ns   += r.plan_ns   ?? 0;
-    }
-    return { pKhqt: khqt, pGdtd: gdtd, pKhd: khd, pBudget: ns };
-  }, [viewByShowroom, monthsInView]);
 
   const alertShowrooms = useMemo(() =>
     showroomBreakdown
@@ -527,7 +394,7 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
               <FilterDropdown
                 isMulti
                 value={filterShowroom}
-                options={showrooms.map(s => ({ value: s.name, label: s.name }))}
+                options={visibleShowrooms.map(s => ({ value: s.name, label: s.name }))}
                 onChange={setFilterShowroom}
                 width={130}
                 placeholder="Tất cả Showroom"
@@ -536,7 +403,7 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
             <FilterDropdown
               isMulti
               value={filterBrand}
-              options={brands.map(b => ({ value: b.name, label: b.name }))}
+              options={(effectiveRole === 'mkt_brand' && profile?.brands?.length ? brands.filter(b => profile.brands!.includes(b.name)) : brands).map(b => ({ value: b.name, label: b.name }))}
               onChange={(v) => { setFilterBrand(v); setFilterModel([]); }}
               width={140}
               placeholder="Tất cả Thương hiệu"
@@ -557,7 +424,7 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
             )}
             <FilterDropdown
               value={filterChannel || 'all'}
-              options={[{ value: 'all', label: 'Tất cả Kênh' }, { value: 'Tổng Digital', label: 'Tổng Digital (=GG+Facebook+Khác)' }, ...CHANNELS.concat(['Sự kiện']).map(c => ({ value: c, label: c }))]}
+              options={[{ value: 'all', label: 'Tất cả Kênh' }, { value: 'Tổng Digital', label: 'Tổng Digital' }, ...CHANNELS.concat(['Sự kiện']).map(c => ({ value: c, label: c }))]}
               onChange={(v: string) => setFilterChannel(v === 'all' ? null : v)}
               width={160}
               placeholder="Tất cả Kênh"
@@ -743,12 +610,12 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
                 </div>
               </div>
               <div style={{ overflowX: 'auto', padding: '0 16px 16px 16px' }}>
-                {showroomBreakdown.length === 0 ? (
+                {visibleShowroomBreakdown.length === 0 ? (
                   <div style={{ padding: '40px 0', width: '100%' }}><EmptyDataState message="Không có dữ liệu showroom nào" /></div>
                 ) : (
                   <DataGrid
                     table={showroomTable}
-                    recordCount={showroomBreakdown.length}
+                    recordCount={visibleShowroomBreakdown.length}
                     tableLayout={{ stripped: true, cellBorder: false, rowBorder: true, headerSticky: true, dense: true, width: 'auto', headerBackground: true }}
                     tableClassNames={{ base: 'data-table' }}
                   >
@@ -814,11 +681,7 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
                               style={{ cursor: 'pointer' }}
                             >
                               {channelBreakdown.map((entry, i) => (
-                                <Cell 
-                                  key={i} 
-                                  fill={entry.color} 
-                                  opacity={(!filterChannel || (filterChannel === 'Tổng Digital' ? ['Google', 'Facebook', 'Khác'].includes(entry.name) : filterChannel === entry.name)) ? 1 : 0.3}
-                                />
+                                <Cell key={i} fill={entry.color} />
                               ))}
                             </Pie>
                             <RechartsTooltip
@@ -830,16 +693,13 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
                       </div>
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5, paddingTop: 2 }}>
                         {channelBreakdown.map(ch => (
-                          <div 
-                            key={ch.name} 
-                            style={{ 
-                              display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
-                              opacity: (!filterChannel || (filterChannel === 'Tổng Digital' ? ['Google', 'Facebook', 'Khác'].includes(ch.name) : filterChannel === ch.name)) ? 1 : 0.4
-                            }}
+                          <div
+                            key={ch.name}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
                             onClick={() => setFilterChannel(prev => prev === ch.name ? null : ch.name)}
                           >
                             <div style={{ width: 7, height: 7, borderRadius: 2, background: ch.color, flexShrink: 0 }} />
-                            <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: (filterChannel === 'Tổng Digital' ? ['Google', 'Facebook', 'Khác'].includes(ch.name) : filterChannel === ch.name) ? 600 : 400 }}>{ch.name}</span>
+                            <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.name}</span>
                             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text)' }}>{ch.pct}%</span>
                           </div>
                         ))}

@@ -14,6 +14,7 @@ import {
 } from '@/lib/events-data';
 import { useBrands } from '@/contexts/BrandsContext';
 import { useShowrooms } from '@/contexts/ShowroomsContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ─── SimpleSelect ──────────────────────────────────────────────────────────────
 function SimpleSelect({ value, options, onChange }: { value: string; options: string[]; onChange: (v: string) => void }) {
@@ -46,6 +47,17 @@ export interface EventFormModalProps {
 export default function EventFormModal({ isNew, initialData, fixedShowroom, onClose, onSave, onNavigateToReport }: EventFormModalProps) {
   const { brands: DEMO_BRANDS } = useBrands();
   const { showrooms, showroomNames } = useShowrooms();
+  const { effectiveRole, profile } = useAuth();
+
+  // mkt_brand: chỉ hiện showroom có brand được giao
+  const visibleShowroomNames = useMemo(() => {
+    if (effectiveRole === 'mkt_brand' && profile?.brands && profile.brands.length > 0) {
+      return showrooms
+        .filter(s => s.brands.some(b => profile.brands!.includes(b)))
+        .map(s => s.name);
+    }
+    return showroomNames;
+  }, [effectiveRole, profile, showrooms, showroomNames]);
   const [data, setData] = useState<EventItem>({ ...initialData });
   const [manualKpi, setManualKpi] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
@@ -321,7 +333,7 @@ export default function EventFormModal({ isNew, initialData, fixedShowroom, onCl
                 <div>
                   <SimpleSelect
                     value={data.showroom}
-                    options={showroomNames}
+                    options={visibleShowroomNames}
                     onChange={v => {
                       const sr = showrooms.find(s => s.name === v);
                       if (!sr) { setErrorMsg(`Không tìm thấy showroom "${v}". Vui lòng liên hệ Admin.`); return; }
