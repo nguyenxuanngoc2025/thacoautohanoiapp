@@ -270,6 +270,16 @@ export default function PlanningPage() {
     return id;
   }, [selectedShowroom, showrooms]);
 
+  // Showrooms hiển thị trong dropdown — mkt_brand chỉ thấy SR có brand được giao
+  const visibleShowroomNames = useMemo(() => {
+    if (effectiveRole === 'mkt_brand' && profile?.brands && profile.brands.length > 0) {
+      return showrooms
+        .filter(s => s.brands.some(b => profile.brands!.includes(b)))
+        .map(s => s.name);
+    }
+    return SHOWROOMS;
+  }, [effectiveRole, profile, showrooms, SHOWROOMS]);
+
   // Brands hiển thị — lọc theo brands của showroom đang chọn (nếu có)
   // mkt_brand: chỉ thấy brand được giao trong profile.brands
   const visibleBrands = useMemo(() => {
@@ -1819,7 +1829,7 @@ export default function PlanningPage() {
         <FilterDropdown
           label="Đơn vị"
           value={selectedShowroom}
-          options={[{value: 'all', label: '— Tất cả SR —'}, ...SHOWROOMS.map(sr => ({value: sr, label: sr}))]}
+          options={[{value: 'all', label: '— Tất cả SR —'}, ...visibleShowroomNames.map(sr => ({value: sr, label: sr}))]}
           onChange={setSelectedShowroom}
           width={140}
           placeholder="— Tất cả SR —"

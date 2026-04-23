@@ -75,6 +75,25 @@ export default function EventsPage() {
     ? (profile?.showroom_ids?.length ? profile.showroom_ids : (profile?.showroom?.code ? [profile.showroom.code] : []))
     : [];
 
+  // mkt_brand: chỉ thấy showroom có brand được giao
+  const visibleShowroomNames = useMemo(() => {
+    if (effectiveRole === 'mkt_brand' && profile?.brands && profile.brands.length > 0) {
+      return showrooms
+        .filter(s => s.brands.some(b => profile.brands!.includes(b)))
+        .map(s => s.name);
+    }
+    return showroomNames;
+  }, [effectiveRole, profile, showrooms, showroomNames]);
+
+  // mkt_brand: chỉ thấy brand được giao trong bộ lọc sự kiện
+  const visibleBrandOptions = useMemo(() => {
+    const base = DEMO_BRANDS.filter(b => !/^DVPT/i.test(b.name));
+    if (effectiveRole === 'mkt_brand' && profile?.brands && profile.brands.length > 0) {
+      return base.filter(b => profile.brands!.includes(b.name));
+    }
+    return base;
+  }, [effectiveRole, profile, DEMO_BRANDS]);
+
   // ── Data fetching via SWR (cached — chuyển trang không fetch lại) ──────────
   const { data: eventsRaw, mutate: mutateEvents } = useEventsData();
 
@@ -268,14 +287,14 @@ export default function EventsPage() {
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <FilterDropdown
               value={filterBrand || 'all'}
-              options={[{ value: 'all', label: 'Tất cả Thương hiệu' }, ...DEMO_BRANDS.filter(b => !/^DVPT/i.test(b.name)).map(b => ({ value: b.name, label: b.name }))]}
+              options={[{ value: 'all', label: 'Tất cả Thương hiệu' }, ...visibleBrandOptions.map(b => ({ value: b.name, label: b.name }))]}
               onChange={(v: string) => setFilterBrand(v === 'all' ? null : v)}
               placeholder="Tất cả Thương hiệu"
               width={150}
             />
             <FilterDropdown
               value={filterShowroom || 'all'}
-              options={[{ value: 'all', label: 'Tất cả Showroom' }, ...showroomNames.map(s => ({ value: s, label: s }))]}
+              options={[{ value: 'all', label: 'Tất cả Showroom' }, ...visibleShowroomNames.map(s => ({ value: s, label: s }))]}
               onChange={(v: string) => setFilterShowroom(v === 'all' ? null : v)}
               placeholder="Tất cả Showroom"
               width={150}
