@@ -5,22 +5,41 @@ import PageHeader from '@/components/layout/PageHeader';
 import {
   CalendarCheck, MapPin, Users, Wallet, TrendingUp,
   CheckCircle2, BarChart3, Activity, Calendar, Flag, Eye,
-  Plus, Pencil, FileCheck2,
+  AlertTriangle, Plus, Pencil, FileCheck2, Trash2
 } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 import {
-  fetchEventsFromDB, upsertEventToDB, inferEventStatus,
+  upsertEventToDB, deleteEventFromDB, inferEventStatus,
   EVENT_TYPE_COLORS, STATUS_CONFIG, PRIORITY_CONFIG,
   type EventItem, type EventsByMonth, type EventStatus, type EventPriority,
   emptyEvent
 } from '@/lib/events-data';
+import { useEventsData, invalidateEventsData } from '@/lib/use-data';
 
 // Lazy load Modals để giảm kích thước bundle ban đầu
 const EventFormModal = dynamic(() => import('@/components/events/EventFormModal'), { ssr: false });
 const CloseReportModal = dynamic(() => import('@/components/events/CloseReportModal'), { ssr: false });
+const EventResultModal = dynamic(() => import('@/components/events/EventResultModal'), { ssr: false });
+
+// Helper: kiểm tra event đã qua ngày chưa
+function isEventPast(event: EventItem): boolean {
+  const dateStr = event.date;
+  if (!dateStr) return false;
+  let parts: string[];
+  if (dateStr.includes('/')) parts = dateStr.split('/');
+  else parts = dateStr.split('-').reverse();
+  if (parts.length !== 3) return false;
+  const [d, m, y] = parts.map(Number);
+  const eventDate = new Date(y, m - 1, d);
+  return eventDate < new Date();
+}
 import { KPICard, MiniBarChart, DonutChart, MonthlySparkline } from '@/components/events/EventDashboardCards';
+import { FilterDropdown } from '@/components/erp/FilterDropdown';
 import { useShowrooms } from '@/contexts/ShowroomsContext';
+import { useBrands } from '@/contexts/BrandsContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUnit } from '@/contexts/UnitContext';
 
 // ─── Modal state types ─────────────────────────────────────────────────────────
 type ModalState =
@@ -36,62 +55,160 @@ export default function EventsPage() {
   const [month, setMonth] = useState(4);
   const [viewMode, setViewMode] = useState<'month' | 'quarter' | 'year'>('month');
   const [modal, setModal] = useState<ModalState>({ mode: 'closed' });
+  const [resultModalEvent, setResultModalEvent] = useState<EventItem | null>(null);
+  const [filterBrand, setFilterBrand] = useState<string | null>(null);
+  const [filterShowroom, setFilterShowroom] = useState<string | null>(null);
+  const [tableMode, setTableMode] = useState<'plan' | 'actual'>('plan');
 
   // ── Load & persist ────────────────────────────────────────────────────────
   const [eventsByMonth, setEventsByMonth] = useState<EventsByMonth>({});
-  const { showroomNames } = useShowrooms();
+  const { showrooms, showroomNames } = useShowrooms();
+  const { profile, effectiveRole } = useAuth();
+  const { brands: DEMO_BRANDS } = useBrands();
+  const { activeUnitId } = useUnit();
 
-  const loadData = useCallback(async () => {
-    const data = await fetchEventsFromDB();
-    setEventsByMonth(data);
-  }, []);
+  // ── Role-based Scope ──────────────────────────────────────────────────────
+  const canEditEvents = !!effectiveRole && !['bld', 'finance'].includes(effectiveRole);
+  const isRestrictedRole = ['mkt_showroom', 'gd_showroom'].includes(effectiveRole as string);
+  // Dùng showroom_ids (Phase 1 bottom-up) hoặc fallback về showroom name
+  const allowedShowroomCodes: string[] = isRestrictedRole
+    ? (profile?.showroom_ids?.length ? profile.showroom_ids : (profile?.showroom?.code ? [profile.showroom.code] : []))
+    : [];
 
+  // ── Data fetching via SWR (cached — chuyển trang không fetch lại) ──────────
+  const { data: eventsRaw, mutate: mutateEvents } = useEventsData();
+
+  // Sync SWR data → local state (chạy khi SWR lần đầu trả về data hoặc refresh)
   useEffect(() => {
-    loadData().then(() => setMounted(true));
-  }, [loadData]);
+    if (eventsRaw !== undefined) {
+      setEventsByMonth(eventsRaw);
+      setMounted(true);
+    }
+  }, [eventsRaw]);
 
-  // Focus sync
+  // Handle URL param to auto-open event
   useEffect(() => {
-    const onFocus = () => loadData();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [loadData]);
+    if (Object.keys(eventsByMonth).length === 0) return;
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const eventIdStr = params.get('eventId');
+      if (eventIdStr) {
+        const targetId = parseInt(eventIdStr, 10);
+        let foundEvent: EventItem | undefined;
+        let foundMonth = month;
+        
+        for (const [mStr, eventsArr] of Object.entries(eventsByMonth)) {
+          const ev = eventsArr.find(e => e.id === targetId);
+          if (ev) {
+            foundEvent = ev;
+            foundMonth = parseInt(mStr, 10);
+            break;
+          }
+        }
+        
+        if (foundEvent && modal.mode === 'closed') { // Avoid reopening infinitely
+          setMonth(foundMonth);
+          setViewMode('month');
+          const action = params.get('action');
+          setModal(action === 'report'
+            ? { mode: 'close_report', data: foundEvent }
+            : { mode: 'edit', data: foundEvent }
+          );
+          // Remove param to keep URL clean after opening
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      }
+    }
+  }, [eventsByMonth, month, modal.mode]);
 
   // ── Mutation helpers ──────────────────────────────────────────────────────
   const upsertEvent = useCallback(async (ev: EventItem, targetMonth: number) => {
-    const success = await upsertEventToDB(ev);
-    if (!success) return;
+    // Inject unit_id + đảm bảo showroom_code nhất quán
+    const resolvedSR = showrooms.find(s => s.name === ev.showroom);
+    const evWithUnit: EventItem = {
+      ...ev,
+      unit_id: ev.unit_id || (activeUnitId !== 'all' ? activeUnitId : undefined),
+      showroom_code: ev.showroom_code || resolvedSR?.code || ev.showroom,
+    };
+    // upsertEventToDB throws on failure — let it bubble up to EventFormModal
+    await upsertEventToDB(evWithUnit);
+    // Optimistic update local state
     setEventsByMonth(prev => {
       const arr = [...(prev[targetMonth] || [])];
       const idx = arr.findIndex(e => e.id === ev.id);
       if (idx >= 0) arr[idx] = ev; else arr.push(ev);
       return { ...prev, [targetMonth]: arr };
     });
-  }, []);
+    // Cập nhật SWR cache để dashboard/reports cũng thấy data mới
+    mutateEvents();
+  }, [mutateEvents, activeUnitId, showrooms]);
+
+  const handleDeleteEvent = useCallback(async (ev: EventItem, targetMonth: number) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa sự kiện "${ev.name}" không?\nHành động này không thể hoàn tác.`)) {
+      return;
+    }
+    try {
+      await deleteEventFromDB(ev.id, ev.showroom_code || ev.showroom, ev.date);
+      setEventsByMonth(prev => {
+        const arr = [...(prev[targetMonth] || [])].filter(e => e.id !== ev.id);
+        return { ...prev, [targetMonth]: arr };
+      });
+      mutateEvents();
+    } catch (err: any) {
+      alert(`Lỗi khi xóa sự kiện: ${err.message}`);
+    }
+  }, [mutateEvents]);
 
   // ── Events for current view ───────────────────────────────────────────────
-  const today = new Date(2026, 3, 10);
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
   const events = useMemo<EventItem[]>(() => {
     let raw: EventItem[];
     if (viewMode === 'month')        raw = eventsByMonth[month] || [];
     else if (viewMode === 'quarter') { const q0 = (Math.ceil(month / 3) - 1) * 3 + 1; raw = [q0, q0+1, q0+2].flatMap(m => eventsByMonth[m] || []); }
     else                             raw = Array.from({ length: 12 }, (_, i) => eventsByMonth[i+1] || []).flat();
+    
+    // Role-based filtering — ưu tiên showroom_code (Phase 1), fallback showroom name
+    if (isRestrictedRole && allowedShowroomCodes.length > 0) {
+      raw = raw.filter(ev =>
+        ev.showroom_code
+          ? allowedShowroomCodes.includes(ev.showroom_code)
+          : allowedShowroomCodes.some(code => {
+              const sr = showrooms.find(s => s.code === code);
+              return sr?.name === ev.showroom;
+            })
+      );
+    }
+    
+    // User-selected filters
+    if (filterBrand) raw = raw.filter(ev => ev.brands.includes(filterBrand));
+    if (filterShowroom) raw = raw.filter(ev => ev.showroom === filterShowroom || ev.showroom_code === filterShowroom);
+
     return raw.map(ev => ({ ...ev, status: inferEventStatus(ev, today) }));
-  }, [eventsByMonth, month, viewMode]);
+  }, [eventsByMonth, month, viewMode, isRestrictedRole, allowedShowroomCodes, showrooms, filterBrand, filterShowroom]);
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
-    const totalBudget = events.reduce((s, e) => s + e.budget, 0);
-    const totalSpent  = events.reduce((s, e) => s + (e.budgetSpent ?? 0), 0);
-    const totalLeads  = events.reduce((s, e) => s + (e.leads ?? 0), 0);
-    const totalDeals  = events.reduce((s, e) => s + (e.deals ?? 0), 0);
-    const totalTestDrives = events.reduce((s, e) => s + (e.testDrives ?? 0), 0);
-    const completed   = events.filter(e => e.status === 'completed').length;
-    const upcoming    = events.filter(e => e.status === 'upcoming').length;
-    const inProgress  = events.filter(e => e.status === 'in_progress').length;
-    const utilPct     = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
-    const cpl         = totalLeads > 0 ? Math.round((totalSpent / totalLeads) * 1_000_000) : 0;
-    return { total: events.length, totalBudget, totalSpent, totalLeads, totalDeals, totalTestDrives, completed, upcoming, inProgress, utilPct, cpl };
+    const totalBudget     = events.reduce((s, e) => s + e.budget, 0);
+    const totalSpent      = events.reduce((s, e) => s + (e.budgetSpent ?? 0), 0);
+    // Hiện thị số thực tế cho event đã hoàn thành, kế hoạch cho event chưa diễn ra
+    const totalLeads      = events.reduce((s, e) => s + (e.status === 'completed' ? (e.leadsActual ?? e.leads ?? 0) : (e.leads ?? 0)), 0);
+    const totalDeals      = events.reduce((s, e) => s + (e.status === 'completed' ? (e.dealsActual ?? e.deals ?? 0) : (e.deals ?? 0)), 0);
+    const totalTestDrives = events.reduce((s, e) => s + (e.status === 'completed' ? (e.testDrivesActual ?? e.testDrives ?? 0) : (e.testDrives ?? 0)), 0);
+    const totalGdtd       = events.reduce((s, e) => s + (e.status === 'completed' ? (e.gdtdActual ?? e.gdtd ?? 0) : (e.gdtd ?? 0)), 0);
+    // Tổng kế hoạch để so sánh
+    const planLeads       = events.reduce((s, e) => s + (e.leads ?? 0), 0);
+    const planDeals       = events.reduce((s, e) => s + (e.deals ?? 0), 0);
+    const completed       = events.filter(e => e.status === 'completed').length;
+    const upcoming        = events.filter(e => e.status === 'upcoming').length;
+    const inProgress      = events.filter(e => e.status === 'in_progress').length;
+    const overdue         = events.filter(e => e.status === 'overdue').length;
+    const utilPct         = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
+    const cpl             = totalLeads > 0 ? Math.round((totalSpent / totalLeads) * 1_000_000) : 0;
+    return { total: events.length, totalBudget, totalSpent, totalLeads, totalDeals, totalTestDrives, totalGdtd, planLeads, planDeals, completed, upcoming, inProgress, overdue, utilPct, cpl };
   }, [events]);
 
   // ── Chart data ────────────────────────────────────────────────────────────
@@ -122,8 +239,13 @@ export default function EventsPage() {
   const monthlyBudget = useMemo(() => Array.from({ length: 12 }, (_, i) => (eventsByMonth[i+1] || []).reduce((s, e) => s + e.budget, 0)), [eventsByMonth]);
 
   const upcomingDeadlines = useMemo(() => events
-    .filter(e => e.status === 'upcoming' || e.status === 'in_progress')
-    .map(e => { const [dd, mm, yy] = e.date.includes('/') ? e.date.split('/') : e.date.split('-').reverse(); const d = new Date(+yy, +mm - 1, +dd); return { ...e, daysUntil: Math.ceil((d.getTime() - today.getTime()) / 86_400_000) }; })
+    .filter(e => e.status === 'upcoming' || e.status === 'in_progress' || e.status === 'overdue')
+    .map(e => { 
+      const [dd, mm, yy] = e.date.includes('/') ? e.date.split('/') : e.date.split('-').reverse(); 
+      const d = new Date(+yy, +mm - 1, +dd); 
+      return { ...e, daysUntil: Math.ceil((d.getTime() - today.getTime()) / 86_400_000) }; 
+    })
+    .filter(e => e.daysUntil <= 14) // Chỉ nhắc sự kiện trong 14 ngày tới hoặc đã trễ
     .sort((a, b) => a.daysUntil - b.daysUntil)
   , [events]);
 
@@ -142,20 +264,53 @@ export default function EventsPage() {
         year={year} month={month} viewMode={viewMode}
         onPeriodChange={(y, m) => { setYear(y); setMonth(m); }}
         onViewModeChange={setViewMode}
+        filters={
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <FilterDropdown
+              value={filterBrand || 'all'}
+              options={[{ value: 'all', label: 'Tất cả Thương hiệu' }, ...DEMO_BRANDS.filter(b => !/^DVPT/i.test(b.name)).map(b => ({ value: b.name, label: b.name }))]}
+              onChange={(v: string) => setFilterBrand(v === 'all' ? null : v)}
+              placeholder="Tất cả Thương hiệu"
+              width={150}
+            />
+            <FilterDropdown
+              value={filterShowroom || 'all'}
+              options={[{ value: 'all', label: 'Tất cả Showroom' }, ...showroomNames.map(s => ({ value: s, label: s }))]}
+              onChange={(v: string) => setFilterShowroom(v === 'all' ? null : v)}
+              placeholder="Tất cả Showroom"
+              width={150}
+            />
+            {(filterBrand || filterShowroom) && (
+              <button
+                onClick={() => { setFilterBrand(null); setFilterShowroom(null); }}
+                style={{ fontSize: 11, padding: '3px 8px', border: '1px solid #fecaca', borderRadius: 4, background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontWeight: 600 }}
+              >✕ Bỏ lọc</button>
+            )}
+          </div>
+        }
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <div style={{ display: 'flex', gap: 4 }}>
               {kpis.completed  > 0 && <span className="header-badge header-badge-success"><CheckCircle2 size={12} />{kpis.completed} HT</span>}
               {kpis.inProgress > 0 && <span className="header-badge header-badge-info"><Activity size={12} />{kpis.inProgress} đang chạy</span>}
               {kpis.upcoming   > 0 && <span className="header-badge header-badge-warn"><Calendar size={12} />{kpis.upcoming} sắp tới</span>}
+              {kpis.overdue    > 0 && <span className="header-badge" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}><AlertTriangle size={12} />{kpis.overdue} quá hạn</span>}
             </div>
-            <button
-              className="button-erp-primary"
-              onClick={() => setModal({ mode: 'create', data: emptyEvent(month, showroomNames[0] || '') })}
-              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-            >
-              <Plus size={14} />Tạo sự kiện
-            </button>
+            {canEditEvents && (
+              <button
+                className="button-erp-primary"
+                onClick={() => {
+                  // Nếu role bị giới hạn SR → mặc định SR đầu tiên được phép
+                  const defaultSR = isRestrictedRole && allowedShowroomCodes.length > 0
+                    ? showrooms.find(s => s.code === allowedShowroomCodes[0]) ?? showrooms[0]
+                    : showrooms[0];
+                  setModal({ mode: 'create', data: emptyEvent(month, defaultSR?.code || '', defaultSR?.name || '') });
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <Plus size={14} />Tạo sự kiện
+              </button>
+            )}
           </div>
         }
       />
@@ -171,7 +326,7 @@ export default function EventsPage() {
             subValue={`Đã chi: ${formatNumber(kpis.totalSpent)} tr (${kpis.utilPct}%)`}
             color="#10B981" />
           <KPICard icon={Users} label="Tổng KHQT" value={kpis.totalLeads}
-            subValue={kpis.cpl > 0 ? `CPL: ${formatNumber(kpis.cpl)}đ` : '—'}
+            subValue={kpis.cpl > 0 ? `CPL: ${formatNumber(kpis.cpl)}đ/lead` : '—'}
             color="#F59E0B" trend="up" />
           <KPICard icon={TrendingUp} label="Hợp đồng" value={kpis.totalDeals}
             subValue={kpis.totalLeads > 0 ? `CR: ${((kpis.totalDeals / kpis.totalLeads)*100).toFixed(1)}%` : '—'}
@@ -243,26 +398,47 @@ export default function EventsPage() {
                   Không có sự kiện cần nhắc
                 </div>
               ) : upcomingDeadlines.map((ev, i) => {
-                const isPast = ev.daysUntil < 0, isToday = ev.daysUntil === 0, isUrgent = ev.daysUntil <= 3 && !isPast;
-                const dot = isPast ? '#ef4444' : isToday ? '#3B82F6' : isUrgent ? '#f59e0b' : '#94a3b8';
-                const itemClass = `timeline-item${isPast ? ' timeline-item-past' : isUrgent ? ' timeline-item-urgent' : ''}`;
-                const countdownColor = isPast ? '#dc2626' : isToday ? '#2563eb' : isUrgent ? '#d97706' : '#64748b';
+                const isOverdue = ev.status === 'overdue';
+                const isPast = ev.daysUntil < 0;
+                const isToday = ev.daysUntil === 0;
+                const isUrgent = ev.daysUntil > 0 && ev.daysUntil <= 3;
+                
+                const dot = isOverdue ? '#ef4444' : isToday ? '#3B82F6' : isUrgent ? '#f59e0b' : '#94a3b8';
+                const itemClass = `timeline-item${isOverdue ? ' timeline-item-past' : isUrgent ? ' timeline-item-urgent' : ''}`;
+                const bgWarning = isOverdue ? '#fef2f2' : isToday ? '#eff6ff' : 'transparent';
+                
                 return (
-                  <div key={ev.id} className={itemClass} style={{ borderBottom: i < upcomingDeadlines.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                  <div key={ev.id} className={itemClass} style={{ borderBottom: i < upcomingDeadlines.length - 1 ? '1px solid #f1f5f9' : 'none', background: bgWarning, padding: '10px 12px', transition: 'all 0.2s', borderRadius: i === upcomingDeadlines.length - 1 ? '0 0 6px 6px' : 0 }}>
                     <div className="timeline-item-connector">
                       <div className="timeline-dot" style={{ background: dot, boxShadow: `0 0 0 2px ${dot}44` }} />
-                      {i < upcomingDeadlines.length - 1 && <div className="timeline-line" />}
+                      {i < upcomingDeadlines.length - 1 && <div className="timeline-line" style={{ background: isOverdue ? '#fecaca' : '#e2e8f0' }} />}
                     </div>
                     <div className="timeline-item-content">
-                      <div className="timeline-item-name">{ev.name}</div>
-                      <div className="timeline-item-meta">{ev.date} · {ev.showroom}</div>
-                      <div className="timeline-item-countdown" style={{ color: countdownColor }}>
-                        {isPast ? `Quá hạn ${Math.abs(ev.daysUntil)}d` : isToday ? '📍 Hôm nay!' : `Còn ${ev.daysUntil} ngày`}
+                      <div className="timeline-item-name" style={{ color: isOverdue ? '#b91c1c' : 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {ev.name}
+                        {isToday && <span style={{ padding: '2px 4px', background: '#3B82F6', color: '#fff', fontSize: 9, borderRadius: 3, fontWeight: 700 }}>NOW</span>}
+                      </div>
+                      <div className="timeline-item-meta">{ev.date.includes('-') ? ev.date.split('-').reverse().join('/') : ev.date} · {ev.showroom}</div>
+                      <div className="timeline-item-countdown" style={{ marginTop: 2 }}>
+                        {isOverdue ? (
+                          <span style={{ color: '#dc2626', fontWeight: 700 }}>Trễ báo cáo {Math.abs(ev.daysUntil)} ngày!</span>
+                        ) : isToday ? (
+                          <span style={{ color: '#2563eb', fontWeight: 600 }}>Đang diễn ra</span>
+                        ) : (
+                          <span style={{ color: isUrgent ? '#d97706' : '#64748b' }}>Còn {ev.daysUntil} ngày</span>
+                        )}
                       </div>
                     </div>
-                    <button title="Sửa" className="timeline-item-edit-btn" onClick={() => setModal({ mode: 'edit', data: ev })}>
-                      <Pencil size={11} />
-                    </button>
+                    
+                    {canEditEvents && (isOverdue ? (
+                      <button title="Cập nhật thông tin" style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)', flexShrink: 0 }} onClick={() => setModal({ mode: 'edit', data: ev })}>
+                        <Pencil size={12} /> Cập nhật
+                      </button>
+                    ) : (
+                      <button title="Chỉnh sửa chung" className="timeline-item-edit-btn" onClick={() => setModal({ mode: 'edit', data: ev })}>
+                        <Pencil size={11} />
+                      </button>
+                    ))}
                   </div>
                 );
               })}
@@ -277,39 +453,68 @@ export default function EventsPage() {
                 Danh sách sự kiện{periodLabel}
               </span>
               <span className="table-panel-count">({events.length})</span>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 2, background: '#f1f5f9', borderRadius: 6, padding: 2 }}>
+                <button onClick={() => setTableMode('plan')} style={{ padding: '4px 12px', fontSize: 11, fontWeight: 600, border: 'none', borderRadius: 4, cursor: 'pointer', background: tableMode === 'plan' ? 'var(--color-primary)' : 'transparent', color: tableMode === 'plan' ? '#fff' : 'var(--color-text-secondary)', transition: 'all 0.15s' }}>Kế hoạch</button>
+                <button onClick={() => setTableMode('actual')} style={{ padding: '4px 12px', fontSize: 11, fontWeight: 600, border: 'none', borderRadius: 4, cursor: 'pointer', background: tableMode === 'actual' ? '#059669' : 'transparent', color: tableMode === 'actual' ? '#fff' : 'var(--color-text-secondary)', transition: 'all 0.15s' }}>Thực hiện</button>
+              </div>
             </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>
               <table className="data-table">
                 <thead>
                   <tr>
                     <th style={{ width: 28, textAlign: 'center' }}>#</th>
-                    <th style={{ textAlign: 'left', minWidth: 160 }}>Sự kiện</th>
-                    <th style={{ width: 90 }}>Loại</th>
-                    <th style={{ width: 95 }}>Trạng thái</th>
-                    <th style={{ width: 100 }}>Showroom</th>
+                    <th style={{ textAlign: 'left', minWidth: 120 }}>Sự kiện</th>
+                    <th style={{ width: 80 }}>Thương hiệu</th>
+                    <th style={{ width: 100 }}>Dòng xe</th>
+                    <th style={{ width: 80 }}>Loại</th>
+                    <th style={{ width: 85 }}>Trạng thái</th>
+                    <th style={{ width: 90 }}>Showroom</th>
                     <th style={{ width: 78 }}>Ngày</th>
-                    <th style={{ width: 54, textAlign: 'right' }}>NS (tr)</th>
-                    <th style={{ width: 54, textAlign: 'right' }}>KHQT</th>
-                    <th style={{ width: 52, textAlign: 'right' }}>Lái thử</th>
-                    <th style={{ width: 50, textAlign: 'right' }}>GDTD</th>
-                    <th style={{ width: 44, textAlign: 'right' }}>KHĐ</th>
+                    <th style={{ width: 64, textAlign: 'right' }}>NS (tr)</th>
+                    <th style={{ width: 60, textAlign: 'right' }}>KHQT</th>
+                    <th style={{ width: 55, textAlign: 'right' }}>Lái thử</th>
+                    <th style={{ width: 55, textAlign: 'right' }}>GDTD</th>
+                    <th style={{ width: 55, textAlign: 'right' }}>KHĐ</th>
                     <th style={{ width: 100, textAlign: 'center' }}>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
                   {events.length === 0 ? (
-                    <tr><td colSpan={12} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-muted)' }}>
+                    <tr><td colSpan={14} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-muted)' }}>
                       Chưa có sự kiện trong kỳ này —{' '}
-                      <button onClick={() => setModal({ mode: 'create', data: emptyEvent(month, showroomNames[0] || '') })} style={{ border: 'none', background: 'none', color: 'var(--color-brand, #004B9B)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Tạo sự kiện mới</button>
+                      <button onClick={() => {
+                        const defaultSR = isRestrictedRole && allowedShowroomCodes.length > 0
+                          ? showrooms.find(s => s.code === allowedShowroomCodes[0]) ?? showrooms[0]
+                          : showrooms[0];
+                        setModal({ mode: 'create', data: emptyEvent(month, defaultSR?.code || '', defaultSR?.name || '') });
+                      }} style={{ border: 'none', background: 'none', color: 'var(--color-brand, #004B9B)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Tạo sự kiện mới</button>
                     </td></tr>
                   ) : events.map((ev, i) => {
                     const stCfg = STATUS_CONFIG[ev.status as EventStatus] || STATUS_CONFIG.upcoming;
+                    const _bSet = new Set(DEMO_BRANDS.map(b => b.name));
+                    const evBrands = ev.brands.filter(b => _bSet.has(b));
+                    const evModels = ev.brands.filter(b => !_bSet.has(b));
+                    const nsVal   = tableMode === 'plan' ? ev.budget            : (ev.budgetSpent ?? null);
+                    const khqtVal = tableMode === 'plan' ? (ev.leads ?? null)   : (ev.leadsActual ?? null);
+                    const ltVal   = tableMode === 'plan' ? (ev.testDrives ?? null) : (ev.testDrivesActual ?? null);
+                    const gdtdVal = tableMode === 'plan' ? (ev.gdtd ?? null)    : (ev.gdtdActual ?? null);
+                    const khdVal  = tableMode === 'plan' ? (ev.deals ?? null)   : (ev.dealsActual ?? null);
                     return (
                       <tr key={ev.id}>
                         <td style={{ textAlign: 'center', color: 'var(--color-text-muted)' }}>{i + 1}</td>
                         <td>
                           <div style={{ fontWeight: 600 }}>{ev.name}</div>
                           <div style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{ev.location}</div>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                            {evBrands.length > 0 ? evBrands.map(b => (
+                              <span key={b} style={{ fontSize: 10, fontWeight: 600, padding: '1px 5px', borderRadius: 3, background: '#eff6ff', color: '#1d4ed8' }}>{b}</span>
+                            )) : <span style={{ color: '#94a3b8', fontSize: 11 }}>—</span>}
+                          </div>
+                        </td>
+                        <td style={{ fontSize: 10, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={evModels.join(', ')}>
+                          {evModels.length > 0 ? (evModels.length <= 2 ? evModels.join(', ') : `${evModels.slice(0,2).join(', ')} +${evModels.length-2}`) : '—'}
                         </td>
                         <td>
                           <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 3, background: (EVENT_TYPE_COLORS[ev.type] || '#94a3b8') + '15', color: EVENT_TYPE_COLORS[ev.type] || '#94a3b8' }}>
@@ -319,22 +524,35 @@ export default function EventsPage() {
                         <td><span className="status-badge" style={{ color: stCfg.color }}>{stCfg.label}</span></td>
                         <td style={{ fontSize: 11 }}>{ev.showroom}</td>
                         <td style={{ fontSize: 11 }}>{ev.date.includes('-') ? ev.date.split('-').reverse().join('/') : ev.date}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatNumber(ev.budget)}</td>
-                        <td style={{ textAlign: 'right', color: '#3b82f6' }}>{ev.leads != null ? formatNumber(ev.leads) : '—'}</td>
-                        <td style={{ textAlign: 'right', color: '#06b6d4' }}>{ev.testDrives != null ? ev.testDrives : '—'}</td>
-                        <td style={{ textAlign: 'right', color: '#f59e0b' }}>{ev.gdtd != null ? formatNumber(ev.gdtd) : '—'}</td>
-                        <td style={{ textAlign: 'right', color: '#10b981', fontWeight: 600 }}>{ev.deals || '—'}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                          {nsVal != null ? formatNumber(nsVal) : <span style={{ color: '#94a3b8' }}>—</span>}
+                        </td>
+                        <td style={{ textAlign: 'right', color: '#3b82f6' }}>
+                          {khqtVal != null ? formatNumber(khqtVal) : <span style={{ color: '#94a3b8' }}>—</span>}
+                        </td>
+                        <td style={{ textAlign: 'right', color: '#06b6d4' }}>
+                          {ltVal != null ? ltVal : <span style={{ color: '#94a3b8' }}>—</span>}
+                        </td>
+                        <td style={{ textAlign: 'right', color: '#f59e0b' }}>
+                          {gdtdVal != null ? formatNumber(gdtdVal) : <span style={{ color: '#94a3b8' }}>—</span>}
+                        </td>
+                        <td style={{ textAlign: 'right', color: '#10b981', fontWeight: 600 }}>
+                          {khdVal != null ? khdVal : <span style={{ color: '#94a3b8' }}>—</span>}
+                        </td>
                         <td style={{ textAlign: 'center' }}>
-                          <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
-                            <button title="Chỉnh sửa" className="action-btn" onClick={() => setModal({ mode: 'edit', data: ev })}>
-                              <Pencil size={11} /> Sửa
-                            </button>
-                            {ev.status !== 'completed' && (
+                          {canEditEvents && (
+                            <div style={{ display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
+                              <button title="Sửa sự kiện" className="action-btn" onClick={() => setModal({ mode: 'edit', data: ev })}>
+                                <Pencil size={11} /> Sửa
+                              </button>
+                              <button title="Xóa sự kiện" className="action-btn" style={{ color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' }} onClick={() => handleDeleteEvent(ev, month)}>
+                                <Trash2 size={11} /> Xóa
+                              </button>
                               <button title="Báo cáo kết thúc" className="action-btn action-btn-success" onClick={() => setModal({ mode: 'close_report', data: ev })}>
                                 <FileCheck2 size={11} /> Kết thúc
                               </button>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
@@ -344,11 +562,20 @@ export default function EventsPage() {
             </div>
             {events.length > 0 && (
               <div className="table-panel-footer">
-                <span><strong>Tổng NS:</strong> {formatNumber(kpis.totalBudget)} tr</span>
-                <span><strong>Đã thực hiện:</strong> {kpis.completed} sự kiện</span>
-                <span><strong>KHQT:</strong> {formatNumber(kpis.totalLeads)}</span>
+                <span>
+                  <strong>NS:</strong> {formatNumber(kpis.totalSpent > 0 ? kpis.totalSpent : kpis.totalBudget)} tr
+                  {kpis.totalSpent > 0 && <span style={{ color: '#94a3b8', fontSize: 10, marginLeft: 4 }}>/ KH:{formatNumber(kpis.totalBudget)}</span>}
+                </span>
+                <span><strong>Đã thực hiện:</strong> {kpis.completed}/{kpis.total} SK</span>
+                <span>
+                  <strong>KHQT:</strong> {formatNumber(kpis.totalLeads)}
+                  {kpis.totalLeads !== kpis.planLeads && <span style={{ color: '#94a3b8', fontSize: 10, marginLeft: 4 }}>/ KH:{formatNumber(kpis.planLeads)}</span>}
+                </span>
                 <span><strong>Lái thử:</strong> {formatNumber(kpis.totalTestDrives)}</span>
-                <span><strong>KHĐ:</strong> {formatNumber(kpis.totalDeals)}</span>
+                <span>
+                  <strong>KHĐ:</strong> {formatNumber(kpis.totalDeals)}
+                  {kpis.totalDeals !== kpis.planDeals && <span style={{ color: '#94a3b8', fontSize: 10, marginLeft: 4 }}>/ KH:{formatNumber(kpis.planDeals)}</span>}
+                </span>
                 <span className="table-panel-footer-spacer" style={{ color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
                   <Eye size={11} />Shared với Lập kế hoạch
                 </span>
@@ -378,6 +605,23 @@ export default function EventsPage() {
           onSave={async (updated) => {
             await upsertEvent(updated, month);
             setModal({ mode: 'closed' });
+          }}
+        />
+      )}
+
+      {resultModalEvent && (
+        <EventResultModal
+          event={resultModalEvent}
+          onClose={() => setResultModalEvent(null)}
+          onSaved={(updated) => {
+            setEventsByMonth(prev => {
+              const arr = [...(prev[month] || [])];
+              const idx = arr.findIndex(e => e.id === updated.id);
+              if (idx >= 0) arr[idx] = updated;
+              return { ...prev, [month]: arr };
+            });
+            mutateEvents();
+            setResultModalEvent(null);
           }}
         />
       )}
