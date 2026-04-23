@@ -477,6 +477,21 @@ export default function PlanningPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveRole, accessibleShowroomCodes, showrooms]);
 
+  // ─── Auto-select showroom từ URL param ?showroom=xxx (deep link từ notification) ─
+  useEffect(() => {
+    if (showrooms.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const srParam = params.get('showroom');
+    if (!srParam) return;
+    const sr = showrooms.find(s => s.name === srParam);
+    if (sr) setSelectedShowroom(sr.name);
+    // Xóa param khỏi URL sau khi đã áp dụng
+    const url = new URL(window.location.href);
+    url.searchParams.delete('showroom');
+    window.history.replaceState({}, '', url.toString());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showrooms]);
+
   // ─── Fetch plan submission + lock status ───────────────────────────────────
   useEffect(() => {
     if (!selectedShowroomId || !activeUnitId) {
@@ -543,6 +558,8 @@ export default function PlanningPage() {
           entry_type,
           showroom_name: selectedShowroom,
           sender_name: profile?.full_name || profile?.email || '',
+          sender_role: effectiveRole || '',
+          brands: visibleBrands.map((b: { name: string }) => b.name).join(', '),
         }),
       });
       if (res.ok) {
