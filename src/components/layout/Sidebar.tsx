@@ -20,13 +20,16 @@ import {
   User,
   BookOpen,
   CheckSquare,
+  Newspaper,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { NAV_ITEMS } from '@/lib/constants';
 import { type UserRole } from '@/types/database';
 
 const ICON_MAP: Record<string, React.ElementType> = {
   LayoutDashboard, CalendarRange, CalendarCheck, ClipboardEdit,
-  Wallet, BarChart3, FileText, Settings, BookOpen, CheckSquare,
+  Wallet, BarChart3, FileText, Settings, BookOpen, CheckSquare, Newspaper,
 };
 
 const SIDEBAR_W_OPEN = 248;
@@ -153,20 +156,22 @@ export default function Sidebar({
   const handleMouseEnter = useCallback(() => {
     setToggleVisible(true);
     if (!collapsed) return;
-    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    hoverTimerRef.current = setTimeout(() => setHoverExpanded(true), HOVER_DELAY_IN);
+    if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
+    hoverTimerRef.current = setTimeout(() => { setHoverExpanded(true); hoverTimerRef.current = null; }, HOVER_DELAY_IN);
   }, [collapsed]);
 
   const handleMouseLeave = useCallback(() => {
     setToggleVisible(false);
     if (!collapsed) return;
-    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    hoverTimerRef.current = setTimeout(() => setHoverExpanded(false), HOVER_DELAY_OUT);
+    if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
+    hoverTimerRef.current = setTimeout(() => { setHoverExpanded(false); hoverTimerRef.current = null; }, HOVER_DELAY_OUT);
   }, [collapsed]);
 
   useEffect(() => {
     setHoverExpanded(false);
-    return () => { if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current); };
+    return () => {
+      if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
+    };
   }, [collapsed]);
 
   const currentW = isOpen ? SIDEBAR_W_OPEN : SIDEBAR_W_COLLAPSED;
@@ -195,7 +200,7 @@ export default function Sidebar({
             top: 0, left: 0,
             width: currentW,
             height: '100%',
-            background: 'linear-gradient(180deg, #004B9B 0%, #063970 100%)',
+            background: 'linear-gradient(180deg, #0056b3 0%, #00264d 100%)',
             display: 'flex', flexDirection: 'column',
             overflowX: 'hidden', overflowY: 'hidden',
             color: '#e2e8f0',
@@ -206,6 +211,7 @@ export default function Sidebar({
                 ? '2px 0 12px rgba(0,0,0,0.12)'
                 : 'none',
             transition: 'width 0.25s cubic-bezier(0.4,0,0.2,1), box-shadow 0.25s ease',
+            willChange: 'width',
             zIndex: 201,
           }}
         >
@@ -321,11 +327,33 @@ export default function Sidebar({
 // ─── User Panel ───────────────────────────────────────────────────────────────
 function UserPanel({ userName, userCode, isOpen }: { userName: string; userCode: string; isOpen: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const initials = userName.split(' ').map(w => w[0]).join('').slice(-2).toUpperCase();
   const { signOut } = useAuth();
   const router = useRouter();
 
+  useEffect(() => {
+    const saved = localStorage.getItem('thaco_theme');
+    if (saved === 'dark') {
+      setTheme('dark');
+      document.documentElement.classList.add('dark');
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    localStorage.setItem('thaco_theme', next);
+    document.documentElement.classList.toggle('dark', next === 'dark');
+  };
+
+  const navigate = (href: string) => {
+    setMenuOpen(false);
+    router.push(href);
+  };
+
   const handleSignOut = async () => {
+    setMenuOpen(false);
     await signOut();
     router.replace('/login');
   };
@@ -345,8 +373,13 @@ function UserPanel({ userName, userCode, isOpen }: { userName: string; userCode:
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text)' }}>{userName}</div>
             <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 1 }}>{userCode}</div>
           </div>
-          <MenuButton icon={<User size={13} />} label="Hồ sơ cá nhân" />
-          <MenuButton icon={<Key size={13} />} label="Đổi mật khẩu" />
+          <MenuButton icon={<User size={13} />} label="Hồ sơ cá nhân" onClick={() => navigate('/settings/profile')} />
+          <MenuButton icon={<Key size={13} />} label="Đổi mật khẩu" onClick={() => navigate('/settings/profile')} />
+          <MenuButton
+            icon={theme === 'light' ? <Moon size={13} /> : <Sun size={13} />}
+            label={theme === 'light' ? 'Chế độ tối' : 'Chế độ sáng'}
+            onClick={toggleTheme}
+          />
           <div style={{ height: 1, background: 'var(--color-border-light)', margin: '2px 0' }} />
           <MenuButton icon={<LogOut size={13} />} label="Đăng xuất" danger onClick={handleSignOut} />
         </div>

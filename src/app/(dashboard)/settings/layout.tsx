@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Tag, Users, Building2, Zap, Radio, UserCircle, Sun, BarChart2 } from 'lucide-react';
+import { Tag, Users, Building2, Zap, Radio, UserCircle, Sun, BarChart2, Lock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { type UserRole } from '@/types/database';
 
@@ -23,7 +23,8 @@ const GROUP_ADMIN = [
   { href: '/settings/accounts',  label: 'Tài khoản & Phân quyền',  icon: Users,     desc: 'Nhân sự, vai trò, scope',
     superAdminOnly: true },
   { href: '/settings/channels',  label: 'Cấu hình Kênh Marketing', icon: Radio,     desc: 'Kênh, danh mục chi tiêu' },
-  { href: '/settings/metrics',   label: 'Chỉ số KPI',              icon: BarChart2, desc: 'Chỉ số đo lường hiệu suất' },
+  { href: '/settings/metrics',      label: 'Chỉ số KPI',              icon: BarChart2, desc: 'Chỉ số đo lường hiệu suất' },
+  { href: '/settings/lock-periods', label: 'Khóa kỳ chỉnh sửa',      icon: Lock,      desc: 'Bật/tắt khóa tháng KH & TH' },
 ];
 
 /** Menu công cụ hệ thống — chỉ super_admin */

@@ -140,7 +140,7 @@ export default function NotificationPanel({ open, onClose, anchorRef }: Notifica
   const router = useRouter();
   const panelRef = useRef<HTMLDivElement>(null);
   const { activeUnitId } = useUnit();
-  const { effectiveRole } = useAuth();
+  const { effectiveRole, profile } = useAuth();
   const [activeTab, setActiveTab] = useState<NotificationTab>('all');
   const [result, setResult] = useState<NotificationResult | null>(null);
   const [dbItems, setDbItems] = useState<NotificationItem[]>([]);
@@ -233,14 +233,24 @@ export default function NotificationPanel({ open, onClose, anchorRef }: Notifica
 
   const loadNotifications = useCallback(async () => {
     setIsLoading(true);
+    let timerId: ReturnType<typeof setTimeout> | null = null;
     try {
-      const [data] = await Promise.all([
-        generateNotifications(activeUnitId !== 'all' ? activeUnitId : undefined),
-        fetchDbNotifications(),
-      ]);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timerId = setTimeout(() => reject(new Error('Notification load timeout')), 5_000);
+      });
+      const [data] = await Promise.race([
+        Promise.all([
+          generateNotifications(activeUnitId !== 'all' ? activeUnitId : undefined, false, profile),
+          fetchDbNotifications(),
+        ]),
+        timeoutPromise,
+      ]) as [NotificationResult, void];
+      if (timerId) clearTimeout(timerId);
       setResult(data);
-    } catch {
-      // silent
+    } catch (err) {
+      console.error('[NotificationPanel] loadNotifications failed:', err);
+      if (timerId) clearTimeout(timerId);
+      setResult({ notifications: [], counts: { total: 0, unread: 0, urgent: 0 } });
     } finally {
       setIsLoading(false);
     }
@@ -251,7 +261,7 @@ export default function NotificationPanel({ open, onClose, anchorRef }: Notifica
     try {
       invalidateNotifCache();
       const [data] = await Promise.all([
-        generateNotifications(activeUnitId !== 'all' ? activeUnitId : undefined, true),
+        generateNotifications(activeUnitId !== 'all' ? activeUnitId : undefined, true, profile),
         fetchDbNotifications(),
       ]);
       setResult(data);
@@ -345,7 +355,7 @@ export default function NotificationPanel({ open, onClose, anchorRef }: Notifica
         right: 0,
         marginBottom: 6,
         width: 420,
-        maxHeight: 'calc(100vh - 80px)',
+        height: 520,
         background: '#ffffff',
         border: '1px solid #e2e8f0',
         borderRadius: 10,

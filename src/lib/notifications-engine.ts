@@ -53,11 +53,15 @@ export interface NotificationItem {
 
 function parseDate(dStr: string): Date | null {
   if (!dStr) return null;
-  const parts = dStr.split('/');
-  if (parts.length !== 3) return null;
-  const [d, m, y] = parts.map(Number);
-  if (isNaN(d) || isNaN(m) || isNaN(y)) return null;
-  return new Date(y, m - 1, d);
+  if (dStr.includes('/')) {
+    const [d, m, y] = dStr.split('/').map(Number);
+    if (!isNaN(d) && !isNaN(m) && !isNaN(y)) return new Date(y, m - 1, d);
+  }
+  if (dStr.includes('-')) {
+    const [y, m, d] = dStr.split('-').map(Number);
+    if (!isNaN(d) && !isNaN(m) && !isNaN(y)) return new Date(y, m - 1, d);
+  }
+  return null;
 }
 
 function daysDiff(date: Date, today?: Date): number {
@@ -66,6 +70,14 @@ function daysDiff(date: Date, today?: Date): number {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
   return Math.round((d.getTime() - t.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/** Nếu deadline rơi vào T7 hoặc CN, dời về Thứ 6 trước đó */
+function getEffectiveDeadline(date: Date): Date {
+  const d = new Date(date);
+  if (d.getDay() === 6) d.setDate(d.getDate() - 1); // T7 → T6
+  if (d.getDay() === 0) d.setDate(d.getDate() - 2); // CN → T6
+  return d;
 }
 
 function monthName(month: number): string {
@@ -278,74 +290,150 @@ function generateActualEntryNotifications(
   return notifs;
 }
 
-// ─── Event Notifications ────────────────────────────────────────────────────────
+// ─── Event Notifications (escalation + batching + business-day aware) ───────────
 
 function generateEventNotifications(
   events: EventItem[],
   today: Date,
   profile: ThacUser | null
 ): NotificationItem[] {
-  const notifs: NotificationItem[] = [];
+  // Phân nhóm sự kiện theo khoảng diff (dùng effective deadline)
+  const overdueLong: EventItem[] = [];   // diff ≤ -8, chưa quyết toán
+  const overdueRecent: EventItem[] = []; // diff = -7..-1, chưa quyết toán
+  const todayEvs: EventItem[] = [];      // diff = 0
+  const tomorrowEvs: EventItem[] = [];   // diff = 1
+  const soon23: EventItem[] = [];        // diff = 2..3
+  const week47: EventItem[] = [];        // diff = 4..7
+  const upcoming814: EventItem[] = [];   // diff = 8..14
+  // diff > 14: bỏ qua
 
   for (const ev of events) {
     const eventDate = parseDate(ev.date);
     if (!eventDate) continue;
-    const diff = daysDiff(eventDate, new Date(today));
+    const effective = getEffectiveDeadline(eventDate);
+    const diff = daysDiff(effective, new Date(today));
 
-    // ── SK quá hạn, chưa quyết toán ──
-    if (diff < 0 && diff >= -7 && !ev.budgetSpent) {
-      const daysAgo = Math.abs(diff);
+    if (diff <= -8) {
+      if (!ev.budgetSpent) overdueLong.push(ev);
+    } else if (diff >= -7 && diff <= -1) {
+      if (!ev.budgetSpent) overdueRecent.push(ev);
+    } else if (diff === 0) {
+      todayEvs.push(ev);
+    } else if (diff === 1) {
+      tomorrowEvs.push(ev);
+    } else if (diff >= 2 && diff <= 3) {
+      soon23.push(ev);
+    } else if (diff >= 4 && diff <= 7) {
+      week47.push(ev);
+    } else if (diff >= 8 && diff <= 14) {
+      upcoming814.push(ev);
+    }
+  }
+
+  const notifs: NotificationItem[] = [];
+
+  // ── Quá hạn lâu (≤ -8): luôn gộp thành 1 ──
+  if (overdueLong.length > 0) {
+    notifs.push({
+      id: `event_overdue_long_batch`,
+      type: 'warning',
+      priority: 'urgent',
+      title: `${overdueLong.length} sự kiện quá hạn cần xử lý gấp`,
+      message: `${overdueLong.map(e => e.name).join(', ')} — đã quá hạn quyết toán trên 8 ngày.`,
+      time: 'Quá hạn',
+      timestamp: -99,
+      read: false,
+      important: true,
+      deepLink: '/events',
+    });
+  }
+
+  // ── Quá hạn gần (-7..-1): riêng lẻ nếu < 3, gộp nếu ≥ 3 ──
+  if (overdueRecent.length >= 3) {
+    notifs.push({
+      id: `event_overdue_recent_batch`,
+      type: 'warning',
+      priority: 'urgent',
+      title: `${overdueRecent.length} sự kiện cần báo cáo tuần này`,
+      message: `${overdueRecent.map(e => e.name).join(', ')} — chưa quyết toán ngân sách.`,
+      time: 'Cần xử lý ngay',
+      timestamp: -8,
+      read: false,
+      important: true,
+      deepLink: '/events',
+    });
+  } else {
+    for (const ev of overdueRecent) {
+      const effective = getEffectiveDeadline(parseDate(ev.date)!);
+      const daysAgo = Math.abs(daysDiff(effective, new Date(today)));
       notifs.push({
         id: `event_settle_${ev.id}`,
         type: 'warning',
-        priority: daysAgo >= 4 ? 'urgent' : 'high',
+        priority: 'urgent',
         title: `Quyết toán: ${ev.name}`,
-        message: `Sự kiện tại ${ev.showroom} đã qua ${daysAgo} ngày. Cần nhập kết quả thực hiện và quyết toán ngân sách.`,
+        message: `Sự kiện tại ${ev.showroom} đã qua ${daysAgo} ngày. Cần nhập kết quả và quyết toán ngân sách.`,
         time: `${daysAgo} ngày trước`,
         timestamp: -daysAgo,
         read: false,
-        important: daysAgo >= 3,
-        deepLink: `/events?id=${ev.id}`,
-      });
-    }
-
-    // ── SK ngày mai ──
-    if (diff === 1) {
-      notifs.push({
-        id: `event_tomorrow_${ev.id}`,
-        type: 'task',
-        priority: 'urgent',
-        title: `NGÀY MAI: ${ev.name}`,
-        message: `Sự kiện tại ${ev.showroom} diễn ra NGÀY MAI (${ev.date}). Kiểm tra nhân sự, vật tư, ngân sách lần cuối.`,
-        time: 'Ngày mai',
-        timestamp: 1,
-        read: false,
         important: true,
         deepLink: `/events?id=${ev.id}`,
       });
     }
+  }
 
-    // ── SK hôm nay ──
-    if (diff === 0) {
-      notifs.push({
-        id: `event_today_${ev.id}`,
-        type: 'info',
-        priority: 'high',
-        title: `HÔM NAY: ${ev.name}`,
-        message: `Sự kiện tại ${ev.showroom} đang diễn ra hôm nay. Theo dõi tiến độ và hỗ trợ kịp thời.`,
-        time: 'Hôm nay',
-        timestamp: 0,
-        read: false,
-        important: true,
-        deepLink: `/events?id=${ev.id}`,
-      });
-    }
+  // ── Hôm nay (diff=0): luôn riêng lẻ ──
+  for (const ev of todayEvs) {
+    notifs.push({
+      id: `event_today_${ev.id}`,
+      type: 'info',
+      priority: 'urgent',
+      title: `HÔM NAY: ${ev.name}`,
+      message: `Sự kiện tại ${ev.showroom} đang diễn ra hôm nay. Theo dõi tiến độ và hỗ trợ kịp thời.`,
+      time: 'Hôm nay',
+      timestamp: 0,
+      read: false,
+      important: true,
+      deepLink: `/events?id=${ev.id}`,
+    });
+  }
 
-    // ── SK 2-3 ngày nữa ──
-    if (diff >= 2 && diff <= 3) {
+  // ── Ngày mai (diff=1): luôn riêng lẻ, important=true ──
+  for (const ev of tomorrowEvs) {
+    notifs.push({
+      id: `event_tomorrow_${ev.id}`,
+      type: 'task',
+      priority: 'urgent',
+      title: `NGÀY MAI: ${ev.name}`,
+      message: `Sự kiện tại ${ev.showroom} diễn ra NGÀY MAI (${ev.date}). Kiểm tra nhân sự, vật tư, ngân sách lần cuối.`,
+      time: 'Ngày mai',
+      timestamp: 1,
+      read: false,
+      important: true,
+      deepLink: `/events?id=${ev.id}`,
+    });
+  }
+
+  // ── 2-3 ngày: riêng lẻ nếu < 3, gộp nếu ≥ 3 ──
+  if (soon23.length >= 3) {
+    notifs.push({
+      id: `event_soon23_batch`,
+      type: 'warning',
+      priority: 'high',
+      title: `${soon23.length} sự kiện trong 2-3 ngày tới`,
+      message: `${soon23.map(e => e.name).join(', ')} — cần xác nhận và chuẩn bị cuối.`,
+      time: 'Còn 2-3 ngày',
+      timestamp: 2,
+      read: false,
+      important: false,
+      deepLink: '/events',
+    });
+  } else {
+    for (const ev of soon23) {
+      const effective = getEffectiveDeadline(parseDate(ev.date)!);
+      const diff = daysDiff(effective, new Date(today));
       notifs.push({
         id: `event_soon_${ev.id}`,
-        type: 'task',
+        type: 'warning',
         priority: 'high',
         title: `Chuẩn bị cuối: ${ev.name}`,
         message: `Còn ${diff} ngày. Xác nhận lịch, nhân sự và vật tư cho sự kiện tại ${ev.showroom}.`,
@@ -356,12 +444,29 @@ function generateEventNotifications(
         deepLink: `/events?id=${ev.id}`,
       });
     }
+  }
 
-    // ── SK 4-7 ngày nữa ──
-    if (diff >= 4 && diff <= 7) {
+  // ── 4-7 ngày: riêng lẻ nếu < 3, gộp nếu ≥ 3 ──
+  if (week47.length >= 3) {
+    notifs.push({
+      id: `event_week47_batch`,
+      type: 'task',
+      priority: 'normal',
+      title: `${week47.length} sự kiện tuần này`,
+      message: `${week47.map(e => e.name).join(', ')} — cần kiểm tra tiến độ chuẩn bị.`,
+      time: 'Tuần này',
+      timestamp: 5,
+      read: false,
+      important: false,
+      deepLink: '/events',
+    });
+  } else {
+    for (const ev of week47) {
+      const effective = getEffectiveDeadline(parseDate(ev.date)!);
+      const diff = daysDiff(effective, new Date(today));
       notifs.push({
         id: `event_week_${ev.id}`,
-        type: 'info',
+        type: 'task',
         priority: 'normal',
         title: `Tuần này: ${ev.name}`,
         message: `Sự kiện tại ${ev.showroom} sau ${diff} ngày nữa (${ev.date}). Kiểm tra tiến độ chuẩn bị.`,
@@ -372,9 +477,26 @@ function generateEventNotifications(
         deepLink: `/events?id=${ev.id}`,
       });
     }
+  }
 
-    // ── SK 8-14 ngày nữa ──
-    if (diff >= 8 && diff <= 14) {
+  // ── 8-14 ngày: read=true, riêng lẻ nếu < 3, gộp nếu ≥ 3 ──
+  if (upcoming814.length >= 3) {
+    notifs.push({
+      id: `event_upcoming814_batch`,
+      type: 'info',
+      priority: 'low',
+      title: `${upcoming814.length} sự kiện sắp tới (8-14 ngày)`,
+      message: `${upcoming814.map(e => e.name).join(', ')} — cần lên kế hoạch nhân sự và ngân sách.`,
+      time: 'Sắp tới',
+      timestamp: 20,
+      read: true,
+      important: false,
+      deepLink: '/events',
+    });
+  } else {
+    for (const ev of upcoming814) {
+      const effective = getEffectiveDeadline(parseDate(ev.date)!);
+      const diff = daysDiff(effective, new Date(today));
       notifs.push({
         id: `event_upcoming_${ev.id}`,
         type: 'info',
@@ -495,6 +617,7 @@ export function invalidateNotifCache(): void {
 export async function generateNotifications(
   unit_id?: string,
   forceRefresh = false,
+  profile?: ThacUser | null,
 ): Promise<NotificationResult> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -515,12 +638,15 @@ export async function generateNotifications(
     const { createClient } = await import('./supabase/client');
     const supabase = createClient();
 
-    // Step A: fetch showrooms (for unit filter + code lookup)
-    const showroomsRaw = await supabase
-      .from('thaco_showrooms')
-      .select('id, code, name, unit_id')
-      .eq('is_active', true)
-      .then(r => { if (r.error) throw r.error; return r.data ?? []; });
+    // Fetch showrooms + events in parallel
+    const [showroomsRaw, eventsData] = await Promise.all([
+      supabase
+        .from('thaco_showrooms')
+        .select('id, code, name, unit_id')
+        .eq('is_active', true)
+        .then(r => { if (r.error) throw r.error; return r.data ?? []; }),
+      fetchEventsFromDB(unit_id).catch(() => ({}) as any),
+    ]);
 
     // Build maps
     const codeByShowroomId: Record<string, string> = {};
@@ -535,7 +661,7 @@ export async function generateNotifications(
       ? showroomsRaw.filter((s: any) => s.unit_id === unit_id).map((s: any) => s.id)
       : null;
 
-    // Step B: fetch plan_submissions
+    // Fetch plan_submissions (needs unitShowroomIds from above)
     let submissionsQuery = supabase
       .from('thaco_plan_submissions')
       .select('showroom_id, year, month, entry_type, status, updated_at')
@@ -561,14 +687,14 @@ export async function generateNotifications(
     const budgetPlans = allSubmissions.filter(s => s.entry_type === 'plan');
     const actualEntries = allSubmissions.filter(s => s.entry_type === 'actual');
 
-    const eventsData = await fetchEventsFromDB(unit_id).catch(() => ({}) as any);
     const allEvents = Object.values(eventsData || {}).flat();
 
+    const resolvedProfile = profile ?? null;
     const notifications: NotificationItem[] = [
-      ...generateBudgetPlanNotifications(budgetPlans, today, null),
-      ...generateActualEntryNotifications(actualEntries, today, null),
-      ...generateEventNotifications(allEvents as any[], today, null),
-      ...generateDeadlineNotifications(budgetPlans, showroomNames, today, null),
+      ...generateBudgetPlanNotifications(budgetPlans, today, resolvedProfile),
+      ...generateActualEntryNotifications(actualEntries, today, resolvedProfile),
+      ...generateEventNotifications(allEvents as any[], today, resolvedProfile),
+      ...generateDeadlineNotifications(budgetPlans, showroomNames, today, resolvedProfile),
     ];
 
     const PRIORITY_ORDER: Record<NotificationPriority, number> = {

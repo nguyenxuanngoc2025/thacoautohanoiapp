@@ -48,6 +48,9 @@ type ModalState =
   | { mode: 'edit';   data: EventItem }
   | { mode: 'close_report'; data: EventItem };
 
+// ─── Config ────────────────────────────────────────────────────────────────────
+const UPCOMING_REMINDER_DAYS = 14; // Nhắc sự kiện trong vòng N ngày tới
+
 // ─── Main Page ──────────────────────────────────────────────────────────────────
 export default function EventsPage() {
   const [mounted, setMounted] = useState(false);
@@ -243,10 +246,14 @@ export default function EventsPage() {
 
   const byShowroomData = useMemo(() => {
     const t: Record<string, number> = {};
-    events.forEach(e => { t[e.showroom] = (t[e.showroom] || 0) + e.budget; });
+    events.forEach(e => {
+      const sr = showrooms.find(s => s.code === e.showroom_code);
+      const key = sr?.name || e.showroom;
+      t[key] = (t[key] || 0) + e.budget;
+    });
     return Object.entries(t).sort((a, b) => b[1] - a[1]).slice(0, 8)
       .map(([l, v], i) => ({ label: l, value: v, color: ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#EF4444','#84CC16'][i%8] }));
-  }, [events]);
+  }, [events, showrooms]);
 
   const byBrandData = useMemo(() => {
     const b: Record<string, number> = {};
@@ -268,7 +275,7 @@ export default function EventsPage() {
       const d = new Date(+yy, +mm - 1, +dd); 
       return { ...e, daysUntil: Math.ceil((d.getTime() - today.getTime()) / 86_400_000) }; 
     })
-    .filter(e => e.daysUntil <= 14) // Chỉ nhắc sự kiện trong 14 ngày tới hoặc đã trễ
+    .filter(e => e.daysUntil <= UPCOMING_REMINDER_DAYS) // Chỉ nhắc sự kiện trong N ngày tới hoặc đã trễ
     .sort((a, b) => a.daysUntil - b.daysUntil)
   , [events]);
 
@@ -313,11 +320,9 @@ export default function EventsPage() {
         }
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {kpis.completed  > 0 && <span className="header-badge header-badge-success"><CheckCircle2 size={12} />{kpis.completed} HT</span>}
-              {kpis.inProgress > 0 && <span className="header-badge header-badge-info"><Activity size={12} />{kpis.inProgress} đang chạy</span>}
-              {kpis.upcoming   > 0 && <span className="header-badge header-badge-warn"><Calendar size={12} />{kpis.upcoming} sắp tới</span>}
-              {kpis.overdue    > 0 && <span className="header-badge" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}><AlertTriangle size={12} />{kpis.overdue} quá hạn</span>}
+            <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+              {kpis.completed  > 0 && <span className="header-badge header-badge-success"><CheckCircle2 size={11} />{kpis.completed} HT</span>}
+              {kpis.inProgress > 0 && <span className="header-badge header-badge-info"><Activity size={11} />{kpis.inProgress} chạy</span>}
             </div>
             {canEditEvents && (
               <button
@@ -356,16 +361,8 @@ export default function EventsPage() {
             color="#8B5CF6" />
         </div>
 
-        {/* Row 2: Charts (4 cột) */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-
-          {/* Biểu đồ tròn: Loại sự kiện */}
-          <div className="chart-panel">
-            <div className="chart-panel-title">
-              <BarChart3 size={15} style={{ color: '#3B82F6' }} />Sự kiện / Nhóm
-            </div>
-            <DonutChart data={byTypeData} />
-          </div>
+        {/* Row 2: Charts (3 cột) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
 
           {/* Bar chart: NS / Showroom */}
           <div className="chart-panel">
@@ -564,16 +561,30 @@ export default function EventsPage() {
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           {canEditEvents && (
-                            <div style={{ display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
-                              <button title="Sửa sự kiện" className="action-btn" onClick={() => setModal({ mode: 'edit', data: ev })}>
-                                <Pencil size={11} /> Sửa
-                              </button>
-                              <button title="Xóa sự kiện" className="action-btn" style={{ color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' }} onClick={() => handleDeleteEvent(ev, month)}>
-                                <Trash2 size={11} /> Xóa
-                              </button>
-                              <button title="Báo cáo kết thúc" className="action-btn action-btn-success" onClick={() => setModal({ mode: 'close_report', data: ev })}>
-                                <FileCheck2 size={11} /> Kết thúc
-                              </button>
+                            <div style={{ display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'nowrap' }}>
+                              {tableMode === 'plan' ? (
+                                <>
+                                  <button title="Sửa sự kiện" className="action-btn" onClick={() => setModal({ mode: 'edit', data: ev })}>
+                                    <Pencil size={11} /> Sửa
+                                  </button>
+                                  <button title="Xóa sự kiện" className="action-btn" style={{ color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' }} onClick={() => handleDeleteEvent(ev, month)}>
+                                    <Trash2 size={11} /> Xóa
+                                  </button>
+                                  <button title="Báo cáo kết thúc" className="action-btn action-btn-success" onClick={() => setModal({ mode: 'close_report', data: ev })}>
+                                    <FileCheck2 size={11} /> Kết thúc
+                                  </button>
+                                </>
+                              ) : (
+                                ev.reportLink ? (
+                                  <a href={ev.reportLink} target="_blank" rel="noopener noreferrer" className="action-btn action-btn-success" style={{ textDecoration: 'none' }}>
+                                    <Eye size={11} /> Báo cáo
+                                  </a>
+                                ) : (
+                                  <button title="Nhập kết quả thực hiện" className="action-btn action-btn-success" onClick={() => setModal({ mode: 'close_report', data: ev })}>
+                                    <FileCheck2 size={11} /> Nhập KQ
+                                  </button>
+                                )
+                              )}
                             </div>
                           )}
                         </td>

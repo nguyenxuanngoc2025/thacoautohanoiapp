@@ -165,13 +165,14 @@ export async function POST(request: Request) {
     // ── Delete old event-sourced entries for this scope, then upsert new ones ──
     // First, delete existing "event"-sourced rows for this showroom+month+year
     // so that removed events are properly cleaned up.
+    // Xóa cả 'su_kien' (đúng) và 'event' (code cũ do bug trước) để cleanup dữ liệu lỗi
     const { error: deleteErr } = await supabase
       .from('thaco_budget_entries')
       .delete()
       .eq('showroom_id', showroom_id)
       .eq('year', year)
       .eq('month', month)
-      .eq('channel_code', 'event')
+      .in('channel_code', ['su_kien', 'event'])
       .eq('plan_source', 'event');
 
     if (deleteErr) throw deleteErr;
@@ -187,8 +188,8 @@ export async function POST(request: Request) {
           month,
           brand_name,
           model_name,
-          channel_code: 'event',
-          plan_ns:   Math.round(kpis.plan_ns   * 10) / 10,
+          channel_code: 'su_kien',
+          plan_ns:   Math.round(kpis.plan_ns   * 100) / 100,
           plan_khqt: Math.round(kpis.plan_khqt),
           plan_gdtd: Math.round(kpis.plan_gdtd),
           plan_khd:  Math.round(kpis.plan_khd),

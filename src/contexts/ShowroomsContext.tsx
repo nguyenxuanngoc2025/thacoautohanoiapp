@@ -93,6 +93,10 @@ export function ShowroomsProvider({ children }: { children: React.ReactNode }) {
       fallbackData: STATIC_FALLBACK,
       revalidateOnFocus: false,
       dedupingInterval: 60000,
+      // Retry on error (e.g. 401 khi auth chưa sẵn sàng) — tối đa 8 lần, mỗi lần cách 2s
+      shouldRetryOnError: true,
+      errorRetryCount: 8,
+      errorRetryInterval: 2000,
     }
   );
 
@@ -101,7 +105,14 @@ export function ShowroomsProvider({ children }: { children: React.ReactNode }) {
   // ─── CASCADE FILTER: Lọc showrooms theo Unit đang active ───────────────────
   const showrooms = useMemo(() => {
     if (activeUnitId === 'all') return allShowrooms;
-    return allShowrooms.filter(s => s.unit_id === activeUnitId);
+    const filtered = allShowrooms.filter(s => s.unit_id === activeUnitId);
+    
+    // Nếu filter ra rỗng VÀ đang dùng STATIC_FALLBACK (chưa load xong báo cáo từ SWR),
+    // Thì trả về nguyên mảng allShowrooms để tránh trang thái rỗng tạm thời gây wipe data.
+    if (filtered.length === 0 && allShowrooms === STATIC_FALLBACK) {
+      return allShowrooms;
+    }
+    return filtered;
   }, [allShowrooms, activeUnitId]);
 
   // Derived values — tính từ showrooms đã lọc

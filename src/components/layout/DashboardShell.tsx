@@ -10,9 +10,16 @@ import StatusBar from '@/components/layout/StatusBar';
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { profile, isLoading, authUser } = useAuth();
+  const { profile, isLoading, authUser, effectiveRole, previewRole } = useAuth();
   const { activeUnit, activeUnitId } = useUnit();
   const [collapsed, setCollapsed] = useState(false);
+
+  // Catch unauthenticated case via client-side redirect safely
+  React.useEffect(() => {
+    if (!isLoading && !authUser) {
+      router.replace('/login');
+    }
+  }, [isLoading, authUser, router]);
 
   // Chờ auth xong trước khi render shell. Quá trình fetch profile có thể mất chút ms.
   if (isLoading) {
@@ -35,15 +42,17 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     );
   }
 
-  // Middleware đã redirect những case chưa auth, nhưng client-side catch lại cho an toàn
   if (!authUser) {
-    router.replace('/login');
     return null;
   }
 
-  const userRole = profile?.role ?? 'mkt_showroom';
+  // effectiveRole: role giả lập (khi preview) hoặc role thực của user
+  const userRole = (effectiveRole ?? profile?.role ?? 'mkt_showroom') as import('@/types/database').UserRole;
   const userName = profile?.full_name ?? (authUser.email ?? 'Unknown');
-  const userSubtitle = profile?.role ? ROLE_LABELS[profile.role] : 'Unknown Role';
+  // Subtitle hiển thị role đang active (có thể là preview)
+  const userSubtitle = previewRole
+    ? `${ROLE_LABELS[previewRole]} (Preview)`
+    : (profile?.role ? ROLE_LABELS[profile.role] : 'Unknown Role');
 
   // companyName: ưu tiên activeUnit (khi super_admin chọn Unit cụ thể)
   // → 'all' → hiển thị 'TOÀN HỆ THỐNG'

@@ -647,7 +647,12 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
                     Phễu chuyển đổi
                   </div>
                 </div>
-                <FunnelChart3D totalKhqt={totalKhqt} totalGdtd={totalGdtd} totalKhd={totalKhd} />
+                <FunnelChart3D
+                  totalKhqt={totalKhqt || pKhqt}
+                  totalGdtd={totalGdtd || pGdtd}
+                  totalKhd={totalKhd || pKhd}
+                  isFallback={!totalKhqt && !totalGdtd && !totalKhd}
+                />
               </div>
 
               {/* ★ Donut — Recharts PieChart thay thế SVG vẽ tay ★ */}

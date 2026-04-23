@@ -1,12 +1,9 @@
 /**
- * events-data.ts — Single source of truth cho dữ liệu sự kiện marketing
+ * events-data.ts — Layer I/O cho dữ liệu sự kiện marketing
  *
- * Planning page (planning/page.tsx) ghi sự kiện vào:
- *   localStorage key: 'thaco-mkt-events'
- *   format: Record<number, EventItem[]>  (key = month number)
- *
- * Events dashboard (events/page.tsx) đọc từ cùng key đó.
- * Sau này khi có Supabase, chỉ cần thay hàm loadEvents/saveEvents bên dưới.
+ * SINGLE SOURCE OF TRUTH: Supabase DB (thaco_events + thaco_budget_plans)
+ * Tất cả đọc/ghi đều qua API Routes server-side để bypass RLS.
+ * KHÔNG dùng hardcode danh mục brand/model — dữ liệu từ thaco_master_brands/models.
  */
 
 // ─── Shared Types ──────────────────────────────────────────────────────────────
@@ -15,6 +12,12 @@
 export interface EventItem {
   id: number;
   unit_id?: string;
+  /**
+   * Mã showroom (ví dụ 'PVD'). Phase 1 Bottom-Up: runtime enforce NOT NULL khi upsert.
+   * Type-level optional để backward-compat với seed data cũ.
+   */
+  showroom_code?: string;
+  /** Tên hiển thị showroom (legacy — sẽ migrate sau). */
   showroom: string;
   name: string;
   type: string;
@@ -37,6 +40,7 @@ export interface EventItem {
   priority?: EventPriority;
   owner?: string;
   notes?: string;
+  reportLink?: string; // Link đến báo cáo chi tiết (Google Drive, vv)
 }
 
 export type EventStatus = 'completed' | 'in_progress' | 'upcoming' | 'overdue';
@@ -67,45 +71,10 @@ export const PRIORITY_CONFIG: Record<EventPriority, { label: string; color: stri
   low:    { label: 'Thấp',       color: '#6b7280', dot: '#9ca3af' },
 };
 
-// ─── Seed / Mock Data ──────────────────────────────────────────────────────────
-/**
- * Dữ liệu seed mặc định — dùng khi localStorage trống hoặc chưa có data.
- * PHẢI khớp với initData trong planning/page.tsx để không lệch nhau.
- * Tháng 4 có 4 sự kiện đang active, tháng khác có dữ liệu mô phỏng.
- */
-export const SEED_EVENTS_BY_MONTH: EventsByMonth = {
-  1: [
-    { id: 101, showroom: 'Phạm Văn Đồng', name: 'Lái thử đầu xuân KIA', type: 'Lái thử', date: '12/01/2026', location: 'Sân vận động Mỹ Đình', brands: ['KIA', 'New Carnival', 'Sportage'], budget: 35, budgetSpent: 35, leads: 120, deals: 8, status: 'completed', priority: 'high', owner: 'Trần Văn A' },
-    { id: 102, showroom: 'Giải Phóng', name: 'Trưng bày Mazda Tết', type: 'Trưng bày', date: '18/01/2026', endDate: '25/01/2026', location: 'Vincom Bà Triệu', brands: ['Mazda', 'Mazda CX-5', 'CX-30'], budget: 25, budgetSpent: 24, leads: 85, deals: 5, status: 'completed', priority: 'medium', owner: 'Nguyễn Thị B' },
-  ],
-  2: [
-    { id: 201, showroom: 'Đông Trù', name: 'Roadshow SUV Châu Âu', type: 'Roadshow', date: '08/02/2026', endDate: '10/02/2026', location: 'Aeon Mall Long Biên', brands: ['Peugeot', 'Mazda', '3008', '5008', 'Mazda CX-8'], budget: 55, budgetSpent: 52, leads: 200, deals: 12, status: 'completed', priority: 'high', owner: 'Lê Văn C' },
-    { id: 202, showroom: 'Long Biên (BMW)', name: 'Workshop BMW đầu năm', type: 'Workshop', date: '20/02/2026', location: 'BMW Showroom', brands: ['BMW', 'Nhóm doanh số chính'], budget: 40, budgetSpent: 38, leads: 60, deals: 4, status: 'completed', priority: 'medium', owner: 'Phạm Thị D' },
-  ],
-  3: [
-    { id: 301, showroom: 'Nguyễn Văn Cừ', name: 'Lái thử New Seltos & Sonet', type: 'Lái thử', date: '05/03/2026', location: 'KĐT Ecopark', brands: ['KIA', 'New Seltos', 'New Sonet'], budget: 30, budgetSpent: 28, leads: 95, deals: 7, status: 'completed', priority: 'high', owner: 'Trần Văn A' },
-    { id: 302, showroom: 'Bạch Đằng/TKC', name: 'Trưng bày Peugeot 3008/5008', type: 'Trưng bày', date: '15/03/2026', endDate: '22/03/2026', location: 'TTTM Vincom Mega Mall', brands: ['Peugeot', '3008', '5008'], budget: 45, budgetSpent: 44, leads: 150, deals: 9, status: 'completed', priority: 'high', owner: 'Nguyễn Thị B' },
-    { id: 303, showroom: 'Đài Tư', name: 'Ngày hội xe tải Q1', type: 'Sự kiện KH', date: '28/03/2026', location: 'KCN Đài Tư', brands: ['TẢI BUS', 'Tải trung', 'TN ĐK BN'], budget: 20, budgetSpent: 18, leads: 40, deals: 3, status: 'completed', priority: 'low', owner: 'Hoàng Văn E' },
-  ],
-  4: [
-    // ── Khớp 100% với planning/page.tsx initData month=4 ──
-    { id: 1, showroom: 'Phạm Văn Đồng', name: 'Lái thử xe cuối tuần', type: 'Lái thử', date: '10/04/2026', location: 'Highlands Hồ Tây', brands: ['KIA', 'New Carnival', 'Sportage'], budget: 30, leads: 100, gdtd: 30, deals: 8, testDrives: 50, budgetSpent: 12, leadsActual: 45, gdtdActual: 14, dealsActual: 2, testDrivesActual: 28, status: 'in_progress', priority: 'high', owner: 'Trần Văn A' },
-    { id: 2, showroom: 'Giải Phóng', name: 'Trưng bày bộ đôi SUV Châu Âu', type: 'Trưng bày', date: '15/04/2026', endDate: '20/04/2026', location: 'Vincom Minh Khai', brands: ['Peugeot', 'Mazda'], budget: 45, leads: 150, gdtd: 45, deals: 11, testDrives: 0, status: 'upcoming', priority: 'high', owner: 'Nguyễn Thị B' },
-    { id: 3, showroom: 'Long Biên (BMW)', name: 'Ra mắt New 5-Series 2025', type: 'Ra mắt sản phẩm', date: '20/04/2026', location: 'HN Lotte Hotel', brands: ['BMW', 'Nhóm doanh số chính', 'Nhóm cao cấp'], budget: 80, leads: 60, gdtd: 18, deals: 5, testDrives: 20, status: 'upcoming', priority: 'high', owner: 'Phạm Thị D' },
-    { id: 4, showroom: 'Đài Tư', name: 'Ngày hội Xe Tải Thương mại', type: 'Sự kiện KH', date: '25/04/2026', location: 'KCN Đài Tư, Long Biên', brands: ['TẢI BUS', 'TN ĐK BN', 'Tải trung'], budget: 25, leads: 80, gdtd: 24, deals: 6, testDrives: 0, status: 'upcoming', priority: 'medium', owner: 'Hoàng Văn E' },
-    { id: 405, showroom: 'Lê Văn Lương (BMW)', name: 'Workshop MINI lifestyle', type: 'Workshop', date: '08/04/2026', location: 'MINI Showroom', brands: ['MINI', '3-Cửa', '5-Cửa'], budget: 20, leads: 67, gdtd: 20, deals: 5, testDrives: 15, budgetSpent: 18, leadsActual: 30, dealsActual: 1, testDrivesActual: 12, status: 'in_progress', priority: 'low', owner: 'Trần Thị F' },
-  ],
-  5: [
-    { id: 501, showroom: 'Phạm Văn Đồng', name: 'Roadshow Mazda CX-5 mới', type: 'Roadshow', date: '05/05/2026', endDate: '07/05/2026', location: 'Royal City', brands: ['Mazda', 'Mazda CX-5', 'CX-30'], budget: 60, budgetSpent: 0, leads: 0, deals: 0, status: 'upcoming', priority: 'high', owner: 'Lê Văn C' },
-    { id: 502, showroom: 'Hà Nam', name: 'Lái thử Peugeot 408', type: 'Lái thử', date: '18/05/2026', location: 'TP Phủ Lý', brands: ['Peugeot', '408', '2008'], budget: 25, budgetSpent: 0, leads: 0, deals: 0, status: 'upcoming', priority: 'medium', owner: 'Nguyễn Thị B' },
-  ],
-  6: [
-    { id: 601, showroom: 'Long Biên (BMW)', name: 'BMW Joy Fest Summer', type: 'Ra mắt sản phẩm', date: '12/06/2026', location: 'JW Marriott', brands: ['BMW', 'Nhóm cao cấp'], budget: 100, budgetSpent: 0, leads: 0, deals: 0, status: 'upcoming', priority: 'high', owner: 'Phạm Thị D' },
-  ],
-  7: [], 8: [], 9: [], 10: [], 11: [], 12: [],
-};
+// ─── Helpers: parse month/year từ event date (internal) ────────────────────────
 
 import { createClient } from '@/lib/supabase/client';
+import { mutate as swrMutate } from 'swr';
 
 // ─── Supabase I/O ──────────────────────────────────────────────────────────────
 
@@ -113,21 +82,28 @@ import { createClient } from '@/lib/supabase/client';
  * Đọc events từ Supabase. Nếu trống → trả về SEED_EVENTS_BY_MONTH.
  */
 export async function fetchEventsFromDB(unit_id?: string): Promise<EventsByMonth> {
-  if (typeof window === 'undefined') return SEED_EVENTS_BY_MONTH;
+  // Helper: trả về object 12 tháng đều rỗng — KHÔNG fallback về SEED mock data
+  const emptyMonths = (): EventsByMonth => {
+    const e: EventsByMonth = {};
+    for (let i = 1; i <= 12; i++) e[i] = [];
+    return e;
+  };
+
+  if (typeof window === 'undefined') return emptyMonths();
   const supabase = createClient();
   let query = supabase.from('thaco_events').select('*');
-  
+
   if (unit_id && unit_id !== 'all') {
-    query = query.eq('unit_id', unit_id);
+    // Include events belonging to the unit OR events with no unit set (legacy/global)
+    query = query.or(`unit_id.eq.${unit_id},unit_id.is.null`);
   }
 
   const { data, error } = await query;
-  
-  if (error || !data) return SEED_EVENTS_BY_MONTH;
 
-  // Merge seed để đảm bảo không thiếu tháng, nhưng reset array để dùng data từ DB
-  const merged: EventsByMonth = { ...SEED_EVENTS_BY_MONTH };
-  for (let i = 1; i <= 12; i++) merged[i] = [];
+  if (error || !data || data.length === 0) return emptyMonths();
+
+  // Khởi tạo 12 tháng rỗng rồi điền từ DB
+  const merged: EventsByMonth = emptyMonths();
 
   data.forEach((row) => {
     let month = 1;
@@ -139,6 +115,7 @@ export async function fetchEventsFromDB(unit_id?: string): Promise<EventsByMonth
     const ev: EventItem = {
       id: Number(row.id),
       unit_id: row.unit_id,
+      showroom_code: row.showroom_code || row.showroom || '',
       showroom: row.showroom || '',
       name: row.name || '',
       type: row.type || '',
@@ -159,7 +136,8 @@ export async function fetchEventsFromDB(unit_id?: string): Promise<EventsByMonth
       status: row.status,
       priority: row.priority,
       owner: row.owner,
-      notes: row.notes
+      notes: row.notes,
+      reportLink: row.report_link
     };
     if (merged[month]) {
       merged[month].push(ev);
@@ -172,71 +150,253 @@ export async function fetchEventsFromDB(unit_id?: string): Promise<EventsByMonth
 /**
  * Ghi event vào Supabase (insert hoặc update).
  */
-export async function upsertEventToDB(ev: EventItem): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
+export async function upsertEventToDB(ev: EventItem): Promise<void> {
+  if (typeof window === 'undefined') throw new Error('upsertEventToDB chỉ chạy phía client');
+
+  // showroom_code bắt buộc
+  if (!ev.showroom_code || ev.showroom_code === 'ALL' || ev.showroom_code === 'all') {
+    throw new Error(`showroom_code không hợp lệ: "${ev.showroom_code || '(rỗng)'}"`);
+  }
+
   const supabase = createClient();
-  
-  const payload = {
+
+  const withTimeout = <T>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Timeout at: ${label} sau ${ms}ms`)), ms))
+    ]);
+  };
+
+  let resolvedUnitId = ev.unit_id;
+  if (!resolvedUnitId || resolvedUnitId === 'all') {
+    // Lookup unit_id từ showroom_code trong DB
+    try {
+      const result = await withTimeout<{ data: { unit_id: string } | null; error: unknown }>(
+        supabase.from('thaco_showrooms').select('unit_id').eq('code', ev.showroom_code).single() as any,
+        8000,
+        'Lookup showroom unit_id'
+      );
+      if (result?.data?.unit_id) resolvedUnitId = result.data.unit_id;
+    } catch (e: any) {
+      console.warn('Lỗi lookup unit_id:', e);
+      // Tiếp tục dù lỗi lookup để không block flow, sẽ retry nếu cần
+    }
+  }
+
+  const payload: Record<string, unknown> = {
     id: ev.id,
-    ...(ev.unit_id && { unit_id: ev.unit_id }),
-    showroom: ev.showroom,
+    showroom_code: ev.showroom_code,
+    showroom: ev.showroom || ev.showroom_code,
     name: ev.name,
     type: ev.type,
     date: ev.date,
     location: ev.location,
     brands: ev.brands,
     budget: ev.budget,
-    leads: ev.leads,
-    gdtd: ev.gdtd,
-    deals: ev.deals,
-    test_drives: ev.testDrives,
-    end_date: ev.endDate,
-    budget_spent: ev.budgetSpent,
-    leads_actual: ev.leadsActual,
-    gdtd_actual: ev.gdtdActual,
-    deals_actual: ev.dealsActual,
-    test_drives_actual: ev.testDrivesActual,
-    status: ev.status,
-    priority: ev.priority,
-    owner: ev.owner,
-    notes: ev.notes
+    leads: ev.leads ?? null,
+    gdtd: ev.gdtd ?? null,
+    deals: ev.deals ?? null,
+    test_drives: ev.testDrives ?? null,
+    end_date: ev.endDate ?? null,
+    budget_spent: ev.budgetSpent ?? null,
+    leads_actual: ev.leadsActual ?? null,
+    gdtd_actual: ev.gdtdActual ?? null,
+    deals_actual: ev.dealsActual ?? null,
+    test_drives_actual: ev.testDrivesActual ?? null,
+    status: ev.status ?? null,
+    priority: ev.priority ?? null,
+    owner: ev.owner ?? null,
+    notes: ev.notes ?? null,
   };
+  if (resolvedUnitId && resolvedUnitId !== 'all') payload.unit_id = resolvedUnitId;
 
-  const { error } = await supabase.from('thaco_events').upsert(payload, { onConflict: 'id' });
-  if (error) {
-    console.error("Error upserting event:", error);
-    return false;
+  console.log('[upsertEventToDB] Đang gửi payload lên Supabase:', payload);
+  try {
+    const res = await withTimeout(
+      fetch('/api/events/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }),
+      15000,
+      'API /api/events/upsert'
+    );
+    
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP ${res.status}`);
+    }
+  } catch (err: any) {
+    console.error("Lỗi khi lưu thaco_events (API):", err);
+    throw new Error(err.message || 'Lỗi không xác định khi lưu qua API');
   }
-  return true;
-}
 
-export async function deleteEventFromDB(id: number): Promise<boolean> {
-  const supabase = createClient();
-  const { error, count } = await supabase.from('thaco_events').delete({ count: 'exact' }).eq('id', id);
-  if (error || count === 0) {
-    console.error("Error deleting event or not found:", error || "No rows matched");
-    return false;
+  // Sync vào budget_entries trong background (không await → không block UI)
+  const eventMonth = parseEventMonth(ev.date);
+  const eventYear = parseEventYear(ev.date);
+  if (eventMonth && eventYear) {
+    syncEventsToBudgetPlan(ev.showroom_code, eventMonth, eventYear, resolvedUnitId)
+      .then(() => {
+        // Invalidate SWR cache của planning page để thấy data event mới
+        swrMutate(
+          (key: unknown) => Array.isArray(key) && key[0] === 'budget_entries',
+          undefined,
+          { revalidate: true }
+        );
+        // Cũng invalidate view caches (dashboard/reports)
+        swrMutate(
+          (key: unknown) => Array.isArray(key) && typeof key[0] === 'string' && key[0].startsWith('v_budget'),
+          undefined,
+          { revalidate: true }
+        );
+      })
+      .catch(err => console.warn('[upsertEventToDB] sync background failed:', err));
   }
-  return true;
 }
 
 /**
- * Tính status tự động dựa trên ngày hiện tại nếu event chưa có status.
- * "today" mặc định là ngày thực hoặc truyền vào để test.
+ * Xóa event khỏi Supabase.
  */
+export async function deleteEventFromDB(id: number, showroom_code: string, date: string): Promise<void> {
+  if (typeof window === 'undefined') throw new Error('deleteEventFromDB chỉ chạy phía client');
+  
+  const payload = { id };
+  try {
+    const res = await Promise.race([
+      fetch('/api/events/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }),
+      new Promise<Response>((_, reject) => setTimeout(() => reject(new Error('Timeout API Delete')), 15000))
+    ]);
+    
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP ${res.status}`);
+    }
+  } catch (err: any) {
+    console.error("Lỗi khi xóa sự kiện (API):", err);
+    throw new Error(err.message || 'Lỗi không xác định khi xóa qua API');
+  }
+
+  // Trigger sync ngầm để tính toán lại ngân sách sau khi xóa event
+  const eventMonth = parseEventMonth(date);
+  const eventYear = parseEventYear(date);
+  if (eventMonth && eventYear) {
+    syncEventsToBudgetPlan(showroom_code, eventMonth, eventYear)
+      .then(() => {
+        swrMutate(
+          (key: unknown) => Array.isArray(key) && key[0] === 'budget_entries',
+          undefined,
+          { revalidate: true }
+        );
+        swrMutate(
+          (key: unknown) => Array.isArray(key) && typeof key[0] === 'string' && key[0].startsWith('v_budget'),
+          undefined,
+          { revalidate: true }
+        );
+      })
+      .catch(err => console.warn('[deleteEventFromDB] sync background failed:', err));
+  }
+}
+
+function parseEventMonth(dateStr: string): number | null {
+  if (!dateStr) return null;
+  if (dateStr.includes('/')) return parseInt(dateStr.split('/')[1]) || null;
+  if (dateStr.includes('-')) return parseInt(dateStr.split('-')[1]) || null;
+  return null;
+}
+function parseEventYear(dateStr: string): number | null {
+  if (!dateStr) return null;
+  if (dateStr.includes('/')) return parseInt(dateStr.split('/')[2]) || null;
+  if (dateStr.includes('-')) return parseInt(dateStr.split('-')[0]) || null;
+  return null;
+}
+
+/**
+ * Sync TẤT CẢ events của 1 showroom+month vào thaco_budget_plans.
+ *
+ * Payload key format: BRAND-MODEL-Sự kiện-METRIC
+ * (BRAND = phần tử đầu trong brands[], MODEL = phần tử thứ 2, hoặc brand nếu chỉ có 1)
+ *
+ * Logic:
+ * 1. Fetch ALL events cho showroom_code + month + year
+ * 2. Aggregate thành payload keys (cùng brand-model → SUM)
+ * 3. Fetch existing budget_plan → remove tất cả cũ -Sự kiện- keys
+ * 4. Merge payload mới → upsert budget_plan
+ */
+/**
+ * [OLD] Logic sync cũ. Giờ chuyển sang gọi API server-side để bypass RLS
+ */
+export async function syncEventsToBudgetPlan(
+  showroomCode: string,
+  month: number,
+  year: number = 2026,
+  unitId?: string
+): Promise<void> {
+  if (typeof window === 'undefined') return;
+
+  const payload = { showroom_code: showroomCode, month, year, unit_id: unitId };
+
+  try {
+    const res = await Promise.race([
+      fetch('/api/events/sync-budget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }),
+      new Promise<Response>((_, reject) => setTimeout(() => reject(new Error('Timeout API Sync')), 20000))
+    ]);
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    console.log(`[syncEventsToBudgetPlan] ✅ Gửi lệnh sync thành công (${showroomCode}, T${month}/${year})`);
+  } catch (err) {
+    console.warn('[syncEventsToBudgetPlan] Lỗi API sync-budget:', err);
+  }
+}
+
+
 export function inferEventStatus(event: EventItem, today?: Date): EventStatus {
-  if (event.status) return event.status;
+  if (event.status === 'completed') return 'completed';
+
   const t = today || new Date();
-  // Normalize về 00:00:00 để tránh lệch timezone khi so sánh ngày
   t.setHours(0, 0, 0, 0);
-  const parts = event.date.split('/');
-  const d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-  d.setHours(0, 0, 0, 0);
-  // Dùng Math.round nhất quán với daysDiff() trong tasks/notifications
-  const diffDays = Math.round((d.getTime() - t.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) return 'completed';
-  if (diffDays === 0) return 'in_progress';
-  return 'upcoming';
+
+  const parseDate = (dateStr: string) => {
+    if (!dateStr) return new Date(t);
+    let pd = new Date(t);
+    if (dateStr.includes('/')) {
+      const parts = dateStr.split('/');
+      if (parts.length === 3) pd = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    } else if (dateStr.includes('-')) {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) pd = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+    pd.setHours(0, 0, 0, 0);
+    return pd;
+  };
+
+  const startD = parseDate(event.date);
+  const diffStart = Math.round((startD.getTime() - t.getTime()) / (86400000));
+
+  if (diffStart > 0) return 'upcoming';
+
+  if (event.endDate) {
+    const endD = parseDate(event.endDate);
+    const diffEnd = Math.round((endD.getTime() - t.getTime()) / (86400000));
+    
+    if (diffEnd < 0) return 'overdue';
+    if (diffStart <= 0 && diffEnd >= 0) return 'in_progress';
+  } else {
+    if (diffStart < 0) return 'overdue';
+    if (diffStart === 0) return 'in_progress';
+  }
+
+  return event.status || 'upcoming';
 }
 
 // ─── Shared Constants & Helpers ───────────────────────────────
@@ -245,6 +405,66 @@ export const EVENT_TYPES = ['Lái thử', 'Trưng bày', 'Sự kiện KH', 'Ra m
 export const PRIORITIES: EventPriority[] = ['high', 'medium', 'low'];
 
 import { DEMO_KPI_RATES } from './master-data';
+
+/**
+ * Tạo payload keys cho budget_plans từ event brands/models.
+ * SSOT: dùng dbBrands từ DB (thaco_master_brands + thaco_master_models).
+ * KHÔNG dùng MASTER_BRANDS hardcode.
+ *
+ * @param evBrands     - brands[] được chọn trên form (mixed brand names + model names)
+ * @param budget/leads/gdtd/deals - giá trị KPI của event
+ * @param dbBrands     - danh sách brand+model từ DB (qua BrandsContext hoặc fetch trực tiếp)
+ */
+export function buildEventPayloadKeys(
+  evBrands: string[],
+  budget: number,
+  leads: number,
+  gdtd: number,
+  deals: number,
+  dbBrands: { name: string; models: string[]; modelData?: { name: string; is_aggregate?: boolean | null; aggregate_group?: string | null }[] }[]
+): Record<string, number> {
+  const payload: Record<string, number> = {};
+  const selectedBrandNames = new Set(
+    dbBrands
+      .map((brand) => brand.name)
+      .filter((brandName) => evBrands.includes(brandName) && !/^DVPT\b/i.test(brandName))
+  );
+
+  const explicitTargets = dbBrands.flatMap((brand) => {
+    if (!selectedBrandNames.has(brand.name)) return [];
+
+    const selectableModels = (brand.modelData ?? brand.models.map((name) => ({ name, is_aggregate: false, aggregate_group: null })))
+      .filter((model) => !model.is_aggregate)
+      .filter((model) => !(model.aggregate_group === 'TONG' && /^DVPT\b/i.test(brand.name)))
+      .map((model) => model.name);
+
+    const explicitlySelected = selectableModels.filter((model) => evBrands.includes(model));
+    
+    // Fallback: If brand is selected but no specific models, assume ALL models
+    if (explicitlySelected.length === 0) {
+      // If brand has no non-aggregate models (rare edge case), use standard empty
+      if (selectableModels.length === 0) return [{ brand: brand.name, model: brand.name }];
+      return selectableModels.map((model) => ({ brand: brand.name, model }));
+    }
+
+    return explicitlySelected.map((model) => ({ brand: brand.name, model }));
+  });
+
+  if (explicitTargets.length === 0) {
+    return payload;
+  }
+
+  const fraction = 1 / explicitTargets.length;
+
+  for (const target of explicitTargets) {
+    const prefix = `${target.brand}-${target.model}-Sự kiện`;
+    payload[`${prefix}-Ngân sách`] = (payload[`${prefix}-Ngân sách`] || 0) + budget * fraction;
+    payload[`${prefix}-KHQT`]      = (payload[`${prefix}-KHQT`]      || 0) + leads  * fraction;
+    payload[`${prefix}-GDTD`]      = (payload[`${prefix}-GDTD`]      || 0) + gdtd   * fraction;
+    payload[`${prefix}-KHĐ`]       = (payload[`${prefix}-KHĐ`]       || 0) + deals  * fraction;
+  }
+  return payload;
+}
 
 // ─── Centralized Constants (Single Source of Truth) ───────────────────────────
 /** Chi phí trên mỗi lead (triệu VND) — Cost Per Lead */
@@ -262,15 +482,70 @@ export function deriveKpis(budget: number) {
   };
 }
 
-export function emptyEvent(month: number, defaultShowroom: string): EventItem {
+export function emptyEvent(month: number, defaultShowroomCode: string, defaultShowroomName?: string): EventItem {
   const mm = String(month).padStart(2, '0');
   return {
     id: Date.now(),
-    name: '', type: 'Lái thử', showroom: defaultShowroom,
+    name: '', type: 'Lái thử',
+    showroom_code: defaultShowroomCode,
+    showroom: defaultShowroomName || defaultShowroomCode,
     date: `01/${mm}/2026`, location: '',
     brands: [], budget: 0,
     leads: 0, gdtd: 0, deals: 0, testDrives: 0,
     status: 'upcoming', priority: 'medium', owner: '',
   };
+}
+
+/**
+ * Phase 1: Lấy events của 1 showroom (qua showroom_code) cho tất cả tháng trong năm.
+ */
+export async function fetchEventsByShowroom(showroom_code: string, unit_id?: string): Promise<EventsByMonth> {
+  const emptyMonths = (): EventsByMonth => {
+    const e: EventsByMonth = {};
+    for (let i = 1; i <= 12; i++) e[i] = [];
+    return e;
+  };
+  if (typeof window === 'undefined') return emptyMonths();
+
+  const supabase = createClient();
+  let query = supabase.from('thaco_events').select('*').eq('showroom_code', showroom_code);
+  // Include events belonging to the unit OR events with no unit set (legacy/global)
+  if (unit_id && unit_id !== 'all') query = query.or(`unit_id.eq.${unit_id},unit_id.is.null`);
+
+  const { data, error } = await query;
+  if (error || !data) return emptyMonths();
+
+  const merged = emptyMonths();
+  data.forEach((row) => {
+    let month = 1;
+    if (row.date) {
+      if (row.date.includes('/')) month = parseInt(row.date.split('/')[1]);
+      else month = parseInt(row.date.split('-')[1]);
+    }
+    const ev: EventItem = {
+      id: Number(row.id),
+      unit_id: row.unit_id,
+      showroom_code: row.showroom_code || row.showroom || '',
+      showroom: row.showroom || '',
+      name: row.name || '',
+      type: row.type || '',
+      date: row.date || '',
+      location: row.location || '',
+      brands: row.brands || [],
+      budget: Number(row.budget) || 0,
+      leads: row.leads, gdtd: row.gdtd, deals: row.deals,
+      testDrives: row.test_drives,
+      endDate: row.end_date,
+      budgetSpent: row.budget_spent,
+      leadsActual: row.leads_actual,
+      gdtdActual: row.gdtd_actual,
+      dealsActual: row.deals_actual,
+      testDrivesActual: row.test_drives_actual,
+      status: row.status, priority: row.priority, owner: row.owner,
+      notes: row.notes, reportLink: row.report_link,
+    };
+    if (merged[month]) merged[month].push(ev);
+  });
+  return merged;
 }
 

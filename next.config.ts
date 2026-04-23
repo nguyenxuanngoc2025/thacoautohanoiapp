@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ['exceljs'],
   turbopack: {
     // Fix: chỉ định root rõ ràng để tránh multi-lockfile confusion
     root: path.resolve(__dirname),

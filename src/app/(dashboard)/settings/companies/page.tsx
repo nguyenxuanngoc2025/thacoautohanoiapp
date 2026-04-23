@@ -43,10 +43,10 @@ function ModalOverlay({ onClose, children }: { onClose: () => void; children: Re
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CompaniesPage() {
-  const { isSuperAdmin, role, profile, isLoading: authLoading } = useAuth();
+  const { effectiveIsSuperAdmin, effectiveRole, role, profile, isLoading: authLoading } = useAuth();
   const { brands: masterBrands } = useBrands();
   const { refreshShowrooms } = useShowrooms();
-  const supabase = createClient();
+  const supabase = React.useMemo(() => createClient(), []);
 
   const [units, setUnits] = useState<UnitRow[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -76,14 +76,14 @@ export default function CompaniesPage() {
         ...u,
         showrooms: showrooms.filter(s => s.unit_id === u.id),
       }));
-      if (!isSuperAdmin && profile?.unit_id) result = result.filter(u => u.id === profile.unit_id);
+      if (!effectiveIsSuperAdmin && profile?.unit_id) result = result.filter(u => u.id === profile.unit_id);
       setUnits(result);
     } catch (e: any) {
       setError(e.message ?? 'Lỗi tải dữ liệu');
     } finally {
       setLoading(false);
     }
-  }, [supabase, isSuperAdmin, profile]);
+  }, [supabase, effectiveIsSuperAdmin, profile]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -157,7 +157,7 @@ export default function CompaniesPage() {
     );
   }
 
-  if (!isSuperAdmin && profile?.role !== 'bld') {
+  if (!effectiveIsSuperAdmin && effectiveRole !== 'bld' && effectiveRole !== 'pt_mkt_cty') {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '40vh', gap: 10, color: '#dc2626' }}>
         <AlertCircle size={20} />
@@ -182,7 +182,7 @@ export default function CompaniesPage() {
         </div>
         <button
           className="button-erp-primary"
-          style={{ display: isSuperAdmin ? 'flex' : 'none', alignItems: 'center', gap: 6 }}
+          style={{ display: effectiveIsSuperAdmin ? 'flex' : 'none', alignItems: 'center', gap: 6 }}
           onClick={() => setUnitModal({ open: true, mode: 'add', data: {} })}
         >
           <Plus size={15} /> Thêm công ty

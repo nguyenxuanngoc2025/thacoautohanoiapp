@@ -9,7 +9,7 @@ import { CHANNEL_CATEGORIES } from '@/lib/constants';
 import { DownloadCloud, UploadCloud, Save, Send, Wallet, Users, FileSignature, BarChart3, Wand2, Zap, X, CheckCircle2, AlertTriangle, Edit2, Trash2, ArrowUpRight, CalendarDays, Keyboard, ChevronDown, CloudUpload, Lock, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/reui/badge';
 import { type EventItem, EVENT_CPL, EVENT_CR1, EVENT_CR2 } from '@/lib/events-data';
-import { useBudgetEntriesByShowroom, useBudgetEntriesByShowroomIds, useEventsData, invalidateBudgetCaches } from '@/lib/use-data';
+import { useBudgetEntriesByShowroom, useBudgetEntriesByShowroomIds, useEventsData, invalidateBudgetCaches, invalidateEventsData } from '@/lib/use-data';
 import { upsertBudgetEntries, cellDataToEntries, makeCellKey } from '@/lib/db/budget-entries';
 import { createClient } from '@/lib/supabase/client';
 import type { BudgetEntryRow } from '@/types/database';
@@ -533,13 +533,19 @@ export default function PlanningPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveRole, selectedShowroomId, year, month]);
 
-  // ─── Refresh dữ liệu — tương đương F5 ────────────────────────────────────
-  const handleRefresh = useCallback(() => {
+  // ─── Refresh dữ liệu — invalidate SWR cache và refetch từ DB ─────────────
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    // Hard reload: đảm bảo toàn bộ state React và cache được reset sạch,
-    // giống F5 nhưng giữ nguyên URL (không mất params).
-    window.location.reload();
-  }, []);
+    try {
+      const unitId = (activeUnitId && activeUnitId !== 'all') ? activeUnitId : undefined;
+      await Promise.all([
+        invalidateBudgetCaches(activeUnitId ?? '', selectedShowroomId ?? '', year, month),
+        invalidateEventsData(unitId),
+      ]);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 800);
+    }
+  }, [selectedShowroomId, activeUnitId, year, month]);
 
   // ─── Gửi kế hoạch ─────────────────────────────────────────────────────────
   const handleSubmitPlan = useCallback(async () => {
@@ -560,6 +566,10 @@ export default function PlanningPage() {
           sender_name: profile?.full_name || profile?.email || '',
           sender_role: effectiveRole || '',
           brands: visibleBrands.map((b: { name: string }) => b.name).join(', '),
+          // brandList: mkt_brand → per-brand tracking; các role khác → [] (cả showroom)
+          brandList: effectiveRole === 'mkt_brand'
+            ? visibleBrands.map((b: { name: string }) => b.name)
+            : [],
         }),
       });
       if (res.ok) {
@@ -570,7 +580,7 @@ export default function PlanningPage() {
     } finally {
       setSubmitLoading(false);
     }
-  }, [selectedShowroomId, activeUnitId, year, month, pageMode, selectedShowroom, profile]);
+  }, [selectedShowroomId, activeUnitId, year, month, pageMode, selectedShowroom, profile, effectiveRole, visibleBrands]);
 
   const getRawHistoricalValue = useCallback((cellKey: string, mode: string): number | null => {
     if (mode === 'none') return null;
@@ -2002,6 +2012,15 @@ export default function PlanningPage() {
                     }
                     dataRows.push(row);
                   }
+                  // Brand total row
+                  const totalRow: (string | number)[] = [`Σ ${brand.name}`, ''];
+                  for (const ch of channelHeaders) {
+                    for (const metric of metricList) {
+                      const sum = modelList.reduce((acc, m) => acc + ((cellData[`${brand.name}-${m}-${ch}-${metric}`] as number) || 0), 0);
+                      totalRow.push(sum);
+                    }
+                  }
+                  dataRows.push(totalRow);
                 }
                 const exportSRs = isAggregateView
                   ? showrooms.filter(s => !s.id.startsWith('fallback'))
@@ -2031,14 +2050,17 @@ export default function PlanningPage() {
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ title: `Kế hoạch ngân sách T${month}/${year} — ${selectedShowroom}`, headers: [headerRow1, headerRow2], rows: dataRows, month, year }),
                 });
-                if (!res.ok) throw new Error('Export failed');
+                if (!res.ok) {
+                  const errBody = await res.json().catch(() => ({}));
+                  throw new Error(errBody?.error ?? `HTTP ${res.status}`);
+                }
                 const blob = await res.blob();
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a'); a.href = url; a.download = `KH_Thang${month}_${year}.xlsx`; a.click();
                 window.URL.revokeObjectURL(url);
                 setAlertInfo({ type: 'success', title: 'Xuất thành công', message: `File Excel đã được tải về.` });
-              } catch {
-                setAlertInfo({ type: 'warning', title: 'Lỗi xuất', message: 'Không thể tạo file Excel. Kiểm tra lại.' });
+              } catch (err: any) {
+                setAlertInfo({ type: 'warning', title: 'Lỗi xuất', message: err?.message ?? 'Không thể tạo file Excel. Kiểm tra lại.' });
               }
             }}
           >
@@ -2048,7 +2070,7 @@ export default function PlanningPage() {
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            title="Làm mới dữ liệu (F5)"
+            title="Tải lại dữ liệu từ database"
             style={{
               display: 'flex', alignItems: 'center', gap: 4,
               padding: '3px 8px', fontSize: 11, fontWeight: 600,
@@ -2401,12 +2423,6 @@ export default function PlanningPage() {
                               const val = getCellValue(cellKey);
                               const histVal = getRawHistoricalValue(cellKey, compareMode);
 
-                              let isHighCpl = false;
-                              if (metric === 'Ngân sách' && val > 0) {
-                                  const localKhqt = getCellValue(`${brand.name}-${model}-${ch.name}-KHQT`);
-                                  if (localKhqt > 0 && (val / localKhqt) > 0.5) isHighCpl = true;
-                              }
-                              
                               if (ch.name !== 'Tổng Digital') {
                                 const actualVal = (actualDataByMonth[month] || {})[cellKey] || 0;
                                 if (metric === 'Ngân sách') {
@@ -2550,7 +2566,7 @@ export default function PlanningPage() {
                                         const isOverBudget = pageMode === 'actual' && cellKey.endsWith('-Ngân sách') && val > 0 && (planCellData[cellKey] || 0) > 0 && val > (planCellData[cellKey] || 0) * 1.1;
                                         return {
                                           height: '100%', position: 'relative' as const,
-                                          background: isOverBudget ? '#fff5f5' : ((ch.readonly || isComputedRow) ? '#f1f5f9' : (isHighCpl ? '#fef08a' : (selectedCells.has(cellKey) ? '#e0f2fe' : 'transparent'))),
+                                          background: isOverBudget ? '#fff5f5' : ((ch.readonly || isComputedRow) ? '#f1f5f9' : (selectedCells.has(cellKey) ? '#e0f2fe' : 'transparent')),
                                           boxShadow: isOverBudget ? 'inset 0 0 0 1.5px #ef4444' : (selectedCells.has(cellKey) ? 'inset 0 0 0 1.5px var(--color-brand)' : 'none'),
                                           cursor: (ch.readonly || isComputedRow) ? 'default' : (selectedCells.has(cellKey) ? 'cell' : 'text'),
                                           fontWeight: isComputedRow ? 600 : 'normal',
@@ -2558,23 +2574,6 @@ export default function PlanningPage() {
                                         };
                                       })()}
                                   >
-                                    {isHighCpl && (
-                                      <div className="group" style={{ position: 'absolute', top: 2, right: 2, color: '#eab308', zIndex: 20, cursor: 'help' }}>
-                                        <AlertTriangle size={10} />
-                                        <div 
-                                          className="hidden group-hover:block" 
-                                          style={{ 
-                                            position: 'absolute', top: 16, right: 0, 
-                                            backgroundColor: '#1e293b', color: '#fff', 
-                                            padding: '4px 8px', borderRadius: 4, fontSize: 11,
-                                            width: 'max-content', maxWidth: 200, zIndex: 300,
-                                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-                                          }}
-                                        >
-                                          Cảnh báo: CPL đang quá cao (&gt;500k/Leads)
-                                        </div>
-                                      </div>
-                                    )}
                                     {editingCell === cellKey && (
                                       <input
                                         ref={cellInputRef}
@@ -2827,9 +2826,11 @@ export default function PlanningPage() {
                         ? digitalChannelNames.reduce((s, dcName) => s + getChMetricSum(dcName, metric), 0)
                         : getChMetricSum(ch.name, metric);
 
-                    // Pre-compute summary totals (chỉ kênh thực, không tính Tổng Digital)
+                    // Pre-compute summary totals
+                    // Khi digitalCollapsed=true: visibleChannels chỉ có "Tổng Digital" (aggregate) → phải include nó
+                    // Khi digitalCollapsed=false: có cả Google/Facebook/Khác + Tổng Digital → exclude aggregate để tránh double-count
                     let totalNS = 0, totalKHQT = 0, totalGDTD = 0, totalKHD = 0;
-                    visibleChannels.filter(ch => !ch.isAggregate).forEach(ch => {
+                    visibleChannels.filter(ch => !ch.isAggregate || digitalCollapsed).forEach(ch => {
                       totalNS   += getChanSum(ch, 'Ngân sách');
                       totalKHQT += getChanSum(ch, 'KHQT');
                       totalGDTD += getChanSum(ch, 'GDTD');
@@ -2839,7 +2840,7 @@ export default function PlanningPage() {
                     // Historical totals for comparison summary columns
                     let histTotalNS = 0, histTotalKHQT = 0, histTotalGDTD = 0, histTotalKHD = 0;
                     if (compareMode !== 'none') {
-                      visibleChannels.filter(ch => !ch.isAggregate).forEach(ch => {
+                      visibleChannels.filter(ch => !ch.isAggregate || digitalCollapsed).forEach(ch => {
                         histTotalNS   += getHistChanSum(ch, 'Ngân sách');
                         histTotalKHQT += getHistChanSum(ch, 'KHQT');
                         histTotalGDTD += getHistChanSum(ch, 'GDTD');

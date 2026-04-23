@@ -27,6 +27,7 @@ export const MASTER_SHOWROOMS = [
 ];
 
 // ─── 2. FALLBACK BRANDS/MODELS (chỉ dùng trong BrandsContext khi DB lỗi) ─────
+// Lưu ý: fallback không có aggregate rows — SSOT là DB với is_aggregate/aggregate_group
 export const MASTER_BRANDS = [
   {
     name: 'KIA',
@@ -34,27 +35,49 @@ export const MASTER_BRANDS = [
   },
   {
     name: 'Mazda',
-    models: ['Mazda CX-5', 'CX-30', 'Mazda CX-8', 'Mazda3', 'Mazda2', 'CX-3', 'Mazda6', 'BT-50'],
+    models: ['CX-90', 'MX-5', 'Mazda CX-8', 'Mazda CX-5', 'Mazda3', 'CX-3', 'CX-30', 'Mazda2'],
   },
   {
-    name: 'Peugeot',
-    models: ['3008', '5008', '2008', '408'],
+    name: 'STELLANTIS',
+    models: ['408', '2008', '3008', '5008'],
   },
   {
     name: 'BMW',
-    models: ['Nhóm doanh số chính', 'Nhóm cao cấp', 'Nhóm xe gầm thấp', 'Nhóm xe gầm cao'],
+    models: [
+      // Nhóm doanh số chính
+      '3 Series (SK 2025, 2026)', 'X3 All New', '520i All New (SK 2025, 2026)', '4 Series (MSP)',
+      // Nhóm cao cấp
+      '530i All New (SK 2025, 2026)', '7 Series (SK 2025, 2026)', 'X7 (SK 2025, 2026)', 'M',
+      // Nhóm Clear stock
+      '3 Series (SK 2023, 2024)', 'X3 (SK 2024)', '520i CKD (SK 2022, 2023)', '530i CBU (SK 2022)',
+      '520i All New (SK 2024)', '4 Series (GC)', '7 Series (SK 2023)', 'X7 (SK 2023)',
+      'X5 LCI', 'X4 (SK 2023)', 'X6 (SK 2023)', 'Z4 (SK 2023)', 'iX3, i4, i7 (SK 2023, 2024)',
+    ],
   },
   {
     name: 'MINI',
-    models: ['3-Cửa', '5-Cửa', 'Clubman', 'Countryman', 'Convertible'],
+    models: ['Cooper 3 Cửa S', 'JCW 3 Cửa', 'Cooper 3 Cửa SE', 'Cooper 5 Cửa S', 'Cooper Mui trần S', 'Countryman S ALL4', 'JCW Countryman ALL4', 'Countryman SE ALL4', 'JCW Countryman'],
   },
   {
     name: 'TẢI BUS',
-    models: ['Tải nhẹ', 'Tải trung', 'Tải nặng', 'Bus', 'TN ĐK BN', 'Tổng Tải', 'Tổng Bus'],
+    models: ['Tải Van', 'Tải nhẹ máy xăng', 'Tải nhẹ máy dầu', 'Tải trung- Ben trung', 'Đầu kéo- Tải nặng- Ben nặng', 'Bus', 'Mini Bus'],
+  },
+  {
+    name: 'DVPT XDL',
+    models: ['Kia', 'Mazda', 'Stellantis', 'BMW'],
+  },
+  {
+    name: 'DVPT Tải Bus',
+    models: ['Tải', 'Bus'],
   },
   {
     name: 'BMW MTR',
-    models: ['Nhóm xe hiện hữu', 'Nhóm xe mới'],
+    models: [
+      // Nhóm xe hiện hữu
+      'R 1250 RT', 'R 18', 'R NineT', 'R NineT SCR', 'S 1000 R', 'M 1000 R', 'F 900 XR', 'F 900 R',
+      // Nhóm xe mới
+      'R 1300 GS', 'R 1300 GSA', 'C 400 GT mới', 'S 1000 RR mới', 'S 1000 R mới',
+    ],
   },
 ];
 

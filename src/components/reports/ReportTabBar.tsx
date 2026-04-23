@@ -1,12 +1,10 @@
 'use client';
 
-export type ReportTabId = 'budget-summary' | 'plan-vs-actual' | 'channel-efficiency' | 'events';
+export type ReportTabId = 'plan-vs-actual' | 'budget-summary';
 
 export const REPORT_TABS: Array<{ id: ReportTabId; label: string; icon: string }> = [
-  { id: 'budget-summary',      label: 'Tổng hợp NS',        icon: '' },
-  { id: 'plan-vs-actual',      label: 'KH vs Thực hiện',    icon: '' },
-  { id: 'channel-efficiency',  label: 'Hiệu quả kênh',      icon: '' },
-  { id: 'events',              label: 'Sự kiện',             icon: '' },
+  { id: 'plan-vs-actual',  label: 'Kỳ báo cáo',        icon: '' },
+  { id: 'budget-summary',  label: 'Xu hướng 12 tháng', icon: '' },
 ];
 
 export function ReportTabBar({

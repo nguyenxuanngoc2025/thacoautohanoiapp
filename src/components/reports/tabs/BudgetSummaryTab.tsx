@@ -1,5 +1,5 @@
 'use client';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { formatNumber } from '@/lib/utils';
 import { ExportButton } from '../ExportButton';
 import { exportToExcel } from '@/lib/report-export';
@@ -45,9 +45,10 @@ function pctColor(pct: number | null): string {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const CELL: React.CSSProperties = {
-  padding: '4px 6px',
+  padding: '5px 7px',
   fontSize: 'var(--fs-table)',
-  borderBottom: '1px solid var(--color-border-light)',
+  borderBottom: '1px solid #e2e8f0',
+  borderRight: '1px solid #f1f5f9',
   textAlign: 'center',
   whiteSpace: 'nowrap',
   verticalAlign: 'top',
@@ -58,13 +59,15 @@ const LABEL_CELL: React.CSSProperties = {
   position: 'sticky',
   left: 0,
   zIndex: 1,
+  borderRight: '2px solid #e2e8f0',
 };
 const TH_STYLE: React.CSSProperties = {
   ...CELL,
   fontWeight: 700,
-  background: '#f8fafc',
-  borderBottom: '1px solid var(--color-border)',
-  color: 'var(--color-text)',
+  background: '#f1f5f9',
+  borderBottom: '2px solid #cbd5e1',
+  color: 'var(--color-text-secondary)',
+  fontSize: 'var(--fs-label)',
 };
 
 // ─── DataCell ─────────────────────────────────────────────────────────────────
@@ -104,17 +107,30 @@ export function BudgetSummaryTab({
   actualsByMonth,
   brands,
   showroomItems,
+  showroomPayloadsByMonth,
 }: {
   plansByMonth: MonthlyPayloads;
   actualsByMonth: MonthlyPayloads;
   brands: BrandWithModels[];
   showroomItems: { name: string; weight: number }[];
+  showroomPayloadsByMonth?: Record<string, { plan: MonthlyPayloads; actual: MonthlyPayloads }>;
 }) {
   const [metric, setMetric]           = useState<MetricOption>('Ngân sách');
-  const [expandedBrands, setExpandedBrands] = useState<Set<string>>(new Set());
+  const [expandedBrands, setExpandedBrands] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('report_expanded_brands');
+      return saved ? new Set(JSON.parse(saved) as string[]) : new Set();
+    } catch { return new Set(); }
+  });
 
   const isCPL = metric === 'CPL';
   const isNS  = metric === 'Ngân sách';
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('report_expanded_brands', JSON.stringify(Array.from(expandedBrands)));
+    } catch { /* ignore */ }
+  }, [expandedBrands]);
 
   function toggleBrand(brand: string) {
     setExpandedBrands(prev => {
@@ -166,14 +182,26 @@ export function BudgetSummaryTab({
     indent = 0,
     color?: string | null,
     extraLabelContent?: React.ReactNode,
+    rowVariant?: 'brand' | 'model',
   ) {
-    const bg = isTotal ? '#eef2f8' : undefined;
+    const isBrand = rowVariant === 'brand';
+    const isModel = rowVariant === 'model';
+    const bg = isTotal ? '#e2e8f4' : isBrand ? '#eff6ff' : isModel ? '#fafbff' : undefined;
+    const borderTop = isTotal ? '2px solid #94a3b8' : isBrand ? '2px solid #bfdbfe' : undefined;
     const thTotal = getYearTH(getter);
     const khTotal = getYearKH(getter);
     const pctTotal = isCPL ? null : calcPct(thTotal, khTotal);
     return (
-      <tr key={label} style={{ background: bg }}>
-        <td style={{ ...LABEL_CELL, background: bg ?? '#fff', paddingLeft: 8 + indent * 16, fontWeight: isTotal ? 700 : 400, color: color ?? 'var(--color-text)' }}>
+      <tr key={label} style={{ background: bg, borderTop }}>
+        <td style={{
+          ...LABEL_CELL,
+          background: bg ?? '#fff',
+          paddingLeft: 8 + indent * 20,
+          fontWeight: isTotal || isBrand ? 700 : 400,
+          color: isBrand ? (color ?? 'var(--color-primary)') : isModel ? '#64748b' : (color ?? 'var(--color-text)'),
+          fontSize: isModel ? 'var(--fs-label)' : 'var(--fs-table)',
+          borderTop,
+        }}>
           {extraLabelContent}{label}
         </td>
         {ALL_MONTHS.map(m => (
@@ -210,7 +238,7 @@ export function BudgetSummaryTab({
           <div style={{ width: 4, height: 18, background: 'var(--color-primary)', borderRadius: 2 }} />
           <span style={{ fontWeight: 700, fontSize: 'var(--fs-body)', color: 'var(--color-text)' }}>{title}</span>
         </div>
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', border: '1px solid #cbd5e1', borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
@@ -256,10 +284,10 @@ export function BudgetSummaryTab({
           {isExpanded ? '▼' : '▶'}
         </span>
       ) : null;
-      rows.push(renderRow(brand.name, false, (p, m) => sumByBrandMetric(p, brand.name, m), 0, brand.color, expandIcon));
+      rows.push(renderRow(brand.name, false, (p, m) => sumByBrandMetric(p, brand.name, m), 0, brand.color, expandIcon, isExpanded ? 'brand' : undefined));
       if (isExpanded) {
         brand.models.forEach(model => {
-          rows.push(renderRow(model, false, (p, m) => sumByModelMetric(p, brand.name, model, m), 1));
+          rows.push(renderRow(model, false, (p, m) => sumByModelMetric(p, brand.name, model, m), 1, null, undefined, 'model'));
         });
       }
     });
@@ -272,16 +300,23 @@ export function BudgetSummaryTab({
 
   const showroomRows = useMemo(() => (
     <>
-      {showroomItems.map(sr =>
-        renderRow(sr.name, false, (p, m) => {
-          const total = totalAllChannels(p, m);
-          return isCPL ? total : total * sr.weight;
-        })
-      )}
+      {showroomItems.map(sr => {
+        const srPayloads = showroomPayloadsByMonth?.[sr.name];
+        const getter = (p: Record<string, number>, m: string): number => {
+          if (!srPayloads) return 0;
+          // Identify month by reference equality — getThVal/getKhVal pass plansByMonth[month] or actualsByMonth[month] directly
+          for (const month of ALL_MONTHS) {
+            if (Object.is(p, actualsByMonth[month])) return totalAllChannels(srPayloads.actual[month] ?? {}, m);
+            if (Object.is(p, plansByMonth[month]))   return totalAllChannels(srPayloads.plan[month]   ?? {}, m);
+          }
+          return 0;
+        };
+        return renderRow(sr.name, false, getter);
+      })}
       {renderRow('Tổng cộng', true, totalAllChannels)}
     </>
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [plansByMonth, actualsByMonth, metric, showroomItems]);
+  ), [plansByMonth, actualsByMonth, metric, showroomItems, showroomPayloadsByMonth]);
 
   // ── Export ───────────────────────────────────────────────────────────────────
 

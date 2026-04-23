@@ -16,6 +16,8 @@ import {
   fetchViewBudgetByShowroom,
   fetchViewBudgetByChannel,
   fetchViewBudgetByBrand,
+  fetchViewBudgetByShowroomBrand,
+  fetchViewBudgetMaster,
   fetchViewKpiByShowroom,
   fetchBudgetEntriesByShowroom,
   fetchBudgetEntriesByUnit,
@@ -25,15 +27,18 @@ import type {
   ViewBudgetByShowroom,
   ViewBudgetByChannel,
   ViewBudgetByBrand,
+  ViewBudgetByShowroomBrand,
+  ViewBudgetMaster,
   ViewKpiByShowroom,
   BudgetEntryRow,
 } from '@/types/database';
 
 // ── Shared SWR options ──────────────────────────────────────────────────────────
 const BASE_OPTS = {
-  revalidateOnFocus: false,
-  revalidateOnReconnect: false,
-  dedupingInterval: 30_000,
+  revalidateOnFocus: true,
+  revalidateOnReconnect: true,
+  revalidateOnMount: true,
+  dedupingInterval: 0,   // mount mới → fetch ngay, không cache theo thời gian
   keepPreviousData: true,
 } as const;
 
@@ -81,7 +86,7 @@ export function useViewBudgetByShowroom(unitId: string | null, year: number) {
   return useSWR<ViewBudgetByShowroom[]>(
     unitId ? ['v_budget_by_showroom', unitId, year] : null,
     () => fetchViewBudgetByShowroom(unitId!, year),
-    { revalidateOnFocus: false }
+    BASE_OPTS
   );
 }
 
@@ -89,7 +94,7 @@ export function useViewKpiByShowroom(unitId: string | null, year: number) {
   return useSWR<ViewKpiByShowroom[]>(
     unitId ? ['v_kpi_by_showroom_monthly', unitId, year] : null,
     () => fetchViewKpiByShowroom(unitId!, year),
-    { revalidateOnFocus: false }
+    BASE_OPTS
   );
 }
 
@@ -97,7 +102,7 @@ export function useViewBudgetByChannel(unitId: string | null, year: number) {
   return useSWR<ViewBudgetByChannel[]>(
     unitId ? ['v_budget_by_channel', unitId, year] : null,
     () => fetchViewBudgetByChannel(unitId!, year),
-    { revalidateOnFocus: false }
+    BASE_OPTS
   );
 }
 
@@ -105,7 +110,23 @@ export function useViewBudgetByBrand(unitId: string | null, year: number) {
   return useSWR<ViewBudgetByBrand[]>(
     unitId ? ['v_budget_by_brand', unitId, year] : null,
     () => fetchViewBudgetByBrand(unitId!, year),
-    { revalidateOnFocus: false }
+    BASE_OPTS
+  );
+}
+
+export function useViewBudgetByShowroomBrand(unitId: string | null, year: number) {
+  return useSWR<ViewBudgetByShowroomBrand[]>(
+    unitId ? ['v_budget_by_showroom_brand', unitId, year] : null,
+    () => fetchViewBudgetByShowroomBrand(unitId!, year),
+    BASE_OPTS
+  );
+}
+
+export function useViewBudgetMaster(unitId: string | null, year: number) {
+  return useSWR<ViewBudgetMaster[]>(
+    unitId ? ['v_budget_master', unitId, year] : null,
+    () => fetchViewBudgetMaster(unitId!, year),
+    BASE_OPTS
   );
 }
 
@@ -117,7 +138,7 @@ export function useBudgetEntriesByShowroom(
   return useSWR<BudgetEntryRow[]>(
     showroomId ? ['budget_entries', showroomId, year, month] : null,
     () => fetchBudgetEntriesByShowroom(showroomId!, year, month),
-    { revalidateOnFocus: true, dedupingInterval: 5_000 }
+    { revalidateOnFocus: true, revalidateOnMount: true, dedupingInterval: 3_000 }
   );
 }
 
@@ -129,7 +150,7 @@ export function useBudgetEntriesByUnit(
   return useSWR<BudgetEntryRow[]>(
     unitId ? ['budget_entries_unit', unitId, year, month] : null,
     () => fetchBudgetEntriesByUnit(unitId!, year, month),
-    { revalidateOnFocus: true, dedupingInterval: 5_000 }
+    { revalidateOnFocus: true, revalidateOnMount: true, dedupingInterval: 3_000 }
   );
 }
 
@@ -145,7 +166,7 @@ export function useBudgetEntriesByShowroomIds(
   return useSWR<BudgetEntryRow[]>(
     idsKey ? ['budget_entries_srs', idsKey, year, month] : null,
     () => fetchBudgetEntriesByShowroomIds(showroomIds!, year, month),
-    { revalidateOnFocus: true, dedupingInterval: 5_000 }
+    { revalidateOnFocus: true, revalidateOnMount: true, dedupingInterval: 3_000 }
   );
 }
 

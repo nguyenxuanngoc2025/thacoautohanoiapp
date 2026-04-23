@@ -23,6 +23,8 @@ export interface ThacShowroom {
   unit_id: string;
   code: string;      // 'PVD', 'GP', ...
   name: string;      // 'Phạm Văn Đồng'
+  weight: number;    // tỷ trọng ngân sách (0–1)
+  brands: string[];  // thương hiệu bán tại SR
   is_active: boolean;
   created_at: string;
   // Joined
@@ -224,6 +226,39 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   finance:      ['Xem tất cả báo cáo tài chính', 'Xuất dữ liệu chi phí'],
 };
 
+/** Danh sách việc ĐƯỢC LÀM của từng role — dùng trong bảng tham chiếu và form tạo TK */
+export const ROLE_CAN: Record<UserRole, string[]> = {
+  super_admin:  ['Xem toàn bộ hệ thống', 'Tạo/sửa/xóa mọi tài khoản', 'Cấu hình hệ thống', 'Duyệt mọi cấp', 'Nhập liệu tất cả showroom', 'Chuyển đổi giữa các công ty'],
+  pt_mkt_cty:   ['Xem toàn bộ công ty được gán', 'Tạo/sửa tài khoản trong đơn vị', 'Duyệt kế hoạch ngân sách', 'Nhập liệu tất cả showroom trong đơn vị', 'Xuất báo cáo'],
+  bld:          ['Xem toàn bộ dữ liệu (chỉ đọc)', 'Duyệt kế hoạch', 'Xuất báo cáo tổng hợp'],
+  gd_showroom:  ['Xem dữ liệu showroom của mình', 'Duyệt kế hoạch cấp showroom', 'Xem báo cáo showroom', 'Tạo/sửa sự kiện tại showroom'],
+  mkt_brand:    ['Nhập kế hoạch ngân sách theo thương hiệu được giao', 'Nhập liệu thực tế', 'Tạo/sửa sự kiện', 'Xem báo cáo thương hiệu'],
+  mkt_showroom: ['Nhập kế hoạch ngân sách tháng', 'Nhập liệu thực tế', 'Tạo/sửa sự kiện tại showroom', 'Xem báo cáo showroom'],
+  finance:      ['Xem tất cả báo cáo tài chính (chỉ đọc)', 'Xuất dữ liệu chi phí'],
+};
+
+/** Danh sách việc KHÔNG ĐƯỢC LÀM của từng role */
+export const ROLE_CANNOT: Record<UserRole, string[]> = {
+  super_admin:  [],
+  pt_mkt_cty:   ['Tạo tài khoản super_admin', 'Truy cập dữ liệu ngoài đơn vị được gán'],
+  bld:          ['Nhập liệu', 'Sửa kế hoạch', 'Tạo/sửa sự kiện', 'Quản lý tài khoản'],
+  gd_showroom:  ['Nhập liệu kế hoạch trực tiếp (chỉ duyệt)', 'Truy cập dữ liệu showroom khác', 'Quản lý tài khoản'],
+  mkt_brand:    ['Nhập liệu thương hiệu không được giao', 'Duyệt kế hoạch', 'Quản lý tài khoản'],
+  mkt_showroom: ['Truy cập dữ liệu showroom khác', 'Duyệt kế hoạch', 'Quản lý tài khoản'],
+  finance:      ['Nhập liệu', 'Sửa kế hoạch', 'Tạo/sửa sự kiện', 'Quản lý tài khoản'],
+};
+
+/** Thông tin gán phạm vi cần thiết khi tạo tài khoản */
+export const ROLE_NEEDS: Record<UserRole, { unit: boolean; showroom: boolean; brands: boolean; label: string }> = {
+  super_admin:  { unit: false, showroom: false, brands: false, label: 'Không cần gán — truy cập toàn hệ thống' },
+  pt_mkt_cty:   { unit: true,  showroom: false, brands: false, label: 'Gán đơn vị (Công ty)' },
+  bld:          { unit: false, showroom: false, brands: false, label: 'Không cần gán — xem toàn hệ thống (chỉ đọc)' },
+  gd_showroom:  { unit: true,  showroom: true,  brands: false, label: 'Gán đơn vị + Showroom phụ trách' },
+  mkt_brand:    { unit: true,  showroom: false, brands: true,  label: 'Gán đơn vị + Thương hiệu phụ trách' },
+  mkt_showroom: { unit: true,  showroom: true,  brands: false, label: 'Gán đơn vị + Showroom phụ trách' },
+  finance:      { unit: false, showroom: false, brands: false, label: 'Không cần gán — xem toàn hệ thống (chỉ đọc)' },
+};
+
 /** Kiểm tra role có cần gán Showroom không */
 export function roleNeedsShowroom(role: UserRole): boolean {
   return role === 'mkt_showroom' || role === 'gd_showroom';
@@ -320,6 +355,40 @@ export interface ViewBudgetByChannel {
 export interface ViewBudgetByBrand {
   unit_id: string;
   brand_name: string;
+  year: number;
+  month: number;
+  plan_ns: number;
+  plan_khqt: number;
+  plan_gdtd: number;
+  plan_khd: number;
+  actual_ns: number;
+  actual_khqt: number;
+  actual_gdtd: number;
+  actual_khd: number;
+}
+
+export interface ViewBudgetByShowroomBrand {
+  unit_id: string;
+  showroom_id: string;
+  brand_name: string;
+  year: number;
+  month: number;
+  plan_ns: number;
+  plan_khqt: number;
+  plan_gdtd: number;
+  plan_khd: number;
+  actual_ns: number;
+  actual_khqt: number;
+  actual_gdtd: number;
+  actual_khd: number;
+}
+
+export interface ViewBudgetMaster {
+  unit_id: string;
+  showroom_id: string;
+  brand_name: string;
+  model_name: string;
+  channel_code: string;
   year: number;
   month: number;
   plan_ns: number;

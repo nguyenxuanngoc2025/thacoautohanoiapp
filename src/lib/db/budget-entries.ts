@@ -4,6 +4,8 @@ import type {
   ViewBudgetByShowroom,
   ViewBudgetByChannel,
   ViewBudgetByBrand,
+  ViewBudgetByShowroomBrand,
+  ViewBudgetMaster,
   ViewKpiByShowroom,
   CellData,
 } from '@/types/database';
@@ -162,6 +164,26 @@ export async function fetchBudgetEntriesByUnit(
   return (data ?? []) as BudgetEntryRow[];
 }
 
+// Fetch tất cả entries của nhiều showrooms (dùng cho aggregate view)
+// Mạnh hơn fetchBudgetEntriesByUnit vì không phụ thuộc unit_id trong entries
+export async function fetchBudgetEntriesByShowroomIds(
+  showroomIds: string[],
+  year: number,
+  month: number
+): Promise<BudgetEntryRow[]> {
+  if (showroomIds.length === 0) return [];
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('thaco_budget_entries')
+    .select('*')
+    .in('showroom_id', showroomIds)
+    .eq('year', year)
+    .eq('month', month);
+
+  if (error) throw error;
+  return (data ?? []) as BudgetEntryRow[];
+}
+
 export async function fetchViewBudgetByShowroom(
   unitId: string,
   year: number
@@ -220,6 +242,36 @@ export async function fetchViewBudgetByBrand(
 
   if (error) throw error;
   return (data ?? []) as ViewBudgetByBrand[];
+}
+
+export async function fetchViewBudgetByShowroomBrand(
+  unitId: string,
+  year: number
+): Promise<ViewBudgetByShowroomBrand[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('v_budget_by_showroom_brand')
+    .select('*')
+    .eq('unit_id', unitId)
+    .eq('year', year);
+
+  if (error) throw error;
+  return (data ?? []) as ViewBudgetByShowroomBrand[];
+}
+
+export async function fetchViewBudgetMaster(
+  unitId: string,
+  year: number
+): Promise<ViewBudgetMaster[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('v_budget_master')
+    .select('*')
+    .eq('unit_id', unitId)
+    .eq('year', year);
+
+  if (error) throw error;
+  return (data ?? []) as ViewBudgetMaster[];
 }
 
 // ─── Upsert ───────────────────────────────────────────────────────────────────

@@ -138,6 +138,14 @@ body {
 ::-webkit-scrollbar-thumb { background: #c1c8d0; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* ============================================================
    PANEL — Container cơ bản của mọi trang
    ============================================================ */
@@ -260,10 +268,12 @@ body {
 }
 
 .data-table {
-  width: 100%;
+  min-width: 100%;
+  width: max-content;
   border-collapse: separate;
   border-spacing: 0;
   font-size: var(--fs-table);
+  table-layout: fixed;
 }
 
 .data-table th {
@@ -271,14 +281,14 @@ body {
   color: #334155;
   font-weight: 600;
   padding: 6px 8px;
-  height: 32px;
+  height: 28px;
   border-bottom: 1px solid var(--color-border);
   border-right: 1px solid var(--color-border);
   text-align: center;
   white-space: nowrap;
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 35;
   border-top: 1px solid var(--color-border);
 }
 
@@ -292,37 +302,40 @@ body {
   white-space: nowrap;
   height: 30px;
   font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  background-color: #ffffff; /* Default solid background for sticky columns */
 }
 
 .data-table td:first-child { border-left: 1px solid var(--color-border-light); }
 
 /* Zebra striping */
-.data-table tbody tr:nth-child(even) td { background-color: #fafbfc; }
-.data-table tr:hover td { background: #f0f7ff !important; }
+.data-table tbody tr:nth-child(even) td { background-color: #f8fafc; }
+.data-table tr:hover td { background-color: #f0f7ff !important; }
 
 /* Subtotal row */
 .data-table tr.subtotal td {
-  background: #f0f4f8 !important;
+  background-color: #f1f5f9 !important;
+  color: var(--color-text-secondary);
   font-weight: 600;
   border-top: 1px solid #cbd5e1;
   border-bottom: 1px solid #cbd5e1;
   font-size: var(--fs-table);
 }
 
-.data-table tr.subtotal:hover td { background: #e8eef4 !important; }
+.data-table tr.subtotal:hover td { background-color: #e2e8f0 !important; }
 
 /* Grand-total / tfoot row */
 .data-table tr.grand-total td,
 .data-table tfoot td {
-  background: #f0f9ff;
+  background-color: #e2e8f0 !important;
   font-weight: 700;
-  border-top: 2px solid var(--color-brand);
-  color: var(--color-brand);
+  border-top: 2px solid var(--color-brand) !important;
+  color: var(--color-brand) !important;
 }
 
 /* Scroll shadow for frozen columns */
 .table-scroll-container.scrolled .data-table td:nth-child(2),
-.table-scroll-container.scrolled .data-table th:nth-child(2) {
+.table-scroll-container.scrolled .data-table thead tr:first-child th:nth-child(2) {
   box-shadow: 4px 0 8px -2px rgba(0, 0, 0, 0.08);
   clip-path: inset(0 -8px 0 0);
 }
@@ -1031,7 +1044,7 @@ body {
   background: #fff;
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-lg);
-  overflow: hidden;
+  overflow: clip; /* clip = không tạo scroll container → sticky th hoạt động */
   display: flex;
   flex-direction: column;
 }
@@ -1237,6 +1250,11 @@ body {
 .header-badge-success { color: #059669; background: #ecfdf5; border-color: #bbf7d0; }
 .header-badge-info    { color: #2563eb; background: #eff6ff; border-color: #bfdbfe; }
 .header-badge-warn    { color: #d97706; background: #fffbeb; border-color: #fde68a; }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 
 @layer base {
   * { @apply border-border outline-ring/50; }

@@ -30,6 +30,26 @@ interface AuthContextValue {
   role: UserRole | null;
   isAdmin: boolean;          // super_admin hoặc bld
   isSuperAdmin: boolean;
+  /** Role đang giả lập (chỉ super_admin có thể set) */
+  previewRole: UserRole | null;
+  /** Đặt preview role — null = tẫt giả lập */
+  setPreviewRole: (role: UserRole | null) => void;
+  /** Role hiệu lực: previewRole nếu đang giả lập, ngược lại = role thực */
+  effectiveRole: UserRole | null;
+  /** false khi đang preview role khác super_admin — dùng thay isSuperAdmin trong UI */
+  effectiveIsSuperAdmin: boolean;
+
+  // ─── Phase 1 Bottom-Up helpers ─────────────────────────────────────────────
+  /** Các showroom CODES user được phép truy cập. [] = không có quyền SR nào (trừ aggregate view). Empty = admin/company-wide → sẽ là tất cả SR trong unit */
+  accessibleShowroomCodes: string[];
+  /** true nếu user được xem tất cả SR trong unit (admin/BLĐ/TP MKT/finance/mkt_brand) */
+  canViewAllShowrooms: boolean;
+  /** true nếu user có quyền edit data showroom này (Draft status) */
+  canEditShowroom: (code: string) => boolean;
+  /** true nếu user có quyền approve data của showroom này */
+  canApproveShowroom: (code: string) => boolean;
+  /** true nếu user có quyền unlock Approved (pt_mkt_cty, super_admin) */
+  canUnlockApproved: boolean;
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -45,56 +65,31 @@ const AuthContext = createContext<AuthContextValue>({
   role: null,
   isAdmin: false,
   isSuperAdmin: false,
+  previewRole: null,
+  setPreviewRole: () => {},
+  effectiveRole: null,
+  effectiveIsSuperAdmin: false,
+  accessibleShowroomCodes: [],
+  canViewAllShowrooms: false,
+  canEditShowroom: () => false,
+  canApproveShowroom: () => false,
+  canUnlockApproved: false,
 });
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // ─── DEV BYPASS ─────────────────────────────────────────────────────────────
-  // Khi DEV_BYPASS_AUTH=true: fake super_admin, không cần đăng nhập
-  if (process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === 'true') {
-    const fakeProfile: ThacUser = {
-      id: 'dev-super-admin',
-      unit_id: 'unit-hn',
-      showroom_id: null,
-      brands: [],
-      email: 'admin@thaco.vn',
-      full_name: 'Nguyễn Xuân Ngọc (Dev)',
-      role: 'super_admin',
-      is_active: true,
-      created_at: new Date().toISOString(),
-      unit: {
-        id: 'unit-hn',
-        code: 'HN',
-        name: 'THACO AUTO HÀ NỘI',
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
-    };
-    return (
-      <AuthContext.Provider value={{
-        authUser: { id: 'dev-super-admin', email: 'admin@thaco.vn' } as any,
-        profile: fakeProfile,
-        session: null,
-        isLoading: false,
-        signIn: async () => ({ error: null }),
-        signOut: async () => {},
-        refreshProfile: async () => {},
-        role: 'super_admin',
-        isAdmin: true,
-        isSuperAdmin: true,
-      }}>
-        {children}
-      </AuthContext.Provider>
-    );
-  }
-  // ────────────────────────────────────────────────────────────────────────────
-
   const supabase = createClient();
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<ThacUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [previewRole, setPreviewRoleState] = useState<UserRole | null>(null);
+
+  // Chỉ super_admin mới được set preview role
+  const setPreviewRole = (r: UserRole | null) => {
+    if (profile?.role === 'super_admin') setPreviewRoleState(r);
+  };
 
   const fetchProfile = useCallback(async (userId: string): Promise<ThacUser | null> => {
     const { data, error } = await supabase
@@ -124,41 +119,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    // DEV SPECIFIC MOCK: Khôi phục phiên tĩnh nếu cookie bypass còn hiệu lực (chế độ Duy trì Đăng nhập)
-    if (typeof document !== 'undefined' && document.cookie.includes('dev_bypass_mock=true')) {
-      const fakeProfile: ThacUser = {
-        id: 'dev-super-admin-mock',
-        unit_id: 'unit-hn',
-        showroom_id: null,
-        brands: [],
-        email: 'nguyenxuanngoc@thaco.com.vn',
-        full_name: 'Nguyễn Xuân Ngọc',
-        role: 'super_admin',
-        is_active: true,
-        created_at: new Date().toISOString(),
-        unit: {
-          id: 'unit-hn',
-          code: 'HN',
-          name: 'THACO AUTO HÀ NỘI',
-          is_active: true,
-          created_at: new Date().toISOString(),
-        },
-      };
-      setAuthUser({ id: 'dev-super-admin-mock', email: 'nguyenxuanngoc@thaco.com.vn' } as User);
-      setProfile(fakeProfile);
-      setIsLoading(false);
-      return;
-    }
-
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       if (!mounted) return;
       setSession(s);
       setAuthUser(s?.user ?? null);
       if (s?.user) {
         const p = await fetchProfile(s.user.id);
-        if (mounted) setProfile(p);
+        if (!mounted) return;
+        setProfile(p);
       }
-      setIsLoading(false);
+      if (mounted) setIsLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
@@ -167,11 +137,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthUser(s?.user ?? null);
       if (s?.user) {
         const p = await fetchProfile(s.user.id);
-        if (mounted) setProfile(p);
+        if (!mounted) return;
+        setProfile(p);
       } else {
         setProfile(null);
       }
-      setIsLoading(false);
+      if (mounted) setIsLoading(false);
     });
 
     return () => {
@@ -182,38 +153,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     try {
-      // DEV SPECIFIC MOCK FOR LOCALHOST testing with customized 8 digit password
-      if (email === 'nguyenxuanngoc@thaco.com.vn' && password === '12344321') {
-        const fakeProfile: ThacUser = {
-          id: 'dev-super-admin-mock',
-          unit_id: 'unit-hn',
-          showroom_id: null,
-          brands: [],
-          email: 'nguyenxuanngoc@thaco.com.vn',
-          full_name: 'Nguyễn Xuân Ngọc',
-          role: 'super_admin',
-          is_active: true,
-          created_at: new Date().toISOString(),
-          unit: {
-            id: 'unit-hn',
-            code: 'HN',
-            name: 'THACO AUTO HÀ NỘI',
-            is_active: true,
-            created_at: new Date().toISOString(),
-          },
-        };
-        // Set fake cookie to bypass middleware loop
-        document.cookie = "dev_bypass_mock=true; path=/; max-age=86400";
-        // Fake session setup manually without hitting GoTrue db limitations
-        setAuthUser({ id: 'dev-super-admin-mock', email } as User);
-        setProfile(fakeProfile);
-        return { error: null };
-      }
-
-      // Cắt đứt sau 4 giây nếu BE treo (Supabase lag/timout)
+      // Timeout 4 giây nếu Supabase/VPS phản hồi chậm
       const loginPromise = supabase.auth.signInWithPassword({ email, password });
       const timeoutPromise = new Promise<any>((resolve) => 
-        setTimeout(() => resolve({ error: { message: 'Máy chủ phản hồi quá chậm (Timeout). Khả năng cấu hình VPS đang gặp sự cố.' } }), 4000)
+        setTimeout(() => resolve({ error: { message: 'Máy chủ phản hồi quá chậm (Timeout). Vui lòng thử lại sau.' } }), 4000)
       );
 
       const { error } = await Promise.race([loginPromise, timeoutPromise]);
@@ -225,15 +168,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase]);
 
   const signOut = useCallback(async () => {
-    if (typeof document !== 'undefined') {
-      document.cookie = "dev_bypass_mock=; path=/; max-age=0";
-    }
     await supabase.auth.signOut();
     setAuthUser(null);
     setProfile(null);
   }, [supabase]);
 
   const role = profile?.role ?? null;
+  const effectiveRole: UserRole | null = previewRole ?? role;
+
+  // ─── Phase 1 Bottom-Up access control ───────────────────────────────────────
+  // Các role được xem tất cả SR trong unit (không giới hạn theo showroom_ids)
+  const canViewAllShowrooms = !!effectiveRole && (
+    effectiveRole === 'super_admin' ||
+    effectiveRole === 'bld' ||
+    effectiveRole === 'pt_mkt_cty' ||
+    effectiveRole === 'finance' ||
+    effectiveRole === 'mkt_brand'  // mkt_brand xem mọi SR có bán brand của mình
+  );
+
+  // showroom_ids của profile (codes). Nếu thiếu, fallback showroom.code (legacy single)
+  const assignedShowroomCodes: string[] = React.useMemo(() => {
+    if (!profile) return [];
+    if (Array.isArray(profile.showroom_ids) && profile.showroom_ids.length > 0) {
+      return profile.showroom_ids;
+    }
+    // fallback legacy: showroom_id → join đã trả về showroom.code
+    if (profile.showroom?.code) return [profile.showroom.code];
+    return [];
+  }, [profile]);
+
+  // Khi canViewAllShowrooms = true, accessibleShowroomCodes sẽ là [] (empty) —
+  // caller (planning page) hiểu ký hiệu này = "không filter, lấy tất cả SR của unit"
+  const accessibleShowroomCodes = canViewAllShowrooms ? [] : assignedShowroomCodes;
+
+  const canEditShowroom = useCallback((code: string) => {
+    if (!effectiveRole) return false;
+    // BLD (ban lãnh đạo) chỉ xem, không edit
+    if (effectiveRole === 'bld' || effectiveRole === 'finance') return false;
+    // super_admin, pt_mkt_cty: edit tất cả
+    if (effectiveRole === 'super_admin' || effectiveRole === 'pt_mkt_cty') return true;
+    // mkt_brand: edit được mọi SR (nhưng chỉ cột brand của mình — enforce ở UI layer)
+    if (effectiveRole === 'mkt_brand') return true;
+    // mkt_showroom, gd_showroom: chỉ SR của mình
+    return assignedShowroomCodes.includes(code);
+  }, [effectiveRole, assignedShowroomCodes]);
+
+  const canApproveShowroom = useCallback((code: string) => {
+    if (!effectiveRole) return false;
+    if (effectiveRole === 'super_admin' || effectiveRole === 'pt_mkt_cty') return true;
+    if (effectiveRole === 'gd_showroom') return assignedShowroomCodes.includes(code);
+    return false;
+  }, [effectiveRole, assignedShowroomCodes]);
+
+  const canUnlockApproved = !!effectiveRole && (
+    effectiveRole === 'super_admin' || effectiveRole === 'pt_mkt_cty'
+  );
 
   return (
     <AuthContext.Provider value={{
@@ -247,6 +236,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role,
       isAdmin: role ? roleIsAdmin(role) : false,
       isSuperAdmin: role === 'super_admin',
+      previewRole,
+      setPreviewRole,
+      effectiveRole,
+      // effectiveIsSuperAdmin: false khi đang preview role khác super_admin
+      effectiveIsSuperAdmin: effectiveRole === 'super_admin',
+      accessibleShowroomCodes,
+      canViewAllShowrooms,
+      canEditShowroom,
+      canApproveShowroom,
+      canUnlockApproved,
     }}>
       {children}
     </AuthContext.Provider>

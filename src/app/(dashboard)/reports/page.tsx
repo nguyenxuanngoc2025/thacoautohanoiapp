@@ -1,9 +1,8 @@
 // app/src/app/(dashboard)/reports/page.tsx
 'use client';
 import React, { useState, useMemo, useEffect } from 'react';
-import { type EventsByMonth } from '@/lib/events-data';
 import {
-  useEventsData, useViewBudgetByBrand, useViewBudgetByChannel, useViewBudgetMaster,
+  useViewBudgetByBrand, useViewBudgetByChannel, useViewBudgetMaster,
 } from '@/lib/use-data';
 import { useBrands } from '@/contexts/BrandsContext';
 import { useShowrooms } from '@/contexts/ShowroomsContext';
@@ -15,8 +14,6 @@ import { FilterDropdown } from '@/components/erp/FilterDropdown';
 import { ReportTabBar, type ReportTabId } from '@/components/reports/ReportTabBar';
 import { BudgetSummaryTab } from '@/components/reports/tabs/BudgetSummaryTab';
 import { PlanVsActualTab } from '@/components/reports/tabs/PlanVsActualTab';
-import { ChannelEfficiencyTab } from '@/components/reports/tabs/ChannelEfficiencyTab';
-import { EventsReportTab } from '@/components/reports/tabs/EventsReportTab';
 import { getMonthsForPeriod, mergePayloads, type MonthlyPayloads } from '@/lib/report-data';
 import type { ViewBudgetByBrand, ViewBudgetByChannel, ViewBudgetMaster } from '@/types/database';
 
@@ -190,7 +187,6 @@ export default function ReportsPage() {
   const { data: prevYearChannelRows }   = useViewBudgetByChannel(unitIdForViews, filters.year - 1);
   const { data: viewMasterRows }        = useViewBudgetMaster(unitIdForViews, filters.year);
   const { data: prevYearMasterRows }    = useViewBudgetMaster(unitIdForViews, filters.year - 1);
-  const { data: eventsRaw }             = useEventsData();
 
   // ── Filter resolution ─────────────────────────────────────────────────────
   const hasAnyFilter = !!(filters.brand || filters.showroom || filters.channel);
@@ -269,13 +265,11 @@ export default function ReportsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredPrevYearMasterRows, prevYearMasterRows, prevYearChannelRows, prevYearBrandRows, compareMode, codeToName]);
 
-  const eventsByMonth = useMemo<EventsByMonth>(() => eventsRaw ?? {}, [eventsRaw]);
-
   // When unitIdForViews is null (super_admin "all" mode), views are skipped — treat as ready
   const viewsReady = unitIdForViews === null
     ? true
     : viewMasterRows !== undefined;
-  const loading = !viewsReady || eventsRaw === undefined;
+  const loading = !viewsReady;
 
   useEffect(() => {
     if (!loading) setMounted(true);
@@ -375,11 +369,17 @@ export default function ReportsPage() {
 
   // Tab-specific filter visibility
   const showBrandFilter    = ['budget-summary', 'plan-vs-actual'].includes(activeTab);
-  const showShowroomFilter = ['plan-vs-actual', 'events'].includes(activeTab);
+  const showShowroomFilter = activeTab === 'plan-vs-actual';
   const showChannelFilter  = activeTab === 'budget-summary';
   const showAnyFilter      = showBrandFilter || showShowroomFilter || showChannelFilter;
 
-  if (!mounted) return null;
+  if (!mounted) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-text-muted)', fontSize: 'var(--fs-body)', gap: 10 }}>
+      <span style={{ display: 'inline-block', width: 18, height: 18, border: '2px solid #e2e8f0', borderTopColor: 'var(--color-primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      Đang tải báo cáo...
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -495,21 +495,6 @@ export default function ReportsPage() {
                 showroomItems={tableShowroomItems}
                 brands={brands}
                 showroomMergedData={showroomMergedData}
-              />
-            )}
-            {activeTab === 'channel-efficiency' && (
-              <ChannelEfficiencyTab
-                plansByMonth={plansByMonth}
-                actualsByMonth={actualsByMonth}
-                viewMode={filters.viewMode}
-                month={filters.month}
-              />
-            )}
-            {activeTab === 'events' && (
-              <EventsReportTab
-                eventsByMonth={eventsByMonth}
-                filterMonth={filters.viewMode === 'month' ? filters.month : 0}
-                filterShowroom={filters.showroom}
               />
             )}
           </>

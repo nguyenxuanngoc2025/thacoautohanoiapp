@@ -2,13 +2,6 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function updateSession(request: NextRequest) {
-  // ─── DEV BYPASS ───────────────────────────────────────────────────────────
-  // Khi DEV_BYPASS_AUTH=true hoặc có cookie dev_bypass_mock: bỏ qua auth, cho đi thẳng vào app
-  if (process.env.DEV_BYPASS_AUTH === 'true' || request.cookies.get('dev_bypass_mock')?.value === 'true') {
-    return NextResponse.next({ request });
-  }
-  // ──────────────────────────────────────────────────────────────────────────
-
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -47,6 +40,22 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);
+  }
+
+  // Kiểm tra is_active: user bị deactivate → redirect về login
+  if (user && !isAuthPage && !isPublicPage) {
+    const { data: profile } = await supabase
+      .from('thaco_users')
+      .select('is_active')
+      .eq('id', user.id)
+      .single();
+    if (profile && profile.is_active === false) {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      url.searchParams.set('error', 'account_disabled');
+      return NextResponse.redirect(url);
+    }
   }
 
   return supabaseResponse;

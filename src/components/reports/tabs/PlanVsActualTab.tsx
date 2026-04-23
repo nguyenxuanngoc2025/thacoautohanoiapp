@@ -61,9 +61,10 @@ function deltaArrow(curr: number | null, prev: number | null, higherIsBetter = t
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const CELL: React.CSSProperties = {
-  padding: '5px 8px',
+  padding: '6px 10px',
   fontSize: 'var(--fs-table)',
-  borderBottom: '1px solid var(--color-border-light)',
+  borderBottom: '1px solid #e2e8f0',
+  borderRight: '1px solid #f1f5f9',
   whiteSpace: 'nowrap',
   textAlign: 'right',
 };
@@ -73,14 +74,19 @@ const LABEL_CELL: React.CSSProperties = {
   position: 'sticky',
   left: 0,
   zIndex: 1,
+  borderRight: '2px solid #e2e8f0',
 };
-const TOTAL_ROW_BG = '#eef2f8';
+const TOTAL_ROW_BG  = '#e2e8f4';   // tổng cộng: xanh xám đủ tương phản
+const BRAND_ROW_BG  = '#eff6ff';   // brand expanded: xanh nhạt
+const MODEL_ROW_BG  = '#fafbff';   // model rows: gần trắng
+const GRP_BORDER    = '2px solid #c7d2fe';  // phân tách nhóm cột (Ngân sách / KHQT...)
 const TH_BASE: React.CSSProperties = {
   ...CELL,
   fontWeight: 700,
-  color: 'var(--color-text)',
-  background: '#f8fafc',
-  borderBottom: '1px solid var(--color-border)',
+  color: 'var(--color-text-secondary)',
+  background: '#f1f5f9',
+  borderBottom: '2px solid #cbd5e1',
+  fontSize: 'var(--fs-label)',
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -98,6 +104,7 @@ export function PlanVsActualTab({
   compareLabel,
   showroomItems,
   brands,
+  showroomMergedData,
 }: {
   plansByMonth: MonthlyPayloads;
   actualsByMonth: MonthlyPayloads;
@@ -109,6 +116,7 @@ export function PlanVsActualTab({
   compareLabel: string;
   showroomItems: ShowroomItem[];
   brands: BrandWithModels[];
+  showroomMergedData?: Record<string, { plan: Record<string, number>; actual: Record<string, number> }>;
 }) {
   const [reportMode, setReportMode]     = useState<ReportMode>('result');
   const [expandedBrands, setExpandedBrands] = useState<Set<string>>(new Set());
@@ -136,15 +144,16 @@ export function PlanVsActualTab({
         <thead>
           <tr style={{ background: '#f8fafc' }}>
             <th style={{ ...TH_BASE, textAlign: 'left', minWidth: 160, position: 'sticky', left: 0, zIndex: 2 }}>{labelHeader}</th>
-            <th style={{ ...TH_BASE, minWidth: 80 }}>NS (tr đ)</th>
+            <th style={{ ...TH_BASE, minWidth: 80 }}>NS (tr)</th>
             <th style={{ ...TH_BASE, minWidth: 70 }}>KHQT</th>
-            <th style={{ ...TH_BASE, minWidth: 80 }}>
-              CPL (tr/lead)
+            <th style={{ ...TH_BASE, minWidth: 110 }}>
+              Chi phí / KHQT
               {hasCompare && <><br /><span style={{ fontSize: 'var(--fs-label)', color: '#94a3b8', fontWeight: 400 }}>vs {compareLabel}</span></>}
             </th>
-            <th style={{ ...TH_BASE, minWidth: 70 }}>CR1%</th>
-            <th style={{ ...TH_BASE, minWidth: 70 }}>CR2%</th>
+            <th style={{ ...TH_BASE, minWidth: 70 }}>GDTD</th>
+            <th style={{ ...TH_BASE, minWidth: 120 }}>Tỷ lệ GDTD / KHQT</th>
             <th style={{ ...TH_BASE, minWidth: 70 }}>KHĐ</th>
+            <th style={{ ...TH_BASE, minWidth: 120 }}>Tỷ lệ KHĐ / GDTD</th>
           </tr>
         </thead>
       );
@@ -158,15 +167,15 @@ export function PlanVsActualTab({
             {labelHeader}
           </th>
           {REPORT_METRICS.map(m => (
-            <th key={m} style={{ ...TH_BASE, textAlign: 'center' }} colSpan={colsPerMetric}>{m}</th>
+            <th key={m} style={{ ...TH_BASE, textAlign: 'center', borderRight: GRP_BORDER }} colSpan={colsPerMetric}>{m}</th>
           ))}
         </tr>
         <tr style={{ background: '#f8fafc' }}>
           {REPORT_METRICS.flatMap(m => {
             const cols = ['KH', 'TH', '%TH'];
             if (hasCompare) cols.push(`TH(${compareLabel})`, '±%');
-            return cols.map(c => (
-              <th key={`${m}-${c}`} style={{ ...TH_BASE, minWidth: 60, fontWeight: 600, fontSize: 'var(--fs-label)' }}>{c}</th>
+            return cols.map((c, ci) => (
+              <th key={`${m}-${c}`} style={{ ...TH_BASE, minWidth: 60, fontWeight: 600, fontSize: 'var(--fs-label)', ...(ci === cols.length - 1 ? { borderRight: GRP_BORDER } : {}) }}>{c}</th>
             ));
           })}
         </tr>
@@ -183,11 +192,23 @@ export function PlanVsActualTab({
     indent = 0,
     color?: string | null,
     extraLabelContent?: React.ReactNode,
+    rowVariant?: 'brand' | 'model',
   ): React.ReactNode {
-    const bg = isTotal ? TOTAL_ROW_BG : undefined;
+    const bg = isTotal ? TOTAL_ROW_BG : rowVariant === 'brand' ? BRAND_ROW_BG : rowVariant === 'model' ? MODEL_ROW_BG : undefined;
+    const isBrand = rowVariant === 'brand';
+    const isModel = rowVariant === 'model';
+    const borderTop = isTotal ? '2px solid #94a3b8' : isBrand ? '2px solid #bfdbfe' : undefined;
     return (
-      <tr key={label} style={{ background: bg }}>
-        <td style={{ ...LABEL_CELL, background: bg ?? '#fff', paddingLeft: 8 + indent * 16, fontWeight: isTotal ? 700 : 400, color: color ?? 'var(--color-text)' }}>
+      <tr key={label} style={{ background: bg, borderTop }}>
+        <td style={{
+          ...LABEL_CELL,
+          background: bg ?? '#fff',
+          paddingLeft: 8 + indent * 20,
+          fontWeight: isTotal || isBrand ? 700 : 400,
+          color: isBrand ? (color ?? 'var(--color-primary)') : isModel ? '#64748b' : (color ?? 'var(--color-text)'),
+          fontSize: isModel ? 'var(--fs-label)' : 'var(--fs-table)',
+          borderTop,
+        }}>
           {extraLabelContent}{label}
         </td>
         {REPORT_METRICS.map(m => {
@@ -196,18 +217,19 @@ export function PlanVsActualTab({
           const actual = getter(actData,  m);
           const pct    = calcPct(actual, plan);
           const cAct   = hasCompare ? getter(cmpAct,  m) : 0;
-          const cPlan  = hasCompare ? getter(cmpPlan, m) : 0;
           const deltaPct = (hasCompare && actual > 0 && cAct > 0)
             ? Math.round((actual - cAct) / Math.abs(cAct) * 100) : null;
           return (
             <React.Fragment key={m}>
               <td style={CELL}>{fmtVal(plan, isNS)}</td>
               <td style={{ ...CELL, fontWeight: actual > 0 ? 600 : 400 }}>{fmtVal(actual, isNS)}</td>
-              <td style={{ ...CELL, ...pctStyle(pct) }}>{pct !== null ? `${pct}%` : '—'}</td>
-              {hasCompare && (
+              {!hasCompare ? (
+                <td style={{ ...CELL, ...pctStyle(pct), borderRight: GRP_BORDER }}>{pct !== null ? `${pct}%` : '—'}</td>
+              ) : (
                 <>
+                  <td style={{ ...CELL, ...pctStyle(pct) }}>{pct !== null ? `${pct}%` : '—'}</td>
                   <td style={{ ...CELL, color: 'var(--color-text-muted)' }}>{fmtVal(cAct, isNS)}</td>
-                  <td style={CELL}>
+                  <td style={{ ...CELL, borderRight: GRP_BORDER }}>
                     {deltaPct !== null ? (
                       <span style={{ color: deltaPct >= 0 ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
                         {deltaPct >= 0 ? '+' : ''}{deltaPct}%
@@ -232,8 +254,12 @@ export function PlanVsActualTab({
     indent = 0,
     color?: string | null,
     extraLabelContent?: React.ReactNode,
+    rowVariant?: 'brand' | 'model',
   ): React.ReactNode {
-    const bg   = isTotal ? TOTAL_ROW_BG : undefined;
+    const bg = isTotal ? TOTAL_ROW_BG : rowVariant === 'brand' ? BRAND_ROW_BG : rowVariant === 'model' ? MODEL_ROW_BG : undefined;
+    const isBrand = rowVariant === 'brand';
+    const isModel = rowVariant === 'model';
+    const borderTop = isTotal ? '2px solid #94a3b8' : isBrand ? '2px solid #bfdbfe' : undefined;
     const ns   = getter(actData, 'Ngân sách');
     const khqt = getter(actData, 'KHQT');
     const gdtd = getter(actData, 'GDTD');
@@ -245,16 +271,25 @@ export function PlanVsActualTab({
     ) : null;
     const fmtK = (v: number | null, dec = 1) => v === null ? '—' : formatNumber(+v.toFixed(dec));
     return (
-      <tr key={label} style={{ background: bg }}>
-        <td style={{ ...LABEL_CELL, background: bg ?? '#fff', paddingLeft: 8 + indent * 16, fontWeight: isTotal ? 700 : 400, color: color ?? 'var(--color-text)' }}>
+      <tr key={label} style={{ background: bg, borderTop }}>
+        <td style={{
+          ...LABEL_CELL,
+          background: bg ?? '#fff',
+          paddingLeft: 8 + indent * 20,
+          fontWeight: isTotal || isBrand ? 700 : 400,
+          color: isBrand ? (color ?? 'var(--color-primary)') : isModel ? '#64748b' : (color ?? 'var(--color-text)'),
+          fontSize: isModel ? 'var(--fs-label)' : 'var(--fs-table)',
+          borderTop,
+        }}>
           {extraLabelContent}{label}
         </td>
         <td style={CELL}>{fmtVal(kpis.ns, true)}{hasCompare && deltaArrow(kpis.ns, ck?.ns ?? null, false)}</td>
         <td style={CELL}>{formatNumber(Math.round(kpis.khqt)) || '—'}{hasCompare && deltaArrow(kpis.khqt, ck?.khqt ?? null, true)}</td>
         <td style={CELL}>{fmtK(kpis.cpl, 2)}{hasCompare && deltaArrow(kpis.cpl, ck?.cpl ?? null, false)}</td>
+        <td style={CELL}>{formatNumber(Math.round(kpis.gdtd)) || '—'}{hasCompare && deltaArrow(kpis.gdtd, ck?.gdtd ?? null, true)}</td>
         <td style={CELL}>{kpis.cr1 !== null ? `${kpis.cr1}%` : '—'}{hasCompare && deltaArrow(kpis.cr1, ck?.cr1 ?? null, true)}</td>
+        <td style={{ ...CELL, fontWeight: 600, color: '#059669' }}>{formatNumber(Math.round(kpis.khd)) || '—'}{hasCompare && deltaArrow(kpis.khd, ck?.khd ?? null, true)}</td>
         <td style={CELL}>{kpis.cr2 !== null ? `${kpis.cr2}%` : '—'}{hasCompare && deltaArrow(kpis.cr2, ck?.cr2 ?? null, true)}</td>
-        <td style={{ ...CELL, fontWeight: 600 }}>{formatNumber(Math.round(kpis.khd)) || '—'}{hasCompare && deltaArrow(kpis.khd, ck?.khd ?? null, true)}</td>
       </tr>
     );
   }
@@ -266,10 +301,11 @@ export function PlanVsActualTab({
     indent = 0,
     color?: string | null,
     extraLabelContent?: React.ReactNode,
+    rowVariant?: 'brand' | 'model',
   ): React.ReactNode {
     return reportMode === 'result'
-      ? renderResultRow(label, isTotal, getter, indent, color, extraLabelContent)
-      : renderEfficiencyRow(label, isTotal, getter, indent, color, extraLabelContent);
+      ? renderResultRow(label, isTotal, getter, indent, color, extraLabelContent, rowVariant)
+      : renderEfficiencyRow(label, isTotal, getter, indent, color, extraLabelContent, rowVariant);
   }
 
   // ── Section title ────────────────────────────────────────────────────────────
@@ -287,7 +323,7 @@ export function PlanVsActualTab({
 
   function renderTable(labelHeader: string, rows: React.ReactNode[]) {
     return (
-      <div style={{ overflowX: 'auto' }}>
+      <div style={{ overflowX: 'auto', border: '1px solid #cbd5e1', borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
         <table style={{ borderCollapse: 'collapse', width: '100%' }}>
           <TableHeader labelHeader={labelHeader} />
           <tbody>{rows}</tbody>
@@ -324,13 +360,14 @@ export function PlanVsActualTab({
         brand.name, false,
         (d, m) => sumByBrandMetric(d, brand.name, m),
         0, brand.color, expandIcon,
+        isExpanded ? 'brand' : undefined,
       ));
       if (isExpanded) {
         brand.models.forEach(model => {
           rows.push(renderRow(
             model, false,
             (d, m) => sumByModelMetric(d, brand.name, model, m),
-            1,
+            1, null, undefined, 'model',
           ));
         });
       }
@@ -343,12 +380,18 @@ export function PlanVsActualTab({
   const showroomRows = useMemo(() => {
     const rows: React.ReactNode[] = [];
     showroomItems.forEach(sr => {
-      rows.push(renderRow(sr.name, false, (d, m) => totalAllChannels(d, m) * sr.weight));
+      const srData = showroomMergedData?.[sr.name];
+      rows.push(renderRow(sr.name, false, (d, m) => {
+        if (!srData) return 0;
+        if (d === planData) return totalAllChannels(srData.plan, m);
+        if (d === actData)  return totalAllChannels(srData.actual, m);
+        return 0; // compare period — no per-showroom prev data
+      }));
     });
     rows.push(renderRow('Tổng cộng', true, totalAllChannels));
     return rows;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planData, actData, cmpPlan, cmpAct, hasCompare, reportMode, showroomItems]);
+  }, [planData, actData, cmpPlan, cmpAct, hasCompare, reportMode, showroomItems, showroomMergedData]);
 
   // ── Export ───────────────────────────────────────────────────────────────────
 
@@ -401,11 +444,6 @@ export function PlanVsActualTab({
           {modeBtn('result', 'KẾT QUẢ')}
           {modeBtn('efficiency', 'HIỆU QUẢ')}
         </div>
-        {reportMode === 'efficiency' && (
-          <span style={{ fontSize: 'var(--fs-label)', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: 4 }}>
-            CPL = NS ÷ KHQT · CR1 = GDTD÷KHQT · CR2 = KHĐ÷GDTD
-          </span>
-        )}
         <div style={{ flex: 1 }} />
         <ExportButton onExport={handleExport} />
       </div>
