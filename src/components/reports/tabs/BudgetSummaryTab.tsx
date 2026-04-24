@@ -2,6 +2,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { formatNumber } from '@/lib/utils';
 import { ExportButton } from '../ExportButton';
+import { DataGridContainer } from '@/components/reui/data-grid/data-grid';
 import { exportToExcel } from '@/lib/report-export';
 import {
   REPORT_CHANNELS,
@@ -36,7 +37,7 @@ function fmtNum(v: number, isNS: boolean): string {
 }
 
 function pctColor(pct: number | null): string {
-  if (pct === null) return '#94a3b8';
+  if (pct === null) return 'var(--color-text-muted)';
   if (pct >= 100) return '#16a34a';
   if (pct >= 80)  return '#d97706';
   return '#dc2626';
@@ -45,10 +46,10 @@ function pctColor(pct: number | null): string {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const CELL: React.CSSProperties = {
-  padding: '5px 7px',
+  padding: '6px 8px',
   fontSize: 'var(--fs-table)',
-  borderBottom: '1px solid #e2e8f0',
-  borderRight: '1px solid #f1f5f9',
+  borderBottom: '1px solid var(--color-border)',
+  borderRight: '1px solid var(--color-border-light)',
   textAlign: 'center',
   whiteSpace: 'nowrap',
   verticalAlign: 'top',
@@ -59,13 +60,13 @@ const LABEL_CELL: React.CSSProperties = {
   position: 'sticky',
   left: 0,
   zIndex: 1,
-  borderRight: '2px solid #e2e8f0',
+  borderRight: '2px solid var(--color-border)',
 };
 const TH_STYLE: React.CSSProperties = {
   ...CELL,
   fontWeight: 700,
-  background: '#f1f5f9',
-  borderBottom: '2px solid #cbd5e1',
+  background: 'var(--color-table-header)',
+  borderBottom: '2px solid var(--color-border-dark)',
   color: 'var(--color-text-secondary)',
   fontSize: 'var(--fs-label)',
 };
@@ -78,23 +79,31 @@ function DataCell({ thVal, khVal, isCPL, isNS }: {
   if (isCPL) {
     return (
       <td style={CELL}>
-        <div style={{ fontWeight: thVal > 0 ? 600 : 400, color: thVal > 0 ? 'var(--color-text)' : '#cbd5e1', fontSize: 'var(--fs-table)' }}>
+        <div style={{ fontWeight: thVal > 0 ? 600 : 400, color: thVal > 0 ? 'var(--color-text)' : 'var(--color-border-dark)', fontSize: 'var(--fs-table)' }}>
           {thVal > 0 ? formatNumber(+(thVal).toFixed(2)) : '—'}
         </div>
       </td>
     );
   }
   const pct = calcPct(thVal, khVal);
+  const hasSubRow = khVal > 0 || pct !== null;
   return (
     <td style={CELL}>
-      <div style={{ fontWeight: thVal > 0 ? 600 : 400, color: thVal > 0 ? 'var(--color-text)' : '#cbd5e1', fontSize: 'var(--fs-table)' }}>
+      <div style={{ fontWeight: thVal > 0 ? 600 : 400, color: thVal > 0 ? 'var(--color-text)' : 'var(--color-border-dark)', fontSize: 'var(--fs-table)' }}>
         {fmtNum(thVal, isNS)}
       </div>
-      {khVal > 0 && (
-        <div style={{ fontSize: 'var(--fs-label)', color: '#94a3b8' }}>{fmtNum(khVal, isNS)}</div>
-      )}
-      {pct !== null && (
-        <div style={{ fontSize: 'var(--fs-label)', color: pctColor(pct), fontWeight: pct < 80 ? 700 : 600 }}>{pct}%</div>
+      {hasSubRow && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
+          {khVal > 0 && (
+            <span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)' }}>{fmtNum(khVal, isNS)}</span>
+          )}
+          {khVal > 0 && pct !== null && (
+            <span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-border-dark)' }}>·</span>
+          )}
+          {pct !== null && (
+            <span style={{ fontSize: 'var(--fs-label)', color: pctColor(pct), fontWeight: pct < 80 ? 700 : 600 }}>{pct}%</span>
+          )}
+        </div>
       )}
     </td>
   );
@@ -186,8 +195,8 @@ export function BudgetSummaryTab({
   ) {
     const isBrand = rowVariant === 'brand';
     const isModel = rowVariant === 'model';
-    const bg = isTotal ? '#e2e8f4' : isBrand ? '#eff6ff' : isModel ? '#fafbff' : undefined;
-    const borderTop = isTotal ? '2px solid #94a3b8' : isBrand ? '2px solid #bfdbfe' : undefined;
+    const bg = isTotal ? 'var(--color-table-header)' : isBrand ? 'var(--color-surface-hover)' : isModel ? 'var(--color-surface)' : undefined;
+    const borderTop = isTotal ? '2px solid var(--color-primary)' : isBrand ? '1px solid #dbeafe' : undefined;
     const thTotal = getYearTH(getter);
     const khTotal = getYearKH(getter);
     const pctTotal = isCPL ? null : calcPct(thTotal, khTotal);
@@ -195,10 +204,10 @@ export function BudgetSummaryTab({
       <tr key={label} style={{ background: bg, borderTop }}>
         <td style={{
           ...LABEL_CELL,
-          background: bg ?? '#fff',
+          background: bg ?? 'var(--color-cell-bg)',
           paddingLeft: 8 + indent * 20,
           fontWeight: isTotal || isBrand ? 700 : 400,
-          color: isBrand ? (color ?? 'var(--color-primary)') : isModel ? '#64748b' : (color ?? 'var(--color-text)'),
+          color: isBrand ? (color ?? 'var(--color-primary)') : isModel ? 'var(--color-text-secondary)' : (color ?? 'var(--color-text)'),
           fontSize: isModel ? 'var(--fs-label)' : 'var(--fs-table)',
           borderTop,
         }}>
@@ -218,7 +227,7 @@ export function BudgetSummaryTab({
           {isCPL ? '—' : (
             <>
               <div style={{ fontSize: 'var(--fs-table)' }}>{fmtNum(thTotal, isNS)}</div>
-              {khTotal > 0 && <div style={{ fontSize: 'var(--fs-label)', color: '#94a3b8' }}>{fmtNum(khTotal, isNS)}</div>}
+              {khTotal > 0 && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)' }}>{fmtNum(khTotal, isNS)}</div>}
               {pctTotal !== null && (
                 <div style={{ fontSize: 'var(--fs-label)', color: pctColor(pctTotal), fontWeight: 600 }}>{pctTotal}%</div>
               )}
@@ -238,10 +247,11 @@ export function BudgetSummaryTab({
           <div style={{ width: 4, height: 18, background: 'var(--color-primary)', borderRadius: 2 }} />
           <span style={{ fontWeight: 700, fontSize: 'var(--fs-body)', color: 'var(--color-text)' }}>{title}</span>
         </div>
-        <div style={{ overflowX: 'auto', border: '1px solid #cbd5e1', borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+        <DataGridContainer>
+          <div style={{ overflowX: 'auto' }}>
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
-              <tr style={{ background: '#f8fafc' }}>
+              <tr style={{ background: 'var(--color-table-header)' }}>
                 <th style={{ ...TH_STYLE, textAlign: 'left', minWidth: 160, position: 'sticky', left: 0, zIndex: 2 }}>
                   {title.replace('Theo ', '')}
                 </th>
@@ -253,7 +263,8 @@ export function BudgetSummaryTab({
             </thead>
             <tbody>{children}</tbody>
           </table>
-        </div>
+          </div>
+        </DataGridContainer>
       </div>
     );
   }
@@ -356,13 +367,13 @@ export function BudgetSummaryTab({
             <button key={m} onClick={() => setMetric(m)} style={{
               padding: '4px 10px', border: 'none', cursor: 'pointer',
               fontSize: 'var(--fs-body)',
-              background: metric === m ? 'var(--color-primary)' : '#fff',
+              background: metric === m ? 'var(--color-primary)' : 'var(--color-cell-bg)',
               color: metric === m ? '#fff' : 'var(--color-text-muted)',
               fontWeight: metric === m ? 700 : 400,
             }}>{m}</button>
           ))}
         </div>
-        <span style={{ fontSize: 'var(--fs-label)', color: '#64748b' }}>
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)' }}>
           {isCPL ? 'CPL = Ngân sách ÷ KHQT (tr/lead) — không có KH' : 'Mỗi ô: TH / KH / %TH'}
         </span>
         <div style={{ flex: 1 }} />

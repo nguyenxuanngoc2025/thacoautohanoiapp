@@ -372,10 +372,10 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
     return up ? 'var(--color-success)' : 'var(--color-danger)';
   };
   const deltaBg = (val: number, plan: number, higherIsBad = false) => {
-    if (plan === 0) return '#f1f5f9';
+    if (plan === 0) return 'var(--color-surface-hover)';
     const up = val >= plan;
-    if (higherIsBad) return up ? '#fef2f2' : '#ecfdf5';
-    return up ? '#ecfdf5' : '#fef2f2';
+    if (higherIsBad) return up ? 'var(--color-danger-bg)' : 'var(--color-success-bg)';
+    return up ? 'var(--color-success-bg)' : 'var(--color-danger-bg)';
   };
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -517,9 +517,9 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
           <div style={{ flex: '100 1 500px', display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
             {/* --- Bảng Thương hiệu --- */}
             <div className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
-              <div style={{ padding: '12px 16px', background: '#e2e8f0', borderRadius: '6px 6px 0 0', borderBottom: '1px solid rgba(226, 232, 240, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontWeight: 600, color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ display: 'inline-block', width: 3, height: 14, background: 'var(--color-primary)', borderRadius: 2 }} />
+              <div className="panel-header">
+                <div className="panel-header-title">
+                  <span className="panel-header-accent" />
                   Hiệu quả ngân sách theo Thương hiệu
                 </div>
                 <button
@@ -580,13 +580,13 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
                   <DataGrid
                     table={brandTable}
                     recordCount={brandBreakdown.length}
-                    tableLayout={{ stripped: true, cellBorder: false, rowBorder: true, headerSticky: true, dense: true, width: 'auto', headerBackground: true }}
+                    tableLayout={{ stripped: true, cellBorder: false, rowBorder: true, headerSticky: true, dense: true, width: 'fixed', headerBackground: true }}
                     tableClassNames={{ base: 'data-table' }}
                   >
                     <DataGridContainer border={false}>
                       <DataGridTable
                         footerContent={brandTable.getFooterGroups().map(group => (
-                          <tr key={group.id} style={{ background: '#e2e8f0', color: 'var(--color-primary)' }}>
+                          <tr key={group.id} style={{ background: 'var(--color-surface-elevated)', color: 'var(--color-primary)' }}>
                             {group.headers.map(header => (
                               <td key={header.id} className={(header.column.columnDef.meta as any)?.footerClassName as string || ''} style={{ borderTop: '2px solid var(--color-primary)', padding: '10px 8px', ...(header.getSize() !== 150 ? { width: header.getSize() } : {})}}>
                                 {header.isPlaceholder ? null : flexRender(header.column.columnDef.footer, header.getContext())}
@@ -603,9 +603,9 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
 
             {/* --- Bảng Showroom --- */}
             <div className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
-              <div style={{ padding: '12px 16px', background: '#e2e8f0', borderRadius: '6px 6px 0 0', borderBottom: '1px solid rgba(226, 232, 240, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontWeight: 600, color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ display: 'inline-block', width: 3, height: 14, background: 'var(--color-primary)', borderRadius: 2 }} />
+              <div className="panel-header">
+                <div className="panel-header-title">
+                  <span className="panel-header-accent" />
                   Hiệu quả ngân sách theo Showroom
                 </div>
               </div>
@@ -616,13 +616,13 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
                   <DataGrid
                     table={showroomTable}
                     recordCount={visibleShowroomBreakdown.length}
-                    tableLayout={{ stripped: true, cellBorder: false, rowBorder: true, headerSticky: true, dense: true, width: 'auto', headerBackground: true }}
+                    tableLayout={{ stripped: true, cellBorder: false, rowBorder: true, headerSticky: true, dense: true, width: 'fixed', headerBackground: true }}
                     tableClassNames={{ base: 'data-table' }}
                   >
                     <DataGridContainer border={false}>
                       <DataGridTable
                         footerContent={showroomTable.getFooterGroups().map(group => (
-                          <tr key={group.id} style={{ background: '#e2e8f0', color: 'var(--color-primary)' }}>
+                          <tr key={group.id} style={{ background: 'var(--color-surface-elevated)', color: 'var(--color-primary)' }}>
                             {group.headers.map(header => (
                               <td key={header.id} className={(header.column.columnDef.meta as any)?.footerClassName as string || ''} style={{ borderTop: '2px solid var(--color-primary)', padding: '10px 8px', ...(header.getSize() !== 150 ? { width: header.getSize() } : {})}}>
                                 {header.isPlaceholder ? null : flexRender(header.column.columnDef.footer, header.getContext())}
@@ -641,9 +641,9 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
           {/* Funnel & Donut Column */}
           <div style={{ flex: '1 1 260px', display: 'flex', flexDirection: 'column', gap: 8, minWidth: 240, maxWidth: '100%' }}>
               <div className="panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                <div style={{ padding: '12px 16px', background: '#e2e8f0', borderRadius: '6px 6px 0 0', borderBottom: '1px solid rgba(226, 232, 240, 0.8)', display: 'flex', alignItems: 'center' }}>
-                  <div style={{ fontWeight: 600, color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ display: 'inline-block', width: 3, height: 14, background: 'var(--color-primary)', borderRadius: 2 }} />
+                <div className="panel-header">
+                  <div className="panel-header-title">
+                    <span className="panel-header-accent" />
                     Phễu chuyển đổi
                   </div>
                 </div>
@@ -657,9 +657,9 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
 
               {/* ★ Donut — Recharts PieChart thay thế SVG vẽ tay ★ */}
               <div className="panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                <div style={{ padding: '12px 16px', background: '#e2e8f0', borderRadius: '6px 6px 0 0', borderBottom: '1px solid rgba(226, 232, 240, 0.8)', display: 'flex', alignItems: 'center' }}>
-                  <div style={{ fontWeight: 600, color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ display: 'inline-block', width: 3, height: 14, background: 'var(--color-primary)', borderRadius: 2 }} />
+                <div className="panel-header">
+                  <div className="panel-header-title">
+                    <span className="panel-header-accent" />
                     Phân bổ Kênh
                   </div>
                 </div>
@@ -717,9 +717,9 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
 
           {/* Events Column */}
           <div className="panel" style={{ flex: '1 1 260px', display: 'flex', flexDirection: 'column', minWidth: 240, maxWidth: '100%' }}>
-              <div style={{ padding: '12px 16px', background: '#e2e8f0', borderRadius: '6px 6px 0 0', borderBottom: '1px solid rgba(226, 232, 240, 0.8)', display: 'flex', alignItems: 'center' }}>
-                <div style={{ fontWeight: 600, color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ display: 'inline-block', width: 3, height: 14, background: 'var(--color-primary)', borderRadius: 2 }} />
+              <div className="panel-header">
+                <div className="panel-header-title">
+                  <span className="panel-header-accent" />
                   Sự kiện sắp tới
                 </div>
               </div>
@@ -731,11 +731,14 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
                     const diff = ev.daysUntil;
                     const isOverdue = ev.inferredStatus === 'overdue' || diff < 0;
                     const isUrgent = diff >= 0 && diff <= 3;
-                    const urgBg  = isOverdue ? '#fef2f2' : diff === 0 ? '#eff6ff' : isUrgent ? '#fffbeb' : '#f8fafc';
-                    const urgClr = isOverdue ? '#dc2626' : diff === 0 ? '#2563eb' : isUrgent ? '#d97706' : '#64748b';
+                    const urgBg  = isOverdue ? 'var(--color-danger-bg)' : diff === 0 ? 'var(--color-primary-light)' : isUrgent ? 'var(--color-warning-bg)' : 'var(--color-surface-hover)';
+                    const urgClr = isOverdue ? 'var(--color-danger)' : diff === 0 ? 'var(--color-primary)' : isUrgent ? 'var(--color-warning)' : 'var(--color-text-muted)';
                     const urgTxt = isOverdue ? `Trễ ${Math.abs(diff)}n` : diff === 0 ? 'Đang diễn ra' : diff === 1 ? 'Ngày mai' : `Còn ${diff}n`;
                     return (
-                      <Link href={`/events?eventId=${ev.id}`} key={i} style={{ display: 'flex', gap: 8, padding: '6px 8px', borderRadius: 4, background: '#f8fafc', border: '1px solid var(--color-border)', alignItems: 'center', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }} className="hover:bg-slate-100 transition-colors">
+                      <Link href={`/events?eventId=${ev.id}`} key={i} style={{ display: 'flex', gap: 8, padding: '6px 8px', borderRadius: 4, background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)', alignItems: 'center', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }} className="transition-colors"
+                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover)'}
+                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-elevated)'}
+                      >
                         <div style={{ width: 32, height: 32, borderRadius: 4, background: 'var(--color-primary)', color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 800, lineHeight: 1 }}>{d.getDate()}</div>
                           <div style={{ fontSize: 8, fontWeight: 600, opacity: 0.8 }}>T{d.getMonth() + 1}</div>
@@ -754,9 +757,9 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
 
         {/* ── ROW 3: ★ Recharts BarChart thay thế SVG vẽ tay ★ ──────── */}
         <div className="panel">
-          <div style={{ padding: '12px 16px', background: '#e2e8f0', borderRadius: '6px 6px 0 0', borderBottom: '1px solid rgba(226, 232, 240, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ fontWeight: 600, color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ display: 'inline-block', width: 3, height: 14, background: 'var(--color-primary)', borderRadius: 2 }} />
+          <div className="panel-header">
+            <div className="panel-header-title">
+              <span className="panel-header-accent" />
               Ngân sách 12 tháng / {year}
             </div>
             <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--color-text-secondary)' }}>
@@ -785,9 +788,9 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
                     if (active && payload && payload.length) {
                       return (
                         <div style={{
-                          background: '#ffffff',
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+                          background: 'var(--color-surface-elevated)',
+                          border: '1px solid var(--color-border)',
+                          boxShadow: 'var(--shadow-dropdown)',
                           borderRadius: 8,
                           padding: '10px 14px',
                           minWidth: 160

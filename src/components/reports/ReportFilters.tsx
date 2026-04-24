@@ -31,7 +31,7 @@ export function ReportFilters({
     border: '1px solid var(--color-border)',
     borderRadius: 'var(--border-radius-erp)',
     fontSize: 'var(--fs-body)',
-    background: '#fff', color: 'var(--color-text)',
+    background: 'var(--color-surface-elevated)', color: 'var(--color-text)',
     cursor: 'pointer',
   };
 
@@ -44,7 +44,7 @@ export function ReportFilters({
               style={{
                 padding: '4px 10px', border: 'none', cursor: 'pointer',
                 fontSize: 'var(--fs-body)',
-                background: filters.viewMode === m ? 'var(--color-primary)' : '#fff',
+                background: filters.viewMode === m ? 'var(--color-primary)' : 'var(--color-surface-elevated)',
                 color: filters.viewMode === m ? '#fff' : 'var(--color-text-muted)',
                 fontWeight: filters.viewMode === m ? 700 : 400,
               }}>

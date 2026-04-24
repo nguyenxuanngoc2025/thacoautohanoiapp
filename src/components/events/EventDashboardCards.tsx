@@ -44,7 +44,7 @@ export function MiniBarChart({ data }: { data: { label: string; value: number; c
       {data.map((d, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', width: 90, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>{d.label}</span>
-          <div style={{ flex: 1, height: 18, background: '#f1f5f9', borderRadius: 3, overflow: 'hidden', position: 'relative' }}>
+          <div style={{ flex: 1, height: 18, background: 'var(--color-surface-hover)', borderRadius: 3, overflow: 'hidden', position: 'relative' }}>
             <div style={{ height: '100%', width: `${Math.max((d.value / max) * 100, 2)}%`, background: `linear-gradient(90deg, ${d.color}, ${d.color}bb)`, borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 6 }}>
               {(d.value / max) > 0.3 && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff' }}>{d.value}</span>}
             </div>
@@ -92,7 +92,7 @@ export function MonthlySparkline({ data, color = '#3B82F6' }: { data: number[]; 
       <defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity="0.2" /><stop offset="100%" stopColor={color} stopOpacity="0" /></linearGradient></defs>
       <path d={`${pathD} L ${w} ${h} L 0 ${h} Z`} fill={`url(#${id})`} />
       <path d={pathD} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" />
-      {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} fill="#fff" stroke={color} strokeWidth="1.5" />)}
+      {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} style={{ fill: 'var(--color-surface)' }} stroke={color} strokeWidth="1.5" />)}
     </svg>
   );
 }

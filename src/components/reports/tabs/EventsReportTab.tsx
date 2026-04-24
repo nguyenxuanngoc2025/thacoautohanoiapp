@@ -38,7 +38,7 @@ export function EventsReportTab({
 
   const HEADER: React.CSSProperties = {
     padding: '6px 10px', fontWeight: 700, fontSize: 'var(--fs-label)',
-    background: '#f8fafc', borderBottom: '1px solid var(--color-border)', textAlign: 'left',
+    background: 'var(--color-table-header)', borderBottom: '1px solid var(--color-border)', textAlign: 'left',
     whiteSpace: 'nowrap',
   };
   const CELL: React.CSSProperties = {
@@ -76,7 +76,7 @@ export function EventsReportTab({
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          style={{ height: 28, padding: '0 6px', border: '1px solid var(--color-border)', borderRadius: 'var(--border-radius-erp)', fontSize: 'var(--fs-body)', background: '#fff' }}
+          style={{ height: 28, padding: '0 6px', border: '1px solid var(--color-border)', borderRadius: 'var(--border-radius-erp)', fontSize: 'var(--fs-body)', background: 'var(--color-surface-elevated)', color: 'var(--color-text)' }}
         >
           <option value="">— Tất cả trạng thái —</option>
           {STATUSES.map(s => {
@@ -92,7 +92,7 @@ export function EventsReportTab({
       </div>
 
       {/* Summary strip */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 14, padding: '8px 12px', background: '#f8fafc', borderRadius: 'var(--border-radius-erp)', border: '1px solid var(--color-border-light)' }}>
+      <div style={{ display: 'flex', gap: 16, marginBottom: 14, padding: '8px 12px', background: 'var(--color-table-header)', borderRadius: 'var(--border-radius-erp)', border: '1px solid var(--color-border)' }}>
         {[
           { label: 'NS kế hoạch', value: formatNumber(+totalPlan.toFixed(1)) + ' tr' },
           { label: 'NS thực hiện', value: formatNumber(+totalActual.toFixed(1)) + ' tr' },
@@ -131,7 +131,7 @@ export function EventsReportTab({
               const cfg = getStatusCfg(ev.status ?? '');
               return (
                 <tr key={ev.id}
-                  onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.background = '#f8fafc'}
+                  onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover)'}
                   onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.background = ''}
                 >
                   <td style={{ ...CELL, fontWeight: 600 }}>{ev.name}</td>

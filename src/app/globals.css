@@ -47,6 +47,18 @@
   --color-danger-bg:  #fee2e2;
   --color-info:       #3b82f6;
 
+  /* ── Surface levels ─────────────────────────────────────── */
+  --color-surface-elevated: #ffffff;
+  --color-surface-hover:    #f1f5f9;
+
+  /* ── Table specific ─────────────────────────────────────── */
+  --color-table-header: #eef2f7;
+  --color-row-alt:      #f1f5f9;
+  --color-cell-bg:      #ffffff;
+
+  /* ── Sidebar ─────────────────────────────────────────────── */
+  --sidebar-bg: linear-gradient(180deg, #0056b3 0%, #00264d 100%);
+
   /* ── Aliases (backward compat) ───────────────────────────── */
   --color-brand:       var(--color-primary);
   --color-brand-hover: var(--color-primary-hover);
@@ -118,6 +130,348 @@
   --warning-foreground:  var(--color-yellow-900);
   --invert:              var(--color-zinc-900);
   --invert-foreground:   var(--color-zinc-50);
+}
+
+/* ============================================================
+   DARK MODE — Palette chuẩn Claude Desktop (charcoal + navy)
+   ============================================================ */
+html.dark {
+  color-scheme: dark;
+
+  /* ── Primary (sáng hơn cho nền tối) ──────────────────────── */
+  --color-primary:       #5b8fff;
+  --color-primary-hover: #4070ee;
+  --color-primary-light: #1a2a50;
+  --color-primary-active:#2e5bcc;
+
+  /* ── Background layers ───────────────────────────────────── */
+  --color-bg:               #131318;   /* nền tối nhất — toàn màn hình */
+  --color-surface:          #1c1c24;   /* panel / card layer 1 */
+  --color-surface-elevated: #24242f;   /* dropdown / popup / modal */
+  --color-surface-hover:    #2a2a38;   /* hover state */
+  --color-topbar:           #1c1c24;
+
+  /* ── Text ────────────────────────────────────────────────── */
+  --color-text-primary:   #e4e4ee;
+  --color-text-secondary: #9090aa;
+  --color-text-muted:     #5c5c78;
+  --color-text:           #e4e4ee;
+
+  /* ── Borders ─────────────────────────────────────────────── */
+  --color-border-light: #1c1c24;
+  --color-border:       #2e2e3e;
+  --color-border-dark:  #3e3e52;
+
+  /* ── Status ──────────────────────────────────────────────── */
+  --color-success:    #34d399;
+  --color-success-bg: #052e16;
+  --color-warning:    #fbbf24;
+  --color-warning-bg: #1c1202;
+  --color-danger:     #f87171;
+  --color-danger-bg:  #2d0b0b;
+  --color-info:       #60a5fa;
+
+  /* ── Table specific ──────────────────────────────────────── */
+  --color-table-header: #22222e;
+  --color-row-alt:      #1e1e28;
+  --color-cell-bg:      #1c1c24;
+
+  /* ── Sidebar ─────────────────────────────────────────────── */
+  --sidebar-bg: #1c1c24;
+
+  /* ── Aliases ─────────────────────────────────────────────── */
+  --color-brand:       var(--color-primary);
+  --color-brand-hover: var(--color-primary-hover);
+
+  /* Shadcn/UI overrides */
+  --background:         oklch(0.1 0.01 270);
+  --foreground:         oklch(0.92 0.01 270);
+  --card:               oklch(0.14 0.01 270);
+  --card-foreground:    oklch(0.92 0.01 270);
+  --popover:            oklch(0.16 0.01 270);
+  --popover-foreground: oklch(0.92 0.01 270);
+  --border:             oklch(0.25 0.01 270);
+  --input:              oklch(0.22 0.01 270);
+  --ring:               oklch(0.55 0.18 250);
+}
+
+/* ── Body ──────────────────────────────────────────────────── */
+html.dark body {
+  background: #131318;
+  color: #e4e4ee;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────── */
+html.dark ::-webkit-scrollbar-track { background: #1c1c24; }
+html.dark ::-webkit-scrollbar-thumb { background: #3e3e52; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: #5c5c78; }
+
+/* ============================================================
+   CSS CLASSES CHO DARK-AWARE COMPONENTS
+   Dùng className thay vì inline style để dark mode hoạt động
+   ============================================================ */
+
+/* ── app-surface: Card / panel nền trắng ────────────────────── */
+.app-surface {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+}
+html.dark .app-surface {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+
+/* ── app-card: Giống app-surface nhưng shadow ───────────────── */
+.app-card {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+html.dark .app-card {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+/* ── notif-panel: Notification popup ───────────────────────── */
+.notif-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+html.dark .notif-panel {
+  background: #1c1c24;
+  border-color: #2e2e3e;
+  box-shadow: 0 -12px 48px rgba(0,0,0,0.5), 0 -4px 16px rgba(0,0,0,0.3);
+}
+
+.notif-header {
+  background: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+}
+html.dark .notif-header {
+  background: #1c1c24;
+  border-bottom-color: #2e2e3e;
+}
+
+.notif-item {
+  border-bottom: 1px solid #f8fafc;
+  transition: background 0.1s;
+}
+html.dark .notif-item {
+  border-bottom-color: #22222c;
+}
+.notif-item:hover { background: #f8fafc; }
+html.dark .notif-item:hover { background: #222230; }
+
+.notif-item.unread { background: #f0f6ff; }
+html.dark .notif-item.unread { background: #1a2240; }
+
+.notif-tabs {
+  border-bottom: 1px solid #f1f5f9;
+}
+html.dark .notif-tabs {
+  border-bottom-color: #2e2e3e;
+}
+
+.notif-tab-btn {
+  padding: 8px 12px;
+  font-size: var(--fs-label);
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.notif-tab-btn:hover { color: var(--color-text); }
+.notif-tab-btn.active { color: var(--color-primary); border-bottom-color: var(--color-primary); font-weight: 600; }
+
+.notif-icon-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 6px;
+  border: none; cursor: pointer; background: transparent;
+  color: var(--color-text-secondary);
+  transition: background 0.1s, color 0.1s;
+}
+.notif-icon-btn:hover { background: #f1f5f9; color: var(--color-text); }
+html.dark .notif-icon-btn:hover { background: #2a2a38; }
+.notif-icon-btn.active { background: #eff6ff; color: var(--color-primary); }
+html.dark .notif-icon-btn.active { background: #1a2a50; }
+
+.notif-empty {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 48px 24px; gap: 12px; flex: 1;
+  color: var(--color-text-muted);
+}
+html.dark .notif-empty { color: #5c5c78; }
+
+/* ── dropdown-panel: Popup dropdown nền trắng ───────────────── */
+.dropdown-panel {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+}
+html.dark .dropdown-panel {
+  background: #24242f;
+  border-color: #2e2e3e;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+.dropdown-header {
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fafafa;
+}
+html.dark .dropdown-header {
+  background: #1c1c28;
+  border-bottom-color: #2e2e3e;
+}
+
+.dropdown-item {
+  width: 100%; display: flex; align-items: flex-start;
+  gap: 12px; padding: 10px 14px;
+  background: transparent; border: none; cursor: pointer;
+  text-align: left; border-bottom: 1px solid #f9fafb;
+  transition: background 0.1s;
+}
+.dropdown-item:hover { background: #f9fafb; }
+html.dark .dropdown-item { border-bottom-color: #22222c; color: #e4e4ee; }
+html.dark .dropdown-item:hover { background: #2a2a38; }
+.dropdown-item.active { background: #f0f6ff; }
+html.dark .dropdown-item.active { background: #1a2240; }
+
+.dropdown-footer {
+  padding: 8px 14px;
+  border-top: 1px solid #f3f4f6;
+  background: #fafafa;
+}
+html.dark .dropdown-footer {
+  background: #1c1c28;
+  border-top-color: #2e2e3e;
+  color: #5c5c78;
+}
+
+/* ── status-bar (CSS class, override inline style via className) */
+.status-bar {
+  height: 28px;
+  background: #e5e7eb;
+  border-top: 1px solid #d1d5db;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 12px;
+  flex-shrink: 0;
+  z-index: 500;
+  user-select: none;
+}
+html.dark .status-bar {
+  background: #1c1c24;
+  border-top-color: #2e2e3e;
+  color: #9090aa;
+}
+
+.status-sep {
+  width: 1px; height: 14px;
+  background: rgba(0,0,0,0.15);
+}
+html.dark .status-sep { background: rgba(255,255,255,0.1); }
+
+/* ── Panel (dark) ──────────────────────────────────────────── */
+html.dark .panel {
+  background: #1c1c24;
+  border-color: #2e2e3e;
+}
+html.dark .panel-header {
+  background: #22222e;
+  border-bottom-color: #2e2e3e;
+}
+
+/* ── Tables (dark) ─────────────────────────────────────────── */
+html.dark .data-table th {
+  background: #22222e;
+  color: #9090aa;
+  border-color: #2e2e3e;
+}
+html.dark .data-table td {
+  background-color: #1c1c24;
+  color: #e4e4ee;
+  border-color: #2e2e3e;
+}
+html.dark .data-table tbody tr:nth-child(even) td { background-color: #202028; }
+html.dark .data-table tr:hover td { background-color: #1a2240 !important; }
+html.dark .data-table tr.subtotal td {
+  background-color: #1e1e28 !important;
+  color: #9090aa;
+  border-color: #3e3e52;
+}
+html.dark .data-table tr.subtotal:hover td {
+  background-color: #2a2a38 !important;
+}
+html.dark .data-table tr.grand-total td,
+html.dark .data-table tfoot td {
+  background-color: #22222e !important;
+  color: var(--color-primary) !important;
+}
+
+/* ── Toolbar (dark) ─────────────────────────────────────────── */
+html.dark .toolbar {
+  background: #20202a;
+  border-bottom-color: #2e2e3e;
+}
+
+/* ── Form controls (dark) ──────────────────────────────────── */
+html.dark .form-select,
+html.dark .form-input {
+  background: #22222e;
+  border-color: #3e3e52;
+  color: #e4e4ee;
+}
+
+/* ── Period tabs (dark) ─────────────────────────────────────── */
+html.dark .period-tab {
+  background: #22222e;
+  color: #9090aa;
+  border-color: #3e3e52;
+}
+html.dark .period-tab.active { background: var(--color-primary); color: #fff; }
+html.dark .period-tab:not(.active):hover { background: #2a2a38; }
+
+/* ── Buttons (dark) ─────────────────────────────────────────── */
+html.dark .button-erp-secondary {
+  background: #22222e;
+  border-color: #3e3e52;
+  color: #9090aa;
+}
+html.dark .button-erp-secondary:hover { background: #2a2a38; border-color: #5c5c78; }
+
+/* ── Summary strip (dark) ───────────────────────────────────── */
+html.dark .summary-strip {
+  background: #1c1c24;
+  border-bottom-color: #2e2e3e;
+}
+html.dark .summary-chip-label { color: #5c5c78; }
+html.dark .summary-divider { background: #2e2e3e; }
+
+/* ── Sidebar background ─────────────────────────────────────── */
+.sidebar-bg {
+  background: linear-gradient(180deg, #0056b3 0%, #00264d 100%);
+}
+html.dark .sidebar-bg {
+  background: #1c1c24;
+  border-right: 1px solid #2e2e3e !important;
+}
+
+/* ── KPI Hero (dark) ────────────────────────────────────────── */
+html.dark .kpi-hero {
+  background: linear-gradient(135deg, #1a2a50 0%, #2040a0 100%);
+  border-color: #2a3d7a;
 }
 
 /* ── Reset ─────────────────────────────────────────────────── */
@@ -368,12 +722,14 @@ body {
 }
 
 .cell-idle:hover { background: #f1f8ff; }
+html.dark .cell-idle:hover { background: #1a2240; }
 
 .cell-editing {
   background: #ffffff;
   box-shadow: inset 0 0 0 1.5px #0185ba;
   z-index: 50;
 }
+html.dark .cell-editing { background: var(--color-surface-elevated); }
 
 .cell-input {
   width: 100%;
@@ -665,6 +1021,7 @@ body {
   border: 1px solid var(--color-border);
   align-items: center;
 }
+html.dark .event-card { background: var(--color-surface-hover); border-color: var(--color-border); }
 
 .event-card-date {
   width: 32px;
@@ -688,6 +1045,9 @@ body {
 .event-badge-urgent { background: #fef2f2; color: #991b1b; }
 .event-badge-soon   { background: #fffbeb; color: #92400e; }
 .event-badge-normal { background: #eff6ff; color: #1e40af; }
+html.dark .event-badge-urgent { background: #2d0b0b; color: #fca5a5; }
+html.dark .event-badge-soon   { background: #1c1202; color: #fcd34d; }
+html.dark .event-badge-normal { background: #1a2a50; color: #93c5fd; }
 
 /* ============================================================
    ALERT ROW — Cảnh báo showroom vượt ngân sách
@@ -834,6 +1194,10 @@ body {
   padding: 16px;
   overflow: hidden;
 }
+html.dark .chart-panel {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
 
 .chart-panel-title {
   font-size: var(--fs-body);
@@ -878,6 +1242,8 @@ body {
 }
 
 .kpi-card-event:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+html.dark .kpi-card-event { background: var(--color-surface); border-color: var(--color-border); }
+html.dark .kpi-card-event:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
 
 .kpi-card-event-header {
   display: flex;
@@ -940,6 +1306,7 @@ body {
   display: flex;
   flex-direction: column;
 }
+html.dark .timeline-panel { background: var(--color-surface); border-color: var(--color-border); }
 
 .timeline-header {
   padding: 10px 16px;
@@ -950,12 +1317,14 @@ body {
   background: linear-gradient(135deg, #fffbeb, #fef3c7);
   flex-shrink: 0;
 }
+html.dark .timeline-header { background: #2a2010; border-bottom-color: var(--color-border); }
 
 .timeline-header-title {
   font-size: var(--fs-body);
   font-weight: 700;
   color: #92400e;
 }
+html.dark .timeline-header-title { color: #fbbf24; }
 
 .timeline-header-count {
   margin-left: auto;
@@ -983,6 +1352,8 @@ body {
 
 .timeline-item-past   { background: #fef2f2; }
 .timeline-item-urgent { background: #fefce8; }
+html.dark .timeline-item-past   { background: #2d0b0b; }
+html.dark .timeline-item-urgent { background: #1c1202; }
 
 .timeline-item-connector {
   display: flex;
@@ -1006,6 +1377,7 @@ body {
   background: #e2e8f0;
   margin-top: 3px;
 }
+html.dark .timeline-line { background: #3e3e52; }
 
 .timeline-item-content { flex: 1; min-width: 0; }
 
@@ -1048,6 +1420,7 @@ body {
   display: flex;
   flex-direction: column;
 }
+html.dark .table-panel { background: var(--color-surface); border-color: var(--color-border); }
 
 .table-panel-header {
   padding: 10px 16px;
@@ -1081,6 +1454,7 @@ body {
   font-size: var(--fs-label);
   color: var(--color-text-secondary);
 }
+html.dark .table-panel-footer { background: var(--color-table-header); border-top-color: var(--color-border); }
 
 .table-panel-footer-spacer { margin-left: auto; }
 
@@ -1224,6 +1598,8 @@ body {
 }
 
 .action-btn:hover { background: #f1f5f9; }
+html.dark .action-btn { background: var(--color-surface-elevated); border-color: var(--color-border); color: var(--color-text-secondary); }
+html.dark .action-btn:hover { background: var(--color-surface-hover); border-color: var(--color-border-dark); }
 
 .action-btn-success {
   border-color: #bbf7d0;
@@ -1232,6 +1608,8 @@ body {
 }
 
 .action-btn-success:hover { background: #d1fae5; }
+html.dark .action-btn-success { border-color: #065f46; background: #052e16; color: #34d399; }
+html.dark .action-btn-success:hover { background: #064e3b; }
 
 /* ============================================================
    HEADER STATUS BADGE — Badge trạng thái mini trong PageHeader

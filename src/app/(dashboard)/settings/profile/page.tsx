@@ -155,7 +155,7 @@ export default function ProfilePage() {
       </div>
 
       {/* ── Change Password ── */}
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px' }}>
+      <div id="password" style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px' }}>
         <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
           <KeyRound size={16} style={{ color: '#2563eb' }} />
           Thay đổi mật khẩu

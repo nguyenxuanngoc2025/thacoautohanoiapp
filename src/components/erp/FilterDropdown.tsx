@@ -53,7 +53,7 @@ export function FilterDropdown({
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="form-select"
-        style={{ width, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px', height: 28, cursor: 'pointer', background: '#fff', border: isOpen ? '1px solid var(--color-brand)' : undefined }}
+        style={{ width, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px', height: 28, cursor: 'pointer', border: isOpen ? '1px solid var(--color-brand)' : undefined }}
       >
         <span style={{ fontSize: 'var(--fs-table)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {displayLabel()}
@@ -62,12 +62,12 @@ export function FilterDropdown({
       </button>
       
       {isOpen && (
-        <div style={{ position: 'absolute', top: '100%', left: label ? 50 : 0, marginTop: 4, width: typeof width === 'number' ? Math.max(width, 180) : '100%', minWidth: 180, background: '#fff', border: '1px solid var(--color-border-dark)', borderRadius: 'var(--border-radius-erp)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'absolute', top: '100%', left: label ? 50 : 0, marginTop: 4, width: typeof width === 'number' ? Math.max(width, 180) : '100%', minWidth: 180, background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border-dark)', borderRadius: 'var(--border-radius-erp)', boxShadow: 'var(--shadow-dropdown)', zIndex: 50, display: 'flex', flexDirection: 'column' }}>
           <div style={{ maxHeight: 250, overflowY: 'auto' }}>
             {isMulti ? (
               <>
                 <div
-                  style={{ padding: '6px 8px', borderBottom: '1px solid var(--color-border)', fontSize: 11, color: 'var(--color-brand)', fontWeight: 600, cursor: 'pointer', textAlign: 'center', position: 'sticky', top: 0, background: '#fff', zIndex: 2 }}
+                  style={{ padding: '6px 8px', borderBottom: '1px solid var(--color-border)', fontSize: 11, color: 'var(--color-brand)', fontWeight: 600, cursor: 'pointer', textAlign: 'center', position: 'sticky', top: 0, background: 'var(--color-surface-elevated)', zIndex: 2 }}
                   onClick={() => setLocalVal([])}
                 >
                   Bỏ chọn tất cả
@@ -76,7 +76,7 @@ export function FilterDropdown({
                   const arr = (localVal ?? value) as string[];
                   const isChecked = arr.includes(o.value);
                   return (
-                    <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', cursor: 'pointer', fontSize: 'var(--fs-table)', borderBottom: '1px solid #f1f5f9', margin: 0 }}>
+                    <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', cursor: 'pointer', fontSize: 'var(--fs-table)', borderBottom: '1px solid var(--color-border-light)', color: 'var(--color-text)', margin: 0 }}>
                       <input
                         type="checkbox"
                         checked={isChecked}
@@ -95,7 +95,7 @@ export function FilterDropdown({
               options.map(o => (
                 <div
                   key={o.value}
-                  style={{ padding: '6px 8px', cursor: 'pointer', fontSize: 'var(--fs-table)', borderBottom: '1px solid #f1f5f9', background: value === o.value ? '#f0f9ff' : 'transparent', color: value === o.value ? 'var(--color-brand)' : 'inherit', fontWeight: value === o.value ? 600 : 400 }}
+                  style={{ padding: '6px 8px', cursor: 'pointer', fontSize: 'var(--fs-table)', borderBottom: '1px solid var(--color-border-light)', background: value === o.value ? 'var(--color-primary-light)' : 'transparent', color: value === o.value ? 'var(--color-brand)' : 'var(--color-text)', fontWeight: value === o.value ? 600 : 400 }}
                   onClick={() => {
                     onChange(o.value);
                     setIsOpen(false);
@@ -107,7 +107,7 @@ export function FilterDropdown({
             )}
           </div>
           {isMulti && (
-            <div style={{ padding: 8, borderTop: '1px solid var(--color-border)', background: '#f8fafc' }}>
+            <div style={{ padding: 8, borderTop: '1px solid var(--color-border)', background: 'var(--color-surface-hover)' }}>
               <button
                 onClick={() => {
                   if (localVal !== null) onChange(localVal);

@@ -14,7 +14,7 @@ export function FunnelChart3D({ totalKhqt, totalGdtd, totalKhd, isFallback }: { 
   return (
     <div style={{ flex: 1, padding: '16px 0', minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
       {isFallback && (
-        <div style={{ position: 'absolute', top: 6, right: 10, fontSize: 10, color: '#94a3b8', background: '#f1f5f9', borderRadius: 4, padding: '2px 6px', fontWeight: 500, zIndex: 1 }}>
+        <div style={{ position: 'absolute', top: 6, right: 10, fontSize: 10, color: 'var(--color-text-muted)', background: 'var(--color-surface-hover)', borderRadius: 4, padding: '2px 6px', fontWeight: 500, zIndex: 1 }}>
           KH
         </div>
       )}

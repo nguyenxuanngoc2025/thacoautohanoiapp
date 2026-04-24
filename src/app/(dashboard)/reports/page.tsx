@@ -455,7 +455,7 @@ export default function ReportsPage() {
                 style={{
                   padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                   border: `1px solid ${compareMode === mode ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                  background: compareMode === mode ? 'var(--color-primary)' : '#fff',
+                  background: compareMode === mode ? 'var(--color-primary)' : 'var(--color-surface-elevated)',
                   color: compareMode === mode ? '#fff' : 'var(--color-text)',
                 }}
               >
@@ -463,7 +463,7 @@ export default function ReportsPage() {
               </button>
             ))}
             {compareMode !== 'none' && compareLabel && (
-              <span style={{ fontSize: 11, color: '#7c3aed', background: '#f5f3ff', padding: '2px 8px', borderRadius: 4 }}>
+              <span style={{ fontSize: 11, color: 'var(--color-primary)', background: 'var(--color-primary-light)', padding: '2px 8px', borderRadius: 4 }}>
                 So với: {compareLabel}
               </span>
             )}

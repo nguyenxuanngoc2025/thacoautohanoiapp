@@ -349,34 +349,24 @@ export default function NotificationPanel({ open, onClose, anchorRef }: Notifica
   return (
     <div
       ref={panelRef}
+      className="notif-panel"
       style={{
-        position: 'absolute',
-        bottom: '100%',
-        right: 0,
-        marginBottom: 6,
-        width: 420,
-        height: 520,
-        background: '#ffffff',
-        border: '1px solid #e2e8f0',
-        borderRadius: 10,
-        boxShadow: '0 -12px 48px rgba(0, 0, 0, 0.12), 0 -4px 16px rgba(0, 0, 0, 0.06)',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        zIndex: 700,
-        animation: 'notifSlideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+        position: 'absolute', bottom: '100%', right: 0, marginBottom: 6,
+        width: 420, height: 520, borderRadius: 10,
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        zIndex: 700, animation: 'notifSlideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
       }}
     >
       {/* ── Header ── */}
-      <div style={{ padding: '14px 16px 0', flexShrink: 0 }}>
+      <div className="notif-header" style={{ padding: '14px 16px 0', flexShrink: 0 }}>
         {/* Title row */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0, letterSpacing: '-0.01em' }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-text)', margin: 0, letterSpacing: '-0.01em' }}>
             Thông báo
             {unreadCount > 0 && (
               <span style={{
                 marginLeft: 8, fontSize: 11, fontWeight: 600, color: '#fff',
-                background: '#3b82f6', borderRadius: 10, padding: '1px 7px', verticalAlign: 'middle',
+                background: 'var(--color-primary)', borderRadius: 10, padding: '1px 7px', verticalAlign: 'middle',
               }}>
                 {unreadCount}
               </span>
@@ -388,42 +378,28 @@ export default function NotificationPanel({ open, onClose, anchorRef }: Notifica
                 transition: 'transform 0.3s',
                 ...(isRefreshing ? { animation: 'notifSpin 0.8s linear infinite' } : {}),
               }} />}
-              title="Làm mới"
-              onClick={handleRefresh}
+              title="Làm mới" onClick={handleRefresh}
             />
             <HeaderIconBtn
-              icon={<Search size={15} />}
-              title="Tìm kiếm"
-              onClick={() => setShowSearch(v => !v)}
-              active={showSearch}
+              icon={<Search size={15} />} title="Tìm kiếm"
+              onClick={() => setShowSearch(v => !v)} active={showSearch}
             />
-            {/* More options with dropdown menu */}
             <div style={{ position: 'relative' }} ref={menuRef}>
               <HeaderIconBtn
-                icon={<MoreHorizontal size={15} />}
-                title="Tuỳ chọn"
-                onClick={() => setShowMenu(v => !v)}
-                active={showMenu}
+                icon={<MoreHorizontal size={15} />} title="Tuỳ chọn"
+                onClick={() => setShowMenu(v => !v)} active={showMenu}
               />
               {showMenu && (
-                <div style={{
+                <div className="dropdown-panel" style={{
                   position: 'absolute', top: '100%', right: 0, marginTop: 4,
-                  width: 200, background: '#fff', border: '1px solid #e2e8f0',
-                  borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-                  zIndex: 800, overflow: 'hidden',
+                  width: 200, zIndex: 800, overflow: 'hidden',
                 }}>
                   <button
                     onClick={handleMarkAllRead}
-                    style={{
-                      width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '8px 12px', background: 'transparent', border: 'none',
-                      cursor: 'pointer', fontSize: 12, color: '#374151', textAlign: 'left',
-                      transition: 'background 0.1s',
-                    }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#f8fafc'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                    className="dropdown-item"
+                    style={{ fontSize: 12, gap: 8, padding: '8px 12px' }}
                   >
-                    <CheckCheck size={14} style={{ color: '#3b82f6' }} />
+                    <CheckCheck size={14} style={{ color: 'var(--color-primary)' }} />
                     Đánh dấu tất cả đã đọc
                   </button>
                 </div>
@@ -442,10 +418,10 @@ export default function NotificationPanel({ open, onClose, anchorRef }: Notifica
         }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            padding: '6px 10px', background: '#f8fafc',
-            border: '1px solid #e2e8f0', borderRadius: 6,
+            padding: '6px 10px', background: 'var(--color-surface-hover)',
+            border: '1px solid var(--color-border)', borderRadius: 6,
           }}>
-            <Search size={13} style={{ color: '#94a3b8', flexShrink: 0 }} />
+            <Search size={13} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
             <input
               ref={searchInputRef}
               value={searchQuery}
@@ -453,13 +429,13 @@ export default function NotificationPanel({ open, onClose, anchorRef }: Notifica
               placeholder="Tìm thông báo..."
               style={{
                 flex: 1, border: 'none', outline: 'none',
-                background: 'transparent', fontSize: 12, color: '#0f172a',
+                background: 'transparent', fontSize: 12, color: 'var(--color-text)',
               }}
             />
             {searchQuery && (
               <button onClick={() => setSearchQuery('')} style={{
                 background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                color: '#94a3b8', display: 'flex',
+                color: 'var(--color-text-muted)', display: 'flex',
               }}>
                 <X size={12} />
               </button>
@@ -468,33 +444,19 @@ export default function NotificationPanel({ open, onClose, anchorRef }: Notifica
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e2e8f0' }}>
+        <div className="notif-tabs" style={{ display: 'flex' }}>
           {TABS.map(tab => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              style={{
-                padding: '8px 12px', fontSize: 12,
-                fontWeight: activeTab === tab.key ? 600 : 400,
-                color: activeTab === tab.key ? '#2563eb' : '#64748b',
-                background: 'transparent', border: 'none',
-                borderBottom: activeTab === tab.key ? '2px solid #2563eb' : '2px solid transparent',
-                cursor: 'pointer', transition: 'color 0.15s, border-color 0.15s',
-                whiteSpace: 'nowrap', position: 'relative',
-              }}
-              onMouseEnter={e => {
-                if (activeTab !== tab.key) (e.currentTarget as HTMLElement).style.color = '#334155';
-              }}
-              onMouseLeave={e => {
-                if (activeTab !== tab.key) (e.currentTarget as HTMLElement).style.color = '#64748b';
-              }}
+              className={`notif-tab-btn${activeTab === tab.key ? ' active' : ''}`}
             >
               {tab.label}
               {tabCounts[tab.key] > 0 && tab.key !== 'all' && (
                 <span style={{
                   marginLeft: 4, fontSize: 9, fontWeight: 700,
-                  color: activeTab === tab.key ? '#2563eb' : '#94a3b8',
-                  background: activeTab === tab.key ? '#eff6ff' : '#f1f5f9',
+                  color: activeTab === tab.key ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                  background: activeTab === tab.key ? 'var(--color-primary-light)' : 'var(--color-surface-hover)',
                   borderRadius: 8, padding: '0 4px', verticalAlign: 'middle',
                 }}>
                   {tabCounts[tab.key]}
@@ -508,99 +470,69 @@ export default function NotificationPanel({ open, onClose, anchorRef }: Notifica
       {/* ── Content ── */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         {isLoading ? (
-          /* Loading state */
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             justifyContent: 'center', padding: '48px 20px', gap: 10,
           }}>
             <div style={{
               width: 28, height: 28, borderRadius: '50%',
-              border: '2.5px solid #e2e8f0', borderTopColor: '#3b82f6',
+              border: '2.5px solid var(--color-border)', borderTopColor: 'var(--color-primary)',
               animation: 'notifSpin 0.8s linear infinite',
             }} />
-            <span style={{ fontSize: 12, color: '#94a3b8' }}>Đang tải thông báo...</span>
+            <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Đang tải thông báo...</span>
           </div>
         ) : filtered.length === 0 ? (
-          /* Empty state */
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', padding: '52px 20px', gap: 10,
-          }}>
-            <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
-              <path d="M12 28L36 16L60 28L36 40Z" fill="#e2e8f0" />
-              <path d="M12 28L36 40L36 56L12 44Z" fill="#cbd5e1" />
-              <path d="M60 28L36 40L36 56L60 44Z" fill="#dde3ea" />
-              <path d="M12 28L24 22L24 30L12 28Z" fill="#d4dbe5" opacity="0.6" />
-              <path d="M60 28L48 22L48 30L60 28Z" fill="#c8d1dc" opacity="0.6" />
-            </svg>
-            <span style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500 }}>
-              {activeTab === 'all'
-                ? 'Hiện tại không có thông báo!'
-                : activeTab === 'unread'
-                  ? 'Không có thông báo chưa đọc'
-                  : activeTab === 'important'
-                    ? 'Không có thông báo quan trọng'
-                    : activeTab === 'approval'
-                      ? 'Không có thông báo duyệt'
-                      : 'Không có công việc nào'}
+          <div className="notif-empty">
+            <Bell size={36} style={{ opacity: 0.2 }} />
+            <span style={{ fontSize: 13, fontWeight: 500 }}>
+              {activeTab === 'all' ? 'Hiện tại không có thông báo!'
+                : activeTab === 'unread' ? 'Không có thông báo chưa đọc'
+                : activeTab === 'important' ? 'Không có thông báo quan trọng'
+                : activeTab === 'approval' ? 'Không có thông báo duyệt'
+                : 'Không có công việc nào'}
             </span>
           </div>
         ) : (
-          /* Notification items */
           <div style={{ padding: '4px 0' }}>
-            {filtered.map((notif, idx) => (
+            {filtered.map((notif) => (
               <button
                 key={notif.id}
                 onClick={() => handleNavigate(notif)}
+                className={`notif-item${notif.read ? '' : ' unread'}`}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'flex-start', gap: 10,
-                  padding: '10px 16px',
-                  background: notif.read ? 'transparent' : '#f8fbff',
-                  border: 'none',
-                  borderBottom: idx < filtered.length - 1 ? '1px solid #f1f5f9' : 'none',
-                  cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s',
-                }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.background = notif.read ? '#f8fafc' : '#eff6ff';
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.background = notif.read ? 'transparent' : '#f8fbff';
+                  padding: '10px 16px', border: 'none', cursor: 'pointer', textAlign: 'left',
                 }}
               >
-                {/* Unread dot */}
                 <div style={{
                   width: 6, height: 6, borderRadius: '50%',
                   background: notif.read ? 'transparent' : getPriorityColor(notif.priority),
                   flexShrink: 0, marginTop: 6,
                 }} />
-                {/* Icon */}
                 <div style={{ flexShrink: 0, marginTop: 1 }}>{getNotifIcon(notif.type)}</div>
-                {/* Content */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
-                    fontSize: 12, fontWeight: notif.read ? 500 : 600, color: '#0f172a',
-                    marginBottom: 2, lineHeight: 1.4,
+                    fontSize: 12, fontWeight: notif.read ? 500 : 600,
+                    color: 'var(--color-text)', marginBottom: 2, lineHeight: 1.4,
                   }}>
                     {notif.title}
                     {notif.important && !notif.read && (
                       <span style={{
                         marginLeft: 6, fontSize: 9, fontWeight: 700,
-                        color: '#dc2626', background: '#fef2f2',
+                        color: 'var(--color-danger)', background: 'var(--color-danger-bg)',
                         borderRadius: 3, padding: '1px 4px', verticalAlign: 'middle',
-                      }}>
-                        !
-                      </span>
+                      }}>!</span>
                     )}
                   </div>
                   <div style={{
-                    fontSize: 11, color: '#64748b', lineHeight: 1.4,
+                    fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.4,
                     display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
                   }}>
                     {notif.message}
                   </div>
                   <div style={{
-                    fontSize: 10, color: '#94a3b8', marginTop: 4,
+                    fontSize: 10, color: 'var(--color-text-muted)', marginTop: 4,
                     display: 'flex', alignItems: 'center', gap: 4,
                   }}>
                     <Clock size={10} />
@@ -608,14 +540,13 @@ export default function NotificationPanel({ open, onClose, anchorRef }: Notifica
                     {notif.deepLink && (
                       <>
                         <span style={{ margin: '0 2px' }}>·</span>
-                        <span style={{ color: '#3b82f6', fontWeight: 500 }}>Xem chi tiết</span>
+                        <span style={{ color: 'var(--color-primary)', fontWeight: 500 }}>Xem chi tiết</span>
                       </>
                     )}
                   </div>
                 </div>
-                {/* Arrow */}
                 {notif.deepLink && (
-                  <ChevronRight size={14} style={{ color: '#cbd5e1', flexShrink: 0, marginTop: 4 }} />
+                  <ChevronRight size={14} style={{ color: 'var(--color-border-dark)', flexShrink: 0, marginTop: 4 }} />
                 )}
               </button>
             ))}
@@ -626,24 +557,24 @@ export default function NotificationPanel({ open, onClose, anchorRef }: Notifica
       {/* ── Footer ── */}
       {notifications.length > 0 && (
         <div style={{
-          padding: '8px 16px', borderTop: '1px solid #f1f5f9',
+          padding: '8px 16px', borderTop: '1px solid var(--color-border)',
           display: 'flex', justifyContent: 'center',
+          background: 'var(--color-surface)',
         }}>
           <button
             onClick={() => { router.push('/tasks'); onClose(); }}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: 12, fontWeight: 500, color: '#3b82f6', transition: 'color 0.15s',
+              fontSize: 12, fontWeight: 500, color: 'var(--color-primary)', transition: 'opacity 0.15s',
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1d4ed8'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#3b82f6'; }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '0.7'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
           >
             Xem tất cả việc cần làm →
           </button>
         </div>
       )}
 
-      {/* Animations */}
       <style>{`
         @keyframes notifSlideUp {
           from { opacity: 0; transform: translateY(8px); }
@@ -663,33 +594,12 @@ export default function NotificationPanel({ open, onClose, anchorRef }: Notifica
 function HeaderIconBtn({
   icon, title, onClick, active,
 }: {
-  icon: React.ReactNode;
-  title: string;
-  onClick: () => void;
-  active?: boolean;
+  icon: React.ReactNode; title: string; onClick: () => void; active?: boolean;
 }) {
   return (
     <button
-      onClick={onClick}
-      title={title}
-      style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        width: 30, height: 30, borderRadius: 6,
-        background: active ? '#f1f5f9' : 'transparent',
-        border: 'none', cursor: 'pointer',
-        color: active ? '#0f172a' : '#64748b',
-        transition: 'background 0.12s, color 0.12s',
-      }}
-      onMouseEnter={e => {
-        (e.currentTarget as HTMLElement).style.background = '#f1f5f9';
-        (e.currentTarget as HTMLElement).style.color = '#0f172a';
-      }}
-      onMouseLeave={e => {
-        if (!active) {
-          (e.currentTarget as HTMLElement).style.background = 'transparent';
-          (e.currentTarget as HTMLElement).style.color = '#64748b';
-        }
-      }}
+      onClick={onClick} title={title}
+      className={`notif-icon-btn${active ? ' active' : ''}`}
     >
       {icon}
     </button>

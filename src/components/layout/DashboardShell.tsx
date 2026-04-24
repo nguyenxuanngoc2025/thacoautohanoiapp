@@ -24,11 +24,11 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   // Chờ auth xong trước khi render shell. Quá trình fetch profile có thể mất chút ms.
   if (isLoading) {
     return (
-      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9' }}>
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
             {/* Bộ khung xương Skeleton cơ bản */}
-            <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid #cbd5e1', borderTopColor: '#004B9B', animation: 'spin 1s linear infinite' }} />
-            <span style={{ color: '#64748b', fontSize: 13, fontWeight: 500 }}>Đang khởi tạo phiên làm việc...</span>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid var(--color-border)', borderTopColor: 'var(--color-primary)', animation: 'spin 1s linear infinite' }} />
+            <span style={{ color: 'var(--color-text-muted)', fontSize: 13, fontWeight: 500 }}>Đang khởi tạo phiên làm việc...</span>
             <style>
               {`
                 @keyframes spin {

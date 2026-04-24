@@ -196,11 +196,11 @@ export default function Sidebar({
         {/* ── Visual panel: absolute khi hover-expand để overlay ── */}
         <div
           style={{
+            background: 'var(--sidebar-bg)',
             position: collapsed && hoverExpanded ? 'absolute' : 'relative',
             top: 0, left: 0,
             width: currentW,
             height: '100%',
-            background: 'linear-gradient(180deg, #0056b3 0%, #00264d 100%)',
             display: 'flex', flexDirection: 'column',
             overflowX: 'hidden', overflowY: 'hidden',
             color: '#e2e8f0',
@@ -227,7 +227,7 @@ export default function Sidebar({
           }}>
             {/* Logo thật — chỉ hiện khi mở */}
             <img
-              src="https://thacoautohanoi.vn/storage/logo/header-website.webp"
+              src="/logo.webp"
               alt="Thaco Auto Logo"
               style={{
                 height: isOpen ? 24 : 0,
@@ -331,6 +331,18 @@ function UserPanel({ userName, userCode, isOpen }: { userName: string; userCode:
   const initials = userName.split(' ').map(w => w[0]).join('').slice(-2).toUpperCase();
   const { signOut } = useAuth();
   const router = useRouter();
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen]);
 
   useEffect(() => {
     const saved = localStorage.getItem('thaco_theme');
@@ -359,22 +371,20 @@ function UserPanel({ userName, userCode, isOpen }: { userName: string; userCode:
   };
 
   return (
-    <div style={{ position: 'relative', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+    <div ref={panelRef} style={{ position: 'relative', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
       {menuOpen && (
-        <div style={{
+        <div className="dropdown-panel" style={{
           position: 'absolute', bottom: '100%',
           left: isOpen ? 8 : 4, right: isOpen ? 8 : 4, minWidth: 180,
-          background: '#ffffff', border: '1px solid var(--color-border)',
-          borderRadius: 8, boxShadow: '0 -4px 24px rgba(0,0,0,0.14)',
           overflow: 'hidden', zIndex: 300,
           marginBottom: 6,
         }}>
-          <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-border-light)', background: '#f8fafc' }}>
+          <div className="dropdown-header" style={{ padding: '10px 14px' }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text)' }}>{userName}</div>
             <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 1 }}>{userCode}</div>
           </div>
           <MenuButton icon={<User size={13} />} label="Hồ sơ cá nhân" onClick={() => navigate('/settings/profile')} />
-          <MenuButton icon={<Key size={13} />} label="Đổi mật khẩu" onClick={() => navigate('/settings/profile')} />
+          <MenuButton icon={<Key size={13} />} label="Đổi mật khẩu" onClick={() => navigate('/settings/profile#password')} />
           <MenuButton
             icon={theme === 'light' ? <Moon size={13} /> : <Sun size={13} />}
             label={theme === 'light' ? 'Chế độ tối' : 'Chế độ sáng'}
@@ -431,7 +441,7 @@ function MenuButton({ icon, label, danger, onClick }: { icon: React.ReactNode; l
         cursor: 'pointer', fontSize: 13, color: danger ? 'var(--color-danger)' : 'var(--color-text-secondary)',
         textAlign: 'left', transition: 'background 0.1s',
       }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = danger ? '#fef2f2' : '#f1f5f9'; }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = danger ? 'var(--color-danger-bg)' : 'var(--color-surface-hover)'; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
     >
       <span style={{ color: danger ? 'var(--color-danger)' : 'var(--color-text-muted)', display: 'flex' }}>{icon}</span>

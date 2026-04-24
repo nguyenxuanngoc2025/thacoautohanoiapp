@@ -425,10 +425,10 @@ export default function EventsPage() {
                 
                 const dot = isOverdue ? '#ef4444' : isToday ? '#3B82F6' : isUrgent ? '#f59e0b' : '#94a3b8';
                 const itemClass = `timeline-item${isOverdue ? ' timeline-item-past' : isUrgent ? ' timeline-item-urgent' : ''}`;
-                const bgWarning = isOverdue ? '#fef2f2' : isToday ? '#eff6ff' : 'transparent';
+                const bgWarning = isOverdue ? 'var(--color-danger-bg)' : isToday ? 'var(--color-primary-light)' : 'transparent';
                 
                 return (
-                  <div key={ev.id} className={itemClass} style={{ borderBottom: i < upcomingDeadlines.length - 1 ? '1px solid #f1f5f9' : 'none', background: bgWarning, padding: '10px 12px', transition: 'all 0.2s', borderRadius: i === upcomingDeadlines.length - 1 ? '0 0 6px 6px' : 0 }}>
+                  <div key={ev.id} className={itemClass} style={{ borderBottom: i < upcomingDeadlines.length - 1 ? '1px solid var(--color-border-light)' : 'none', background: bgWarning, padding: '10px 12px', transition: 'all 0.2s', borderRadius: i === upcomingDeadlines.length - 1 ? '0 0 6px 6px' : 0 }}>
                     <div className="timeline-item-connector">
                       <div className="timeline-dot" style={{ background: dot, boxShadow: `0 0 0 2px ${dot}44` }} />
                       {i < upcomingDeadlines.length - 1 && <div className="timeline-line" style={{ background: isOverdue ? '#fecaca' : '#e2e8f0' }} />}
@@ -473,7 +473,7 @@ export default function EventsPage() {
                 Danh sách sự kiện{periodLabel}
               </span>
               <span className="table-panel-count">({events.length})</span>
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 2, background: '#f1f5f9', borderRadius: 6, padding: 2 }}>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 2, background: 'var(--color-surface-hover)', borderRadius: 6, padding: 2 }}>
                 <button onClick={() => setTableMode('plan')} style={{ padding: '4px 12px', fontSize: 11, fontWeight: 600, border: 'none', borderRadius: 4, cursor: 'pointer', background: tableMode === 'plan' ? 'var(--color-primary)' : 'transparent', color: tableMode === 'plan' ? '#fff' : 'var(--color-text-secondary)', transition: 'all 0.15s' }}>Kế hoạch</button>
                 <button onClick={() => setTableMode('actual')} style={{ padding: '4px 12px', fontSize: 11, fontWeight: 600, border: 'none', borderRadius: 4, cursor: 'pointer', background: tableMode === 'actual' ? '#059669' : 'transparent', color: tableMode === 'actual' ? '#fff' : 'var(--color-text-secondary)', transition: 'all 0.15s' }}>Thực hiện</button>
               </div>
@@ -529,7 +529,7 @@ export default function EventsPage() {
                         <td>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                             {evBrands.length > 0 ? evBrands.map(b => (
-                              <span key={b} style={{ fontSize: 10, fontWeight: 600, padding: '1px 5px', borderRadius: 3, background: '#eff6ff', color: '#1d4ed8' }}>{b}</span>
+                              <span key={b} style={{ fontSize: 10, fontWeight: 600, padding: '1px 5px', borderRadius: 3, background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>{b}</span>
                             )) : <span style={{ color: '#94a3b8', fontSize: 11 }}>—</span>}
                           </div>
                         </td>
@@ -567,7 +567,7 @@ export default function EventsPage() {
                                   <button title="Sửa sự kiện" className="action-btn" onClick={() => setModal({ mode: 'edit', data: ev })}>
                                     <Pencil size={11} /> Sửa
                                   </button>
-                                  <button title="Xóa sự kiện" className="action-btn" style={{ color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' }} onClick={() => handleDeleteEvent(ev, month)}>
+                                  <button title="Xóa sự kiện" className="action-btn" style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger-bg)', background: 'var(--color-danger-bg)' }} onClick={() => handleDeleteEvent(ev, month)}>
                                     <Trash2 size={11} /> Xóa
                                   </button>
                                   <button title="Báo cáo kết thúc" className="action-btn action-btn-success" onClick={() => setModal({ mode: 'close_report', data: ev })}>

@@ -47,29 +47,15 @@ function RoleSwitcherPopup({
 
   return (
     <div
+      className="dropdown-panel"
       style={{
-        position: 'absolute',
-        bottom: '100%',
-        right: 0,
-        marginBottom: 4,
-        width: 500,
-        background: '#ffffff',
-        border: '1px solid #e5e7eb',
-        borderRadius: 8,
+        position: 'absolute', bottom: '100%', right: 0,
+        marginBottom: 4, width: 500, overflow: 'hidden', zIndex: 600,
         boxShadow: '0 -8px 32px rgba(0,0,0,0.15)',
-        overflow: 'hidden',
-        zIndex: 600,
       }}
     >
       {/* Header */}
-      <div style={{
-        padding: '10px 14px 8px',
-        borderBottom: '1px solid #f3f4f6',
-        background: '#fafafa',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-      }}>
+      <div className="dropdown-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <Eye size={13} style={{ color: '#6b7280' }} />
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
@@ -90,22 +76,10 @@ function RoleSwitcherPopup({
             <button
               key={role}
               onClick={() => { onSelect(role); onClose(); }}
+              className={`dropdown-item${isActive ? ' active' : ''}`}
               style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 12,
-                padding: '10px 14px',
-                background: isActive ? c.bg : 'transparent',
-                border: 'none',
                 borderLeft: `3px solid ${isActive ? c.border : 'transparent'}`,
-                cursor: 'pointer',
-                textAlign: 'left',
-                borderBottom: '1px solid #f9fafb',
-                transition: 'background 0.1s',
               }}
-              onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = '#f9fafb'; }}
-              onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
             >
               {/* Role icon dot */}
               <div style={{
@@ -148,7 +122,7 @@ function RoleSwitcherPopup({
       </div>
 
       {/* Footer note */}
-      <div style={{ padding: '8px 14px', borderTop: '1px solid #f3f4f6', background: '#fafafa', fontSize: 10, color: '#9ca3af' }}>
+      <div className="dropdown-footer" style={{ fontSize: 10 }}>
         Giả lập để preview — không ảnh hưởng dữ liệu thực
       </div>
     </div>
@@ -202,21 +176,7 @@ export default function StatusBar() {
     : (activeUnit?.name ?? 'Đang tải...');
 
   return (
-    <div
-      style={{
-        height: 28,
-        background: '#e5e7eb',
-        borderTop: '1px solid #d1d5db',
-        color: '#111827',
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 12px',
-        gap: 12,
-        flexShrink: 0,
-        zIndex: 500,
-        userSelect: 'none',
-      }}
-    >
+    <div className="status-bar">
       {/* Đẩy nội dung sang phải */}
       <div style={{ flex: 1 }} />
 
@@ -241,7 +201,7 @@ export default function StatusBar() {
           >
             Thoát
           </button>
-          <div style={{ width: 1, height: 14, background: 'rgba(0,0,0,0.15)' }} />
+          <div className="status-sep" />
         </>
       )}
 
@@ -251,7 +211,7 @@ export default function StatusBar() {
         Hệ thống hoạt động
       </span>
 
-      <div style={{ width: 1, height: 14, background: 'rgba(0,0,0,0.15)' }} />
+      <div className="status-sep" />
 
       {/* ── Role badge (clickable nếu super_admin) ── */}
       <div ref={roleRef} style={{ position: 'relative' }}>
@@ -299,7 +259,7 @@ export default function StatusBar() {
         )}
       </div>
 
-      <div style={{ width: 1, height: 14, background: 'rgba(0,0,0,0.15)' }} />
+      <div className="status-sep" />
 
       {/* ── Unit Switcher ── */}
       <div ref={unitRef} style={{ position: 'relative' }}>
@@ -336,12 +296,11 @@ export default function StatusBar() {
 
         {/* Unit Dropdown */}
         {unitOpen && (
-          <div style={{
+          <div className="dropdown-panel" style={{
             position: 'absolute', bottom: '100%', right: 0, marginBottom: 4,
-            width: 320, background: '#ffffff', border: '1px solid #e5e7eb',
-            borderRadius: 6, boxShadow: '0 -8px 32px rgba(0,0,0,0.1)', overflow: 'hidden', zIndex: 600,
+            width: 320, overflow: 'hidden', zIndex: 600,
           }}>
-            <div style={{ padding: '8px 12px 6px', borderBottom: '1px solid #f3f4f6', fontSize: 10, color: '#6b7280', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            <div className="dropdown-header" style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               Chọn phạm vi dữ liệu
             </div>
             <UnitOption
@@ -353,7 +312,7 @@ export default function StatusBar() {
               color="#2563eb"
               onClick={() => { setActiveUnitId('all'); setUnitOpen(false); }}
             />
-            <div style={{ height: 1, background: '#f3f4f6', margin: '2px 0' }} />
+            <div style={{ height: 1, background: 'var(--color-border-light)', margin: '2px 0' }} />
             <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
               {availableUnits.map(unit => (
                 <UnitOption
@@ -371,7 +330,7 @@ export default function StatusBar() {
         )}
       </div>
 
-      <div style={{ width: 1, height: 14, background: 'rgba(0,0,0,0.15)' }} />
+      <div className="status-sep" />
 
       {/* ── Notification Bell ── */}
       <div style={{ position: 'relative' }}>
@@ -428,22 +387,17 @@ function UnitOption({ isActive, icon, name, code, subtitle, color, onClick }: {
   return (
     <button
       onClick={onClick}
-      style={{
-        width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
-        background: isActive ? '#f8fafc' : 'transparent', border: 'none', cursor: 'pointer',
-        textAlign: 'left', transition: 'background 0.1s', borderLeft: `2px solid ${isActive ? color : 'transparent'}`,
-      }}
-      onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = '#f1f5f9'; }}
-      onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+      className={`dropdown-item${isActive ? ' active' : ''}`}
+      style={{ borderLeft: `2px solid ${isActive ? color : 'transparent'}` }}
     >
-      <span style={{ color: isActive ? color : '#64748b', display: 'flex', flexShrink: 0 }}>{icon}</span>
+      <span style={{ color: isActive ? color : 'var(--color-text-muted)', display: 'flex', flexShrink: 0 }}>{icon}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: isActive ? 600 : 500, color: isActive ? '#0f172a' : '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ fontSize: 12, fontWeight: isActive ? 600 : 500, color: isActive ? 'var(--color-text)' : 'var(--color-text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {name}
         </div>
-        {subtitle && <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{subtitle}</div>}
+        {subtitle && <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 1 }}>{subtitle}</div>}
       </div>
-      <span style={{ fontSize: 10, color: '#64748b', fontFamily: 'monospace', fontWeight: 600, background: isActive ? '#e2e8f0' : '#f1f5f9', padding: '1px 5px', borderRadius: 3, flexShrink: 0 }}>
+      <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontFamily: 'monospace', fontWeight: 600, background: 'var(--color-surface-hover)', padding: '1px 5px', borderRadius: 3, flexShrink: 0 }}>
         {code}
       </span>
       {isActive && <CheckCircle2 size={12} style={{ color, flexShrink: 0, marginLeft: 4 }} />}

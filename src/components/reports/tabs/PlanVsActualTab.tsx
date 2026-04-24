@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { formatNumber } from '@/lib/utils';
 import { ExportButton } from '../ExportButton';
 import { exportToExcel } from '@/lib/report-export';
+import { DataGridContainer } from '@/components/reui/data-grid/data-grid';
 import {
   REPORT_CHANNELS, REPORT_METRICS,
   sumByChannelMetric, sumByBrandMetric, sumByModelMetric,
@@ -25,9 +26,9 @@ function fmtVal(v: number, isNS: boolean): string {
 
 function pctStyle(pct: number | null): React.CSSProperties {
   if (pct === null) return {};
-  if (pct >= 100) return { color: '#16a34a', background: '#f0fdf4', borderRadius: 4, padding: '0 4px' };
-  if (pct >= 80)  return { color: '#d97706', background: '#fffbeb', borderRadius: 4, padding: '0 4px' };
-  return              { color: '#dc2626', background: '#fef2f2', borderRadius: 4, padding: '0 4px' };
+  if (pct >= 100) return { color: '#16a34a', fontWeight: 600 };
+  if (pct >= 80)  return { color: '#d97706', fontWeight: 600 };
+  return              { color: '#dc2626', fontWeight: 700 };
 }
 
 function totalAllChannels(data: Record<string, number>, metric: string): number {
@@ -61,10 +62,10 @@ function deltaArrow(curr: number | null, prev: number | null, higherIsBetter = t
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const CELL: React.CSSProperties = {
-  padding: '6px 10px',
+  padding: '6px 8px',
   fontSize: 'var(--fs-table)',
-  borderBottom: '1px solid #e2e8f0',
-  borderRight: '1px solid #f1f5f9',
+  borderBottom: '1px solid var(--color-border)',
+  borderRight: '1px solid var(--color-border-light)',
   whiteSpace: 'nowrap',
   textAlign: 'right',
 };
@@ -74,18 +75,18 @@ const LABEL_CELL: React.CSSProperties = {
   position: 'sticky',
   left: 0,
   zIndex: 1,
-  borderRight: '2px solid #e2e8f0',
+  borderRight: '2px solid var(--color-border)',
 };
-const TOTAL_ROW_BG  = '#e2e8f4';   // tổng cộng: xanh xám đủ tương phản
-const BRAND_ROW_BG  = '#eff6ff';   // brand expanded: xanh nhạt
-const MODEL_ROW_BG  = '#fafbff';   // model rows: gần trắng
-const GRP_BORDER    = '2px solid #c7d2fe';  // phân tách nhóm cột (Ngân sách / KHQT...)
+const TOTAL_ROW_BG  = 'var(--color-table-header)';
+const BRAND_ROW_BG  = 'var(--color-surface-hover)';
+const MODEL_ROW_BG  = 'var(--color-surface)';
+const GRP_BORDER    = '2px solid var(--color-border-dark)';
 const TH_BASE: React.CSSProperties = {
   ...CELL,
   fontWeight: 700,
   color: 'var(--color-text-secondary)',
-  background: '#f1f5f9',
-  borderBottom: '2px solid #cbd5e1',
+  background: 'var(--color-table-header)',
+  borderBottom: '2px solid var(--color-border-dark)',
   fontSize: 'var(--fs-label)',
 };
 
@@ -142,13 +143,13 @@ export function PlanVsActualTab({
     if (reportMode === 'efficiency') {
       return (
         <thead>
-          <tr style={{ background: '#f8fafc' }}>
+          <tr style={{ background: 'var(--color-table-header)' }}>
             <th style={{ ...TH_BASE, textAlign: 'left', minWidth: 160, position: 'sticky', left: 0, zIndex: 2 }}>{labelHeader}</th>
             <th style={{ ...TH_BASE, minWidth: 80 }}>NS (tr)</th>
             <th style={{ ...TH_BASE, minWidth: 70 }}>KHQT</th>
             <th style={{ ...TH_BASE, minWidth: 110 }}>
               Chi phí / KHQT
-              {hasCompare && <><br /><span style={{ fontSize: 'var(--fs-label)', color: '#94a3b8', fontWeight: 400 }}>vs {compareLabel}</span></>}
+              {hasCompare && <><br /><span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)', fontWeight: 400 }}>vs {compareLabel}</span></>}
             </th>
             <th style={{ ...TH_BASE, minWidth: 70 }}>GDTD</th>
             <th style={{ ...TH_BASE, minWidth: 120 }}>Tỷ lệ GDTD / KHQT</th>
@@ -162,7 +163,7 @@ export function PlanVsActualTab({
     const colsPerMetric = hasCompare ? 5 : 3;
     return (
       <thead>
-        <tr style={{ background: '#f8fafc' }}>
+        <tr style={{ background: 'var(--color-surface)' }}>
           <th style={{ ...TH_BASE, textAlign: 'left', minWidth: 160, position: 'sticky', left: 0, zIndex: 2 }} rowSpan={2}>
             {labelHeader}
           </th>
@@ -170,7 +171,7 @@ export function PlanVsActualTab({
             <th key={m} style={{ ...TH_BASE, textAlign: 'center', borderRight: GRP_BORDER }} colSpan={colsPerMetric}>{m}</th>
           ))}
         </tr>
-        <tr style={{ background: '#f8fafc' }}>
+        <tr style={{ background: 'var(--color-surface)' }}>
           {REPORT_METRICS.flatMap(m => {
             const cols = ['KH', 'TH', '%TH'];
             if (hasCompare) cols.push(`TH(${compareLabel})`, '±%');
@@ -197,15 +198,15 @@ export function PlanVsActualTab({
     const bg = isTotal ? TOTAL_ROW_BG : rowVariant === 'brand' ? BRAND_ROW_BG : rowVariant === 'model' ? MODEL_ROW_BG : undefined;
     const isBrand = rowVariant === 'brand';
     const isModel = rowVariant === 'model';
-    const borderTop = isTotal ? '2px solid #94a3b8' : isBrand ? '2px solid #bfdbfe' : undefined;
+    const borderTop = isTotal ? '2px solid var(--color-primary)' : isBrand ? '1px solid #dbeafe' : undefined;
     return (
       <tr key={label} style={{ background: bg, borderTop }}>
         <td style={{
           ...LABEL_CELL,
-          background: bg ?? '#fff',
+          background: bg ?? 'var(--color-cell-bg)',
           paddingLeft: 8 + indent * 20,
           fontWeight: isTotal || isBrand ? 700 : 400,
-          color: isBrand ? (color ?? 'var(--color-primary)') : isModel ? '#64748b' : (color ?? 'var(--color-text)'),
+          color: isBrand ? (color ?? 'var(--color-primary)') : isModel ? 'var(--color-text-secondary)' : (color ?? 'var(--color-text)'),
           fontSize: isModel ? 'var(--fs-label)' : 'var(--fs-table)',
           borderTop,
         }}>
@@ -259,7 +260,7 @@ export function PlanVsActualTab({
     const bg = isTotal ? TOTAL_ROW_BG : rowVariant === 'brand' ? BRAND_ROW_BG : rowVariant === 'model' ? MODEL_ROW_BG : undefined;
     const isBrand = rowVariant === 'brand';
     const isModel = rowVariant === 'model';
-    const borderTop = isTotal ? '2px solid #94a3b8' : isBrand ? '2px solid #bfdbfe' : undefined;
+    const borderTop = isTotal ? '2px solid var(--color-primary)' : isBrand ? '1px solid #dbeafe' : undefined;
     const ns   = getter(actData, 'Ngân sách');
     const khqt = getter(actData, 'KHQT');
     const gdtd = getter(actData, 'GDTD');
@@ -274,10 +275,10 @@ export function PlanVsActualTab({
       <tr key={label} style={{ background: bg, borderTop }}>
         <td style={{
           ...LABEL_CELL,
-          background: bg ?? '#fff',
+          background: bg ?? 'var(--color-cell-bg)',
           paddingLeft: 8 + indent * 20,
           fontWeight: isTotal || isBrand ? 700 : 400,
-          color: isBrand ? (color ?? 'var(--color-primary)') : isModel ? '#64748b' : (color ?? 'var(--color-text)'),
+          color: isBrand ? (color ?? 'var(--color-primary)') : isModel ? 'var(--color-text-secondary)' : (color ?? 'var(--color-text)'),
           fontSize: isModel ? 'var(--fs-label)' : 'var(--fs-table)',
           borderTop,
         }}>
@@ -288,7 +289,7 @@ export function PlanVsActualTab({
         <td style={CELL}>{fmtK(kpis.cpl, 2)}{hasCompare && deltaArrow(kpis.cpl, ck?.cpl ?? null, false)}</td>
         <td style={CELL}>{formatNumber(Math.round(kpis.gdtd)) || '—'}{hasCompare && deltaArrow(kpis.gdtd, ck?.gdtd ?? null, true)}</td>
         <td style={CELL}>{kpis.cr1 !== null ? `${kpis.cr1}%` : '—'}{hasCompare && deltaArrow(kpis.cr1, ck?.cr1 ?? null, true)}</td>
-        <td style={{ ...CELL, fontWeight: 600, color: '#059669' }}>{formatNumber(Math.round(kpis.khd)) || '—'}{hasCompare && deltaArrow(kpis.khd, ck?.khd ?? null, true)}</td>
+        <td style={{ ...CELL, fontWeight: 600, color: 'var(--color-success)' }}>{formatNumber(Math.round(kpis.khd)) || '—'}{hasCompare && deltaArrow(kpis.khd, ck?.khd ?? null, true)}</td>
         <td style={CELL}>{kpis.cr2 !== null ? `${kpis.cr2}%` : '—'}{hasCompare && deltaArrow(kpis.cr2, ck?.cr2 ?? null, true)}</td>
       </tr>
     );
@@ -323,12 +324,14 @@ export function PlanVsActualTab({
 
   function renderTable(labelHeader: string, rows: React.ReactNode[]) {
     return (
-      <div style={{ overflowX: 'auto', border: '1px solid #cbd5e1', borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-          <TableHeader labelHeader={labelHeader} />
-          <tbody>{rows}</tbody>
-        </table>
-      </div>
+      <DataGridContainer>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <TableHeader labelHeader={labelHeader} />
+            <tbody>{rows}</tbody>
+          </table>
+        </div>
+      </DataGridContainer>
     );
   }
 
@@ -429,7 +432,7 @@ export function PlanVsActualTab({
     <button key={mode} onClick={() => setReportMode(mode)} style={{
       padding: '4px 14px', border: 'none', cursor: 'pointer',
       fontSize: 'var(--fs-body)', fontWeight: reportMode === mode ? 700 : 400,
-      background: reportMode === mode ? 'var(--color-primary)' : '#fff',
+      background: reportMode === mode ? 'var(--color-primary)' : 'var(--color-cell-bg)',
       color: reportMode === mode ? '#fff' : 'var(--color-text-muted)',
     }}>
       {label}

@@ -169,7 +169,7 @@ const FilterDropdown = ({
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="form-select"
-        style={{ width, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px', height: 26, cursor: 'pointer', background: '#fff', border: isOpen ? '1px solid var(--color-brand)' : undefined }}
+        style={{ width, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px', height: 26, cursor: 'pointer', background: 'var(--color-cell-bg)', border: isOpen ? '1px solid var(--color-brand)' : undefined }}
       >
         <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {displayLabel()}
@@ -178,12 +178,12 @@ const FilterDropdown = ({
       </button>
       
       {isOpen && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, width: typeof width === 'number' ? Math.max(width, 220) : '100%', minWidth: 220, background: '#fff', border: '1px solid var(--color-border-dark)', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 200, display: 'flex', flexDirection: 'column', animation: 'scaleInId 0.15s ease-out', transformOrigin: 'top left' }}>
+        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, width: typeof width === 'number' ? Math.max(width, 220) : '100%', minWidth: 220, background: 'var(--color-cell-bg)', border: '1px solid var(--color-border-dark)', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 200, display: 'flex', flexDirection: 'column', animation: 'scaleInId 0.15s ease-out', transformOrigin: 'top left' }}>
           <div style={{ maxHeight: 250, overflowY: 'auto' }}>
             {isMulti ? (
               <>
                 <div
-                  style={{ padding: '6px 8px', borderBottom: '1px solid var(--color-border)', fontSize: 11, color: 'var(--color-brand)', fontWeight: 600, cursor: 'pointer', textAlign: 'center', position: 'sticky', top: 0, background: '#fff', zIndex: 2 }}
+                  style={{ padding: '6px 8px', borderBottom: '1px solid var(--color-border)', fontSize: 11, color: 'var(--color-brand)', fontWeight: 600, cursor: 'pointer', textAlign: 'center', position: 'sticky', top: 0, background: 'var(--color-cell-bg)', zIndex: 2 }}
                   onClick={() => setLocalVal([])}
                 >
                   Bỏ chọn tất cả
@@ -192,7 +192,7 @@ const FilterDropdown = ({
                   const arr = (localVal ?? value) as string[];
                   const isChecked = arr.includes(o.value);
                   return (
-                    <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', cursor: 'pointer', fontSize: 12, borderBottom: '1px solid #f1f5f9', margin: 0 }}>
+                    <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', cursor: 'pointer', fontSize: 12, borderBottom: '1px solid var(--color-border)', margin: 0 }}>
                       <input
                         type="checkbox"
                         checked={isChecked}
@@ -211,7 +211,7 @@ const FilterDropdown = ({
               options.map(o => (
                 <div
                   key={o.value}
-                  style={{ padding: '6px 8px', cursor: 'pointer', fontSize: 12, borderBottom: '1px solid #f1f5f9', background: value === o.value ? '#f0f9ff' : 'transparent', color: value === o.value ? 'var(--color-brand)' : 'inherit' }}
+                  style={{ padding: '6px 8px', cursor: 'pointer', fontSize: 12, borderBottom: '1px solid var(--color-border)', background: value === o.value ? 'var(--color-primary-light)' : 'transparent', color: value === o.value ? 'var(--color-brand)' : 'inherit' }}
                   onClick={() => {
                     onChange(o.value);
                     setIsOpen(false);
@@ -223,7 +223,7 @@ const FilterDropdown = ({
             )}
           </div>
           {isMulti && (
-            <div style={{ padding: 8, borderTop: '1px solid var(--color-border)', background: '#f8fafc' }}>
+            <div style={{ padding: 8, borderTop: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
               <button
                 onClick={() => {
                   if (localVal !== null) onChange(localVal);
@@ -1392,7 +1392,7 @@ export default function PlanningPage() {
     position: 'sticky',
     left: 0,
     zIndex: 50,
-    background: '#eef2f7',
+    background: 'var(--color-table-header)',
     width: COL1_WIDTH,
     minWidth: COL1_WIDTH,
     borderRight: '2px solid var(--color-border-dark)',
@@ -1405,7 +1405,7 @@ export default function PlanningPage() {
     position: 'sticky',
     left: COL1_WIDTH,
     zIndex: 50,
-    background: '#eef2f7',
+    background: 'var(--color-table-header)',
     width: COL2_WIDTH,
     minWidth: COL2_WIDTH,
     maxWidth: COL2_WIDTH,
@@ -1420,7 +1420,7 @@ export default function PlanningPage() {
     position: 'sticky',
     left: 0,
     zIndex: 31,
-    background: '#ffffff',
+    background: 'var(--color-cell-bg)',
     width: COL1_WIDTH,
     minWidth: COL1_WIDTH,
     borderRight: '2px solid var(--color-border-dark)',
@@ -1432,7 +1432,7 @@ export default function PlanningPage() {
     position: 'sticky',
     left: COL1_WIDTH,
     zIndex: 30,
-    background: '#ffffff',
+    background: 'var(--color-cell-bg)',
     width: COL2_WIDTH,
     minWidth: COL2_WIDTH,
     borderRight: '2px solid var(--color-border-dark)',
@@ -1732,7 +1732,7 @@ export default function PlanningPage() {
                 display: 'flex', alignItems: 'center', gap: 4,
                 fontSize: 11, color: '#dc2626', fontWeight: 600,
                 padding: '2px 8px', borderRadius: 4,
-                border: '1px solid #fca5a5', background: '#fff1f2',
+                border: '1px solid var(--color-danger)', background: 'var(--color-danger-bg)',
               }}>
                 <Lock size={11} /> Đã khóa T{month}
               </span>
@@ -1745,7 +1745,7 @@ export default function PlanningPage() {
                 className={submitStatus === 'sent' ? 'button-erp-secondary' : 'button-erp-primary'}
                 style={{
                   padding: '2px 10px', height: 26, display: 'flex', alignItems: 'center', gap: 4,
-                  ...(submitStatus === 'sent' ? { border: '1px solid #16a34a', color: '#16a34a', background: '#f0fdf4' } : {}),
+                  ...(submitStatus === 'sent' ? { border: '1px solid var(--color-success)', color: 'var(--color-success)', background: 'var(--color-success-bg)' } : {}),
                 }}
                 onClick={handleSubmitPlan}
                 disabled={submitLoading || saveStatus === 'saving' || saveStatus === 'editing'}
@@ -1767,8 +1767,8 @@ export default function PlanningPage() {
                     display: 'flex', alignItems: 'center', gap: 4,
                     padding: '2px 10px', height: 26, fontSize: 12, fontWeight: 600,
                     border: '1px solid var(--color-border)', borderRadius: 4,
-                    background: hasPendingEdits.current ? '#eff6ff' : 'var(--color-surface)',
-                    color: hasPendingEdits.current ? '#1d4ed8' : 'var(--color-text-secondary)',
+                    background: hasPendingEdits.current ? 'var(--color-primary-light)' : 'var(--color-surface)',
+                    color: hasPendingEdits.current ? 'var(--color-primary)' : 'var(--color-text-secondary)',
                     cursor: saveStatus === 'saving' ? 'default' : 'pointer',
                     opacity: saveStatus === 'saving' ? 0.6 : 1,
                     transition: 'all 0.15s',
@@ -1780,7 +1780,7 @@ export default function PlanningPage() {
                 </button>
                 {/* Save status indicator */}
                 {saveStatus === 'saving' && (
-                  <span style={{ fontSize: 11, color: '#64748b' }}>Đang lưu...</span>
+                  <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Đang lưu...</span>
                 )}
                 {saveStatus === 'saved' && lastSavedAt && (
                   <span style={{ fontSize: 11, color: '#16a34a' }}>
@@ -1792,7 +1792,7 @@ export default function PlanningPage() {
                     <span style={{ fontSize: 11, color: '#ef4444' }}>Lỗi lưu!</span>
                     <button
                       onClick={handleForceSave}
-                      style={{ fontSize: 10, color: '#ef4444', border: '1px solid #fca5a5', borderRadius: 3, padding: '1px 6px', background: '#fff1f2', cursor: 'pointer', lineHeight: 1.4 }}
+                      style={{ fontSize: 10, color: 'var(--color-danger)', border: '1px solid var(--color-danger)', borderRadius: 3, padding: '1px 6px', background: 'var(--color-danger-bg)', cursor: 'pointer', lineHeight: 1.4 }}
                       title="Thử lại lưu dữ liệu"
                     >Thử lại</button>
                   </span>
@@ -1816,7 +1816,7 @@ export default function PlanningPage() {
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '0 12px', height: 34, minHeight: 34,
         borderBottom: '1px solid var(--color-border)',
-        background: pageMode === 'actual' ? '#fffbeb' : 'var(--color-surface)',
+        background: pageMode === 'actual' ? 'var(--color-warning-bg)' : 'var(--color-surface)',
         flexShrink: 0, flexWrap: 'nowrap',
       }}>
         {/* ── Mode Switcher KẾ HOẠCH / THỰC HIỆN ── */}
@@ -1825,7 +1825,7 @@ export default function PlanningPage() {
             onClick={() => { setPageMode('plan'); setCompareMode('none'); }}
             style={{
               padding: '0 12px', height: 24, fontSize: 11, fontWeight: pageMode === 'plan' ? 700 : 500,
-              background: pageMode === 'plan' ? 'var(--color-primary)' : '#fff',
+              background: pageMode === 'plan' ? 'var(--color-primary)' : 'var(--color-cell-bg)',
               color: pageMode === 'plan' ? '#fff' : 'var(--color-text-secondary)',
               borderTop: `1px solid ${pageMode === 'plan' ? 'var(--color-primary)' : 'var(--color-border-dark)'}`,
               borderBottom: `1px solid ${pageMode === 'plan' ? 'var(--color-primary)' : 'var(--color-border-dark)'}`,
@@ -1838,7 +1838,7 @@ export default function PlanningPage() {
             onClick={() => { setPageMode('actual'); setCompareMode('none'); }}
             style={{
               padding: '0 12px', height: 24, fontSize: 11, fontWeight: pageMode === 'actual' ? 700 : 500,
-              background: pageMode === 'actual' ? '#f59e0b' : '#fff',
+              background: pageMode === 'actual' ? '#f59e0b' : 'var(--color-cell-bg)',
               color: pageMode === 'actual' ? '#fff' : 'var(--color-text-secondary)',
               borderTop: `1px solid ${pageMode === 'actual' ? '#f59e0b' : 'var(--color-border-dark)'}`,
               borderBottom: `1px solid ${pageMode === 'actual' ? '#f59e0b' : 'var(--color-border-dark)'}`,
@@ -1911,39 +1911,29 @@ export default function PlanningPage() {
       </div>
 
       {/* ROW 4: Kênh | Metric toggles | Ẩn dòng trống */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderBottom: '1px solid var(--color-border)', background: pageMode === 'actual' ? '#fffbeb' : 'var(--color-surface)', flexShrink: 0, flexWrap: 'nowrap', overflowX: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderBottom: '1px solid var(--color-border)', background: pageMode === 'actual' ? 'var(--color-warning-bg)' : 'var(--color-surface)', flexShrink: 0, flexWrap: 'nowrap', overflowX: 'auto' }}>
           {/* Kênh chips */}
           <span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>Kênh:</span>
           <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap' }}>
-            <button
-              onClick={() => toggleHiddenChannel('DIGITAL')}
-              style={{
-                padding: '2px 8px', fontSize: 11, fontWeight: 600,
-                border: '1px solid', borderRadius: 4,
-                borderColor: hiddenChannels.has('DIGITAL') ? 'var(--color-border-dark)' : '#EA4335',
-                background: hiddenChannels.has('DIGITAL') ? 'transparent' : '#EA433515',
-                color: hiddenChannels.has('DIGITAL') ? 'var(--color-text-muted)' : '#EA4335',
-                cursor: 'pointer', textDecoration: hiddenChannels.has('DIGITAL') ? 'line-through' : 'none',
-              }}
-            >
-              Digital
-            </button>
-            {[{ cat: 'SỰ KIỆN', label: 'Sự kiện', color: '#10B981' }, { cat: 'CSKH', label: 'CSKH', color: '#F59E0B' }, { cat: 'NHẬN DIỆN', label: 'Nhận diện', color: '#8B5CF6' }].map(({ cat, label, color }) => (
-              <button
-                key={cat}
-                onClick={() => toggleHiddenChannel(cat)}
-                style={{
-                  padding: '2px 8px', fontSize: 11, fontWeight: 600,
-                  border: '1px solid', borderRadius: 4,
-                  borderColor: hiddenChannels.has(cat) ? 'var(--color-border-dark)' : color,
-                  background: hiddenChannels.has(cat) ? 'transparent' : `${color}15`,
-                  color: hiddenChannels.has(cat) ? 'var(--color-text-muted)' : color,
-                  cursor: 'pointer', textDecoration: hiddenChannels.has(cat) ? 'line-through' : 'none',
-                }}
-              >
-                {label}
-              </button>
-            ))}
+            {[{ cat: 'DIGITAL', label: 'Digital' }, { cat: 'SỰ KIỆN', label: 'Sự kiện' }, { cat: 'CSKH', label: 'CSKH' }, { cat: 'NHẬN DIỆN', label: 'Nhận diện' }].map(({ cat, label }) => {
+              const isHidden = hiddenChannels.has(cat);
+              return (
+                <button
+                  key={cat}
+                  onClick={() => toggleHiddenChannel(cat)}
+                  style={{
+                    padding: '2px 8px', fontSize: 11, fontWeight: isHidden ? 400 : 600,
+                    border: '1px solid', borderRadius: 4,
+                    borderColor: isHidden ? 'var(--color-border)' : 'var(--color-brand)',
+                    background: isHidden ? 'transparent' : 'var(--color-primary-light)',
+                    color: isHidden ? 'var(--color-text-muted)' : 'var(--color-brand)',
+                    cursor: 'pointer', textDecoration: isHidden ? 'line-through' : 'none',
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
 
           <div className="toolbar-sep" style={{ height: 14, flexShrink: 0 }} />
@@ -2186,7 +2176,7 @@ export default function PlanningPage() {
                         style={{
                           position: 'sticky', top: 0, zIndex: 35,
                           textAlign: 'center',
-                          background: '#eef2f7',
+                          background: 'var(--color-table-header)',
                           borderBottom: '1px solid var(--color-border-dark)',
                           borderTop: `3px solid ${catColor}`,
                           padding: '4px 8px'
@@ -2233,7 +2223,7 @@ export default function PlanningPage() {
                   rowSpan={hasTier2 ? 2 : 1}
                   style={{
                     position: 'sticky', top: 0, zIndex: 35,
-                    background: '#eef2f7',
+                    background: 'var(--color-table-header)',
                     color: 'var(--color-text)',
                     textAlign: 'center',
                     fontWeight: 700,
@@ -2261,7 +2251,7 @@ export default function PlanningPage() {
                       style={{
                         position: 'sticky', top: 28, zIndex: 35,
                         textAlign: 'center',
-                        background: '#eef2f7',
+                        background: 'var(--color-table-header)',
                         borderBottom: '1px solid var(--color-border-dark)',
                         color: 'var(--color-text)',
                         fontSize: 'var(--fs-label)',
@@ -2305,7 +2295,7 @@ export default function PlanningPage() {
                       colSpan={isActualSplitMode ? 2 : 1}
                       style={{
                         position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35,
-                        background: '#eef2f7',
+                        background: 'var(--color-table-header)',
                         color: 'var(--color-text-muted)',
                         width: isActualSplitMode ? 140 : (metric === 'Ngân sách' ? 80 : 62), minWidth: isActualSplitMode ? 140 : (metric === 'Ngân sách' ? 80 : 62),
                         textAlign: 'center',
@@ -2318,10 +2308,10 @@ export default function PlanningPage() {
                     </th>
                   ));
                 })}
-                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 88, minWidth: isActualSplitMode ? 140 : 88, background: '#eef2f7', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '2px solid var(--color-border-dark)', padding: '4px 8px' }}>Ngân sách</th>
-                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 76, minWidth: isActualSplitMode ? 140 : 76, background: '#eef2f7', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', padding: '4px 8px' }}>KHQT</th>
-                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 76, minWidth: isActualSplitMode ? 140 : 76, background: '#eef2f7', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', padding: '4px 8px' }}>GDTD</th>
-                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 76, minWidth: isActualSplitMode ? 140 : 76, background: '#eef2f7', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', padding: '4px 8px' }}>KHĐ</th>
+                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 88, minWidth: isActualSplitMode ? 140 : 88, background: 'var(--color-table-header)', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '2px solid var(--color-border-dark)', padding: '4px 8px' }}>Ngân sách</th>
+                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 76, minWidth: isActualSplitMode ? 140 : 76, background: 'var(--color-table-header)', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', padding: '4px 8px' }}>KHQT</th>
+                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 76, minWidth: isActualSplitMode ? 140 : 76, background: 'var(--color-table-header)', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', padding: '4px 8px' }}>GDTD</th>
+                <th colSpan={isActualSplitMode ? 2 : 1} style={{ position: 'sticky', top: hasTier2 ? 56 : 28, zIndex: 35, width: isActualSplitMode ? 140 : 76, minWidth: isActualSplitMode ? 140 : 76, background: 'var(--color-table-header)', color: 'var(--color-text)', textAlign: 'center', fontWeight: 600, borderBottom: isActualSplitMode ? 'none' : '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', padding: '4px 8px' }}>KHĐ</th>
               </tr>
 
               {/* Tier 4 (actual split mode only): KH | TH sub-headers per metric */}
@@ -2333,10 +2323,10 @@ export default function PlanningPage() {
                       <React.Fragment key={`${ch.name}-${metric}-split`}>
                         <th style={{
                           position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 35,
-                          background: '#eef2f7',
+                          background: 'var(--color-table-header)',
                           width: 70, minWidth: 70, height: 22,
                           textAlign: 'center', fontSize: 'var(--fs-label)', fontWeight: 600,
-                          color: '#64748b',
+                          color: 'var(--color-text-secondary)',
                           borderBottom: '2px solid var(--color-border-dark)',
                           borderRight: '1px dashed var(--color-border-dark)',
                           padding: '2px 4px'
@@ -2345,10 +2335,10 @@ export default function PlanningPage() {
                         </th>
                         <th style={{
                           position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 35,
-                          background: '#eef2f7',
+                          background: 'var(--color-table-header)',
                           width: 70, minWidth: 70, height: 22,
                           textAlign: 'center', fontSize: 'var(--fs-label)', fontWeight: 700,
-                          color: '#0f172a',
+                          color: 'var(--color-text)',
                           borderBottom: '2px solid var(--color-border-dark)',
                           padding: '2px 4px'
                         }}>
@@ -2360,8 +2350,8 @@ export default function PlanningPage() {
                   {/* TỔNG CỘNG: KH | TH sub-headers */}
                   {['Ngân sách', 'KHQT', 'GDTD', 'KHĐ'].map((metric, idx) => (
                     <React.Fragment key={`total-split-${idx}`}>
-                      <th style={{ position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 35, background: '#eef2f7', width: 70, minWidth: 70, height: 22, textAlign: 'center', fontSize: 'var(--fs-label)', fontWeight: 600, color: '#64748b', borderBottom: '2px solid var(--color-border-dark)', borderRight: '1px dashed var(--color-border-dark)', borderLeft: idx === 0 ? '2px solid var(--color-border-dark)' : '1px solid var(--color-border-dark)', padding: '2px 4px' }}>KH</th>
-                      <th style={{ position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 35, background: '#eef2f7', width: 70, minWidth: 70, height: 22, textAlign: 'center', fontSize: 'var(--fs-label)', fontWeight: 700, color: '#0f172a', borderBottom: '2px solid var(--color-border-dark)', padding: '2px 4px' }}>TH</th>
+                      <th style={{ position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 35, background: 'var(--color-table-header)', width: 70, minWidth: 70, height: 22, textAlign: 'center', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--color-text-secondary)', borderBottom: '2px solid var(--color-border-dark)', borderRight: '1px dashed var(--color-border-dark)', borderLeft: idx === 0 ? '2px solid var(--color-border-dark)' : '1px solid var(--color-border-dark)', padding: '2px 4px' }}>KH</th>
+                      <th style={{ position: 'sticky', top: hasTier2 ? 84 : 56, zIndex: 35, background: 'var(--color-table-header)', width: 70, minWidth: 70, height: 22, textAlign: 'center', fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--color-text)', borderBottom: '2px solid var(--color-border-dark)', padding: '2px 4px' }}>TH</th>
                     </React.Fragment>
                   ))}
                 </tr>
@@ -2414,7 +2404,7 @@ export default function PlanningPage() {
                               </span>
                             </td>
                           )}
-                          <td style={{ ...stickyBodyCol2, fontWeight: isComputedRow ? 700 : '500', background: isComputedRow ? '#f1f5f9' : '#ffffff', color: isComputedRow ? 'var(--color-brand)' : 'inherit', textTransform: isComputedRow ? 'uppercase' : 'none' }}>
+                          <td style={{ ...stickyBodyCol2, fontWeight: isComputedRow ? 700 : '500', background: isComputedRow ? 'var(--color-row-alt)' : 'var(--color-cell-bg)', color: isComputedRow ? 'var(--color-brand)' : 'inherit', textTransform: isComputedRow ? 'uppercase' : 'none' }}>
                             {model}
                           </td>
                           {visibleChannels.map((ch) =>
@@ -2455,13 +2445,13 @@ export default function PlanningPage() {
                                 return (
                                   <React.Fragment key={cellKey}>
                                     {/* KH — Plan value: read-only reference */}
-                                    <td style={{ padding: 0, borderTop: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', borderRight: '1px dashed var(--color-border-dark)', height: 26, background: '#f8fafc' }}>
+                                    <td style={{ padding: 0, borderTop: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', borderRight: '1px dashed var(--color-border-dark)', height: 26, background: 'var(--color-surface)' }}>
                                       <div style={{ padding: '2px 6px', textAlign: 'right', fontSize: 'var(--fs-table)', color: 'var(--color-text-muted)', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                                         {planVal > 0 ? formatNumber(planVal) : ''}
                                       </div>
                                     </td>
                                     {/* TH — Actual value: inline editable */}
-                                    <td style={{ padding: 0, borderTop: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)', borderLeft: 'none', borderRight: '1px solid var(--color-border-dark)', height: 26, background: actualVal > 0 ? '#fffbeb' : '#ffffff' }}>
+                                    <td style={{ padding: 0, borderTop: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)', borderLeft: 'none', borderRight: '1px solid var(--color-border-dark)', height: 26, background: actualVal > 0 ? 'var(--color-warning-bg)' : 'var(--color-cell-bg)' }}>
                                       <input
                                         type="text"
                                         inputMode="decimal"
@@ -2494,7 +2484,7 @@ export default function PlanningPage() {
                               }
 
                               return (
-                                <td key={cellKey} colSpan={isActualSplitMode ? 2 : 1} style={{ padding: 0, border: '1px solid #e2e8f0', height: compareMode !== 'none' ? 44 : 26 }}>
+                                <td key={cellKey} colSpan={isActualSplitMode ? 2 : 1} style={{ padding: 0, border: '1px solid var(--color-border)', height: compareMode !== 'none' ? 44 : 26, background: 'var(--color-cell-bg)' }}>
                                   <div
                                     className={cn(
                                       "cell-wrapper",
@@ -2566,7 +2556,7 @@ export default function PlanningPage() {
                                         const isOverBudget = pageMode === 'actual' && cellKey.endsWith('-Ngân sách') && val > 0 && (planCellData[cellKey] || 0) > 0 && val > (planCellData[cellKey] || 0) * 1.1;
                                         return {
                                           height: '100%', position: 'relative' as const,
-                                          background: isOverBudget ? '#fff5f5' : ((ch.readonly || isComputedRow) ? '#f1f5f9' : (selectedCells.has(cellKey) ? '#e0f2fe' : 'transparent')),
+                                          background: isOverBudget ? 'var(--color-danger-bg)' : ((ch.readonly || isComputedRow) ? 'var(--color-row-alt)' : (selectedCells.has(cellKey) ? 'var(--color-primary-light)' : 'transparent')),
                                           boxShadow: isOverBudget ? 'inset 0 0 0 1.5px #ef4444' : (selectedCells.has(cellKey) ? 'inset 0 0 0 1.5px var(--color-brand)' : 'none'),
                                           cursor: (ch.readonly || isComputedRow) ? 'default' : (selectedCells.has(cellKey) ? 'cell' : 'text'),
                                           fontWeight: isComputedRow ? 600 : 'normal',
@@ -2602,7 +2592,7 @@ export default function PlanningPage() {
                                             e.stopPropagation();
                                           }}
                                           className="cell-input"
-                                          style={{ position: 'absolute', inset: 0, zIndex: 10, background: '#fff' }}
+                                          style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'var(--color-cell-bg)' }}
                                         />
                                     )}
                                     {pageMode === 'actual' && editingCell !== cellKey
@@ -2622,13 +2612,13 @@ export default function PlanningPage() {
                                { key: 'khd', val: totalKhd, act: actTotalKhd, hist: histTotalKhd }
                              ];
                              return totals.map((t, idx) => {
-                               const bg = isComputedRow ? '#e2e8f0' : (idx === 0 ? '#f1f5f9' : '#f8fafc');
+                               const bg = isComputedRow ? 'var(--color-table-header)' : (idx === 0 ? 'var(--color-row-alt)' : 'var(--color-surface)');
                                const color = idx === 0 || isComputedRow ? 'var(--color-text)' : 'inherit';
                                const fw = idx === 0 || isComputedRow ? 700 : 600;
                                if (isActualSplitMode) {
                                  return (
                                     <React.Fragment key={`tot-${t.key}`}>
-                                      <td style={{ padding: '2px 6px', textAlign: 'right', fontWeight: 600, background: '#f8fafc', color: 'var(--color-text-muted)', borderRight: '1px dashed var(--color-border-dark)', borderLeft: idx === 0 ? '2px solid var(--color-border-dark)' : '1px solid var(--color-border-dark)' }}>
+                                      <td style={{ padding: '2px 6px', textAlign: 'right', fontWeight: 600, background: 'var(--color-surface)', color: 'var(--color-text-muted)', borderRight: '1px dashed var(--color-border-dark)', borderLeft: idx === 0 ? '2px solid var(--color-border-dark)' : '1px solid var(--color-border-dark)' }}>
                                         {t.val > 0 ? formatNumber(t.val) : ''}
                                       </td>
                                       <td style={{ padding: '2px 6px', textAlign: 'right', fontWeight: fw, background: bg, color: color }}>
@@ -2651,7 +2641,7 @@ export default function PlanningPage() {
                     {/* Brand Subtotal Row — always visible, click to toggle */}
                     <tr className="subtotal">
                       <td
-                        style={{ ...stickyBodyCol1, background: isCollapsed ? '#e2e8f0' : '#f1f5f9', fontWeight: 700, cursor: 'pointer', userSelect: 'none' }}
+                        style={{ ...stickyBodyCol1, background: isCollapsed ? 'var(--color-table-header)' : 'var(--color-row-alt)', fontWeight: 700, cursor: 'pointer', userSelect: 'none' }}
                         onClick={() => toggleBrand(brand.name)}
                         title={(isCollapsed || displayModels.length === 0) ? `Mở rộng ${brand.name}` : `Thu gọn ${brand.name}`}
                       >
@@ -2665,7 +2655,7 @@ export default function PlanningPage() {
                           {brand.name}
                         </span>
                       </td>
-                      <td style={{ ...stickyBodyCol2, background: isCollapsed ? '#e2e8f0' : '#f1f5f9', fontWeight: 700, fontSize: 'var(--fs-table)', color: 'var(--color-text)' }}>
+                      <td style={{ ...stickyBodyCol2, background: isCollapsed ? 'var(--color-table-header)' : 'var(--color-row-alt)', fontWeight: 700, fontSize: 'var(--fs-table)', color: 'var(--color-text)' }}>
                         Σ {brand.name}
                       </td>
                       {visibleChannels.map((ch) =>
@@ -2676,7 +2666,7 @@ export default function PlanningPage() {
                             style={{
                               textAlign: 'right',
                               fontWeight: 600,
-                              background: isCollapsed ? '#e2e8f0' : '#f1f5f9',
+                              background: isCollapsed ? 'var(--color-table-header)' : 'var(--color-row-alt)',
                               color: 'var(--color-text-secondary)',
                               fontSize: 'var(--fs-table)',
                             }}
@@ -2689,16 +2679,16 @@ export default function PlanningPage() {
                           </td>
                         ))
                       )}
-                      <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 700, background: '#e2e8f0', color: 'var(--color-text)', borderLeft: '2px solid var(--color-border-dark)' }}>
+                      <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 700, background: 'var(--color-table-header)', color: 'var(--color-text)', borderLeft: '2px solid var(--color-border-dark)' }}>
                         {renderDualValue(subtotal.budget, compareMode !== 'none' ? subtotal.histBudget : null, false)}
                       </td>
-                      <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 600, background: '#f1f5f9', borderLeft: '1px solid var(--color-border-dark)' }}>
+                      <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 600, background: 'var(--color-row-alt)', borderLeft: '1px solid var(--color-border-dark)' }}>
                         {renderDualValue(subtotal.khqt, compareMode !== 'none' ? subtotal.histKhqt : null, false)}
                       </td>
-                      <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 600, background: '#f1f5f9', borderLeft: '1px solid var(--color-border-dark)' }}>
+                      <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 600, background: 'var(--color-row-alt)', borderLeft: '1px solid var(--color-border-dark)' }}>
                         {renderDualValue(subtotal.gdtd, compareMode !== 'none' ? subtotal.histGdtd : null, false)}
                       </td>
-                      <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 600, background: '#f1f5f9', borderLeft: '1px solid var(--color-border-dark)' }}>
+                      <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 600, background: 'var(--color-row-alt)', borderLeft: '1px solid var(--color-border-dark)' }}>
                         {renderDualValue(subtotal.khd, compareMode !== 'none' ? subtotal.histKhd : null, false)}
                       </td>
                     </tr>
@@ -2708,10 +2698,10 @@ export default function PlanningPage() {
 
               {/* Grand Total Row */}
               <tr className="grand-total">
-                <td style={{ ...stickyBodyCol1, background: '#f1f5f9', fontWeight: 800, color: 'var(--color-text)', borderTop: '2px solid var(--color-text-muted)' }}>
+                <td style={{ ...stickyBodyCol1, background: 'var(--color-row-alt)', fontWeight: 800, color: 'var(--color-text)', borderTop: '2px solid var(--color-text-muted)' }}>
                   TỔNG
                 </td>
-                <td style={{ ...stickyBodyCol2, background: '#f1f5f9', fontWeight: 700, borderTop: '2px solid var(--color-text-muted)', color: 'var(--color-text)' }}>
+                <td style={{ ...stickyBodyCol2, background: 'var(--color-row-alt)', fontWeight: 700, borderTop: '2px solid var(--color-text-muted)', color: 'var(--color-text)' }}>
                   TOÀN BỘ
                 </td>
                 {visibleChannels.map((ch) =>
@@ -2723,7 +2713,7 @@ export default function PlanningPage() {
                         textAlign: 'right',
                         fontWeight: 700,
                         fontSize: 'var(--fs-table)',
-                        background: ch.readonly ? '#f8fafc' : undefined,
+                        background: ch.readonly ? 'var(--color-surface)' : undefined,
                         borderTop: '2px solid var(--color-text-muted)'
                       }}
                     >
@@ -2735,16 +2725,16 @@ export default function PlanningPage() {
                     </td>
                   ))
                 )}
-                <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 800, background: '#e2e8f0', color: 'var(--color-text)', fontSize: 12, borderTop: '2px solid var(--color-text-muted)', borderLeft: '2px solid var(--color-border-dark)' }}>
+                <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 800, background: 'var(--color-table-header)', color: 'var(--color-text)', fontSize: 12, borderTop: '2px solid var(--color-text-muted)', borderLeft: '2px solid var(--color-border-dark)' }}>
                   {renderDualValue(grandTotal.budget, compareMode !== 'none' ? grandTotal.histBudget : null, false)}
                 </td>
-                <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 700, background: '#f1f5f9', color: 'var(--color-text)', borderTop: '2px solid var(--color-text-muted)', borderLeft: '1px solid var(--color-border-dark)' }}>
+                <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 700, background: 'var(--color-row-alt)', color: 'var(--color-text)', borderTop: '2px solid var(--color-text-muted)', borderLeft: '1px solid var(--color-border-dark)' }}>
                   {renderDualValue(grandTotal.khqt, compareMode !== 'none' ? grandTotal.histKhqt : null, false)}
                 </td>
-                <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 700, background: '#f1f5f9', color: 'var(--color-text)', borderTop: '2px solid var(--color-text-muted)', borderLeft: '1px solid var(--color-border-dark)' }}>
+                <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 700, background: 'var(--color-row-alt)', color: 'var(--color-text)', borderTop: '2px solid var(--color-text-muted)', borderLeft: '1px solid var(--color-border-dark)' }}>
                   {renderDualValue(grandTotal.gdtd, compareMode !== 'none' ? grandTotal.histGdtd : null, false)}
                 </td>
-                <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 700, background: '#f1f5f9', color: 'var(--color-text)', borderTop: '2px solid var(--color-text-muted)', borderLeft: '1px solid var(--color-border-dark)' }}>
+                <td colSpan={isActualSplitMode ? 2 : 1} style={{ textAlign: 'right', fontWeight: 700, background: 'var(--color-row-alt)', color: 'var(--color-text)', borderTop: '2px solid var(--color-text-muted)', borderLeft: '1px solid var(--color-border-dark)' }}>
                   {renderDualValue(grandTotal.khd, compareMode !== 'none' ? grandTotal.histKhd : null, false)}
                 </td>
               </tr>
@@ -2764,30 +2754,30 @@ export default function PlanningPage() {
                   <tr>
                     <td
                       colSpan={2}
-                      style={{ padding: '5px 8px 3px', borderTop: '3px solid var(--color-border-dark)', background: '#f8fafc', position: 'sticky', left: 0, zIndex: 5, fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap', minWidth: COL1_WIDTH + COL2_WIDTH }}
+                      style={{ padding: '5px 8px 3px', borderTop: '3px solid var(--color-border-dark)', background: 'var(--color-surface)', position: 'sticky', left: 0, zIndex: 5, fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap', minWidth: COL1_WIDTH + COL2_WIDTH }}
                     >
                       {isAggregateView ? 'Chi tiết theo Showroom' : `Tổng hợp — ${selectedShowroom}`}
                     </td>
-                    <td colSpan={999} style={{ borderTop: '3px solid var(--color-border-dark)', background: '#f8fafc' }} />
+                    <td colSpan={999} style={{ borderTop: '3px solid var(--color-border-dark)', background: 'var(--color-surface)' }} />
                   </tr>
                   {/* Sub-header row */}
                   <tr style={{ height: 24 }}>
-                    <td colSpan={2} style={{ padding: '2px 8px', background: '#eef2f7', position: 'sticky', left: 0, zIndex: 5, fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border-dark)', minWidth: COL1_WIDTH + COL2_WIDTH }}>
+                    <td colSpan={2} style={{ padding: '2px 8px', background: 'var(--color-table-header)', position: 'sticky', left: 0, zIndex: 5, fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border-dark)', minWidth: COL1_WIDTH + COL2_WIDTH }}>
                       Đơn vị
                     </td>
                     {visibleChannels.map(ch => visibleMetrics.map(m => (
-                      <td key={`sr-hdr-${ch.name}-${m}`} colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 6px', background: '#eef2f7', textAlign: 'center', fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border-dark)' }}>
+                      <td key={`sr-hdr-${ch.name}-${m}`} colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 6px', background: 'var(--color-table-header)', textAlign: 'center', fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border-dark)' }}>
                         {m === 'Ngân sách' ? 'NS' : m}
                       </td>
                     )))}
-                    <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', background: '#eef2f7', textAlign: 'center', fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderLeft: '2px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)' }}>NS</td>
-                    <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', background: '#eef2f7', textAlign: 'center', fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderLeft: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)' }}>KHQT</td>
-                    <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', background: '#eef2f7', textAlign: 'center', fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderLeft: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)' }}>GDTD</td>
-                    <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', background: '#eef2f7', textAlign: 'center', fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderLeft: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)' }}>KHĐ</td>
+                    <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', background: 'var(--color-table-header)', textAlign: 'center', fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderLeft: '2px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)' }}>NS</td>
+                    <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', background: 'var(--color-table-header)', textAlign: 'center', fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderLeft: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)' }}>KHQT</td>
+                    <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', background: 'var(--color-table-header)', textAlign: 'center', fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderLeft: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)' }}>GDTD</td>
+                    <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', background: 'var(--color-table-header)', textAlign: 'center', fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderLeft: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)' }}>KHĐ</td>
                   </tr>
                   {displaySRs.map((srObj, si) => {
                     const srData = (pageMode === 'plan' ? showroomDataByMonth : showroomActualDataByMonth)[month]?.[srObj.id] || {};
-                    const bg = si % 2 === 0 ? '#ffffff' : '#fafafa';
+                    const bg = si % 2 === 0 ? 'var(--color-cell-bg)' : 'var(--color-row-alt)';
 
                     // Historical data for comparison (null when compareMode === 'none')
                     const _prevMonth = month === 1 ? 12 : month - 1;
@@ -2864,7 +2854,7 @@ export default function PlanningPage() {
                         {visibleChannels.map(ch => visibleMetrics.map(m => {
                           const v = getChanSum(ch, m);
                           const h = compareMode !== 'none' ? getHistChanSum(ch, m) : null;
-                          const cellBg = ch.readonly ? (si % 2 === 0 ? '#fafafa' : '#f5f5f5') : undefined;
+                          const cellBg = ch.readonly ? (si % 2 === 0 ? 'var(--color-row-alt)' : 'var(--color-table-header)') : undefined;
                           return (
                             <td
                               key={`sr-${srObj.id}-${ch.name}-${m}`}
@@ -2900,7 +2890,7 @@ export default function PlanningPage() {
                           );
                         }))}
                         {/* Summary cols — khớp với TỔNG CỘNG của bảng trên */}
-                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', verticalAlign: 'middle', fontWeight: 700, background: '#f1f5f9', borderBottom: '1px solid var(--color-border)', borderLeft: '2px solid var(--color-border-dark)', color: totalNS > 0 ? 'var(--color-brand)' : 'var(--color-text-muted)' }}>
+                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', verticalAlign: 'middle', fontWeight: 700, background: 'var(--color-row-alt)', borderBottom: '1px solid var(--color-border)', borderLeft: '2px solid var(--color-border-dark)', color: totalNS > 0 ? 'var(--color-brand)' : 'var(--color-text-muted)' }}>
                           {compareMode !== 'none' ? (
                             compareMode === 'vs_plan' ? (
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
@@ -2924,7 +2914,7 @@ export default function PlanningPage() {
                             })()
                           ) : (totalNS > 0 ? formatNumber(totalNS) : '—')}
                         </td>
-                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', verticalAlign: 'middle', fontWeight: 600, background: '#f8fafc', borderBottom: '1px solid var(--color-border)', borderLeft: '1px solid var(--color-border-dark)', color: totalKHQT > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
+                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', verticalAlign: 'middle', fontWeight: 600, background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)', borderLeft: '1px solid var(--color-border-dark)', color: totalKHQT > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
                           {compareMode !== 'none' ? (
                             compareMode === 'vs_plan' ? (
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
@@ -2948,7 +2938,7 @@ export default function PlanningPage() {
                             })()
                           ) : (totalKHQT > 0 ? formatNumber(totalKHQT) : '—')}
                         </td>
-                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', verticalAlign: 'middle', fontWeight: 600, background: '#f8fafc', borderBottom: '1px solid var(--color-border)', borderLeft: '1px solid var(--color-border-dark)', color: totalGDTD > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
+                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', verticalAlign: 'middle', fontWeight: 600, background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)', borderLeft: '1px solid var(--color-border-dark)', color: totalGDTD > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
                           {compareMode !== 'none' ? (
                             compareMode === 'vs_plan' ? (
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
@@ -2972,7 +2962,7 @@ export default function PlanningPage() {
                             })()
                           ) : (totalGDTD > 0 ? formatNumber(totalGDTD) : '—')}
                         </td>
-                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', verticalAlign: 'middle', fontWeight: 600, background: '#f8fafc', borderBottom: '1px solid var(--color-border)', borderLeft: '1px solid var(--color-border-dark)', color: totalKHD > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
+                        <td colSpan={isActualSplitMode ? 2 : 1} style={{ padding: '2px 8px', textAlign: 'right', verticalAlign: 'middle', fontWeight: 600, background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)', borderLeft: '1px solid var(--color-border-dark)', color: totalKHD > 0 ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
                           {compareMode !== 'none' ? (
                             compareMode === 'vs_plan' ? (
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
@@ -3063,8 +3053,8 @@ export default function PlanningPage() {
         onClick={() => { if (eventWarningRef.current) eventWarningRef.current.style.display = 'none'; }}
       >
         <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--border-radius-lg)', width: 420, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.2)', overflow: 'hidden', border: '1px solid var(--color-border-dark)' }} onClick={e => e.stopPropagation()}>
-          <div style={{ background: '#fffbeb', padding: '12px 16px', borderBottom: '1px solid #fde68a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#92400e', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ background: 'var(--color-warning-bg)', padding: '12px 16px', borderBottom: '1px solid var(--color-warning)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: 6 }}>
               <CalendarDays size={15} color="#d97706" />
               Cột Sự kiện — Chỉ đọc
             </span>
@@ -3080,7 +3070,7 @@ export default function PlanningPage() {
               <button onClick={() => { if (eventWarningRef.current) eventWarningRef.current.style.display = 'none'; }} style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--color-text-secondary)' }}>
                 Đóng
               </button>
-              <a href={`/events?month=${month}`} style={{ padding: '6px 14px', borderRadius: 6, background: '#1d4ed8', color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <a href={`/events?month=${month}`} style={{ padding: '6px 14px', borderRadius: 6, background: 'var(--color-primary)', color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 <CalendarDays size={13} />
                 Đến trang Sự kiện →
               </a>
@@ -3095,7 +3085,7 @@ export default function PlanningPage() {
           <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--border-radius-lg)', width: 600, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.2)', overflow: 'hidden', animation: 'scaleInId 0.2s ease-out', border: '1px solid var(--color-border-dark)' }} onClick={(e) => e.stopPropagation()}>
             
             {/* Header */}
-            <div style={{ background: '#f8fafc', padding: '12px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ background: 'var(--color-surface)', padding: '12px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: '13px', fontWeight: 600, margin: 0, color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 {allocationModal.type === 'brand' ? <Wand2 size={15} color="var(--color-brand)" /> : <Zap size={15} color="var(--color-warning)" />}
                 {allocationModal.type === 'brand' ? `Phân bổ tổng: Dòng xe ${allocationModal.name}` : `Điều chỉnh hàng loạt: ${allocationModal.type === 'category' ? 'Nhóm kênh' : 'Kênh'} ${allocationModal.name} (${selectedShowroom === 'all' ? 'Lỗi: Chưa chọn SR' : selectedShowroom})`}
@@ -3132,7 +3122,7 @@ export default function PlanningPage() {
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Nguồn đối chiếu tỷ trọng</label>
-                    <select className="form-select" value={String(allocBase)} onChange={e => setAllocBase(e.target.value === 'current' ? 'current' : parseInt(e.target.value, 10))} style={{ width: '100%', background: '#f8fafc' }}>
+                    <select className="form-select" value={String(allocBase)} onChange={e => setAllocBase(e.target.value === 'current' ? 'current' : parseInt(e.target.value, 10))} style={{ width: '100%', background: 'var(--color-surface)' }}>
                       <option value="current">Tháng hiện hành (T{month})</option>
                       {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => (
                         m !== month && <option key={m} value={m}>Tháng {m}</option>
@@ -3144,7 +3134,7 @@ export default function PlanningPage() {
 
               {(allocationModal.type === 'channel' || allocationModal.type === 'category') && (
                 <>
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12 }}>
+                  <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, padding: 12 }}>
                     <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text)', lineHeight: 1.5, fontWeight: 600 }}>
                       CÔNG CỤ XÂY DỰNG KẾ HOẠCH MARKETING: Tuỳ chỉnh <strong>{allocationModal.name === 'Tổng Digital' ? 'Tất cả các kênh Digital' : `${allocationModal.type === 'category' ? 'Nhóm kênh' : 'Kênh'} ${allocationModal.name}`}</strong> tại <strong>{selectedShowroom}</strong> cho <strong>Tháng {month}</strong>.
                     </p>
@@ -3154,7 +3144,7 @@ export default function PlanningPage() {
                     <label style={{ display: 'block', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
                       Bạn muốn lấy tháng nào làm cơ sở dữ liệu để mô phỏng?
                     </label>
-                    <select className="form-select" value={String(allocBase)} onChange={e => setAllocBase(e.target.value === 'current' ? 'current' : parseInt(e.target.value, 10))} style={{ width: '100%', background: '#f8fafc' }}>
+                    <select className="form-select" value={String(allocBase)} onChange={e => setAllocBase(e.target.value === 'current' ? 'current' : parseInt(e.target.value, 10))} style={{ width: '100%', background: 'var(--color-surface)' }}>
                       <option value="current">Sao chép tỷ lệ và CPL của Tháng hiện hành (T{month})</option>
                       {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => (
                         m !== month && <option key={m} value={m}>Sao chép tỷ lệ và CPL của Tháng {m}</option>
@@ -3172,7 +3162,7 @@ export default function PlanningPage() {
                       </div>
                     </div>
                     
-                    <div style={{ background: '#f8fafc', padding: '16px 12px', borderRadius: 8, border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ background: 'var(--color-surface)', padding: '16px 12px', borderRadius: 8, border: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: 12 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <input 
                           type="range" 
@@ -3193,7 +3183,7 @@ export default function PlanningPage() {
                             value={massPercent}
                             onChange={(e) => setMassPercent(parseInt(e.target.value) || 0)}
                           />
-                          <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: '#64748b', pointerEvents: 'none' }}>%</span>
+                          <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--color-text-secondary)', pointerEvents: 'none' }}>%</span>
                         </div>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--color-text-muted)', marginTop: 4 }}>
@@ -3205,12 +3195,12 @@ export default function PlanningPage() {
                   </div>
 
                   {/* Giải thích Thuật toán */}
-                  <div style={{ background: '#f0fdf4', borderLeft: '3px solid #22c55e', padding: '10px 14px', borderRadius: '0 6px 6px 0', marginTop: 4 }}>
-                    <h4 style={{ fontSize: 12, fontWeight: 700, color: '#166534', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ background: 'var(--color-success-bg)', borderLeft: '3px solid var(--color-success)', padding: '10px 14px', borderRadius: '0 6px 6px 0', marginTop: 4 }}>
+                    <h4 style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-success)', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/><circle cx="12" cy="12" r="4"/></svg>
                       Logic Phân bổ Khách hàng (Funnel Sync)
                     </h4>
-                    <p style={{ margin: 0, fontSize: 11, color: '#15803d', lineHeight: 1.5 }}>
+                    <p style={{ margin: 0, fontSize: 11, color: 'var(--color-success)', lineHeight: 1.5 }}>
                       Hệ thống không chia lại khách hàng theo CPL chuẩn (tránh làm sai lệch dữ liệu thực tế lịch sử). Thay vào đó, khi ngân sách thay đổi <strong>{massPercent}%</strong>, mọi chỉ số khách hàng phái sinh (KHQT, GDTD, KHĐ) cũng sẽ được tịnh tiến <strong>{massPercent}%</strong>. Điều này đảm bảo Tỷ lệ chuyển đổi (CR) và CPL của tháng tham chiếu được bảo toàn 100%.
                     </p>
                   </div>
@@ -3220,7 +3210,7 @@ export default function PlanningPage() {
             </div>
 
             {/* Footer */}
-            <div style={{ padding: '12px 16px', background: '#f8fafc', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <div style={{ padding: '12px 16px', background: 'var(--color-surface)', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button className="button-erp-secondary" onClick={() => { setAllocationModal(null); setAllocAction('weight'); setAllocChannel('all'); setAllocBase(month === 1 ? 12 : month - 1); setAllocBudget(0); }}>Hủy bỏ</button>
               <button className="button-erp-primary" onClick={handleExecuteAllocation}>Thực thi ngay</button>
             </div>
@@ -3267,18 +3257,18 @@ export default function PlanningPage() {
       {/* Alert Component */}
       {alertInfo && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(15,23,42,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setAlertInfo(null)}>
-          <div style={{ background: '#fff', borderRadius: 12, width: 360, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden', animation: 'scaleInId 0.2s ease-out' }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ background: 'var(--color-cell-bg)', borderRadius: 12, width: 360, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden', animation: 'scaleInId 0.2s ease-out' }} onClick={(e) => e.stopPropagation()}>
              <div style={{ padding: 24, textAlign: 'center' }}>
-               <div style={{ 
-                 background: alertInfo.type === 'success' ? '#dcfce7' : alertInfo.type === 'info' ? '#e0f2fe' : '#fef2f2', 
-                 width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' 
+               <div style={{
+                 background: alertInfo.type === 'success' ? 'var(--color-success-bg)' : alertInfo.type === 'info' ? 'var(--color-primary-light)' : 'var(--color-danger-bg)',
+                 width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'
                }}>
                  {alertInfo.type === 'success' ? <CheckCircle2 size={28} color="#16a34a" strokeWidth={2.5} /> : 
                   alertInfo.type === 'info' ? <Send size={28} color="#0284c7" strokeWidth={2.5} /> : 
                   <AlertTriangle size={28} color="#dc2626" strokeWidth={2.5} />}
                </div>
-               <h3 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: '0 0 8px 0' }}>{alertInfo.title}</h3>
-               <p style={{ color: '#475569', fontSize: 14, margin: '0 0 24px 0', lineHeight: 1.5 }}>{alertInfo.message}</p>
+               <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', margin: '0 0 8px 0' }}>{alertInfo.title}</h3>
+               <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '0 0 24px 0', lineHeight: 1.5 }}>{alertInfo.message}</p>
                <button 
                  className="button-erp-primary" 
                  style={{ width: '100%', justifyContent: 'center', padding: '10px' }}

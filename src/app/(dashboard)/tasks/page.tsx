@@ -167,6 +167,14 @@ export default function TasksPage() {
     return tasks.filter(t => t.category === categoryFilter);
   }, [tasks, categoryFilter]);
 
+  const categoryCounts = useMemo<Record<'all' | TaskCategory, number>>(() => ({
+    all:    tasks.length,
+    event:  tasks.filter(t => t.category === 'event').length,
+    plan:   tasks.filter(t => t.category === 'plan').length,
+    budget: tasks.filter(t => t.category === 'budget').length,
+    manual: tasks.filter(t => t.category === 'manual').length,
+  }), [tasks]);
+
   const groups = useMemo<Record<TaskPriority, Task[]>>(() => ({
     urgent:     filteredTasks.filter(t => t.priority === 'urgent'),
     this_week:  filteredTasks.filter(t => t.priority === 'this_week'),
@@ -243,16 +251,16 @@ export default function TasksPage() {
         {/* Right actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {activeMainTab === 'tasks' && (
-            <div style={{ display: 'flex', background: '#f1f5f9', padding: 3, borderRadius: 'var(--border-radius-erp)' }}>
+            <div style={{ display: 'flex', background: 'var(--color-surface-hover)', padding: 3, borderRadius: 'var(--border-radius-erp)' }}>
               <button
                 onClick={() => setViewMode('list')}
-                style={{ padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 5, background: viewMode === 'list' ? '#fff' : 'transparent', borderRadius: 4, boxShadow: viewMode === 'list' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none', color: viewMode === 'list' ? '#0f172a' : '#64748b', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer', transition: 'all 0.1s' }}
+                style={{ padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 5, background: viewMode === 'list' ? 'var(--color-surface-elevated)' : 'transparent', borderRadius: 4, boxShadow: viewMode === 'list' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none', color: viewMode === 'list' ? 'var(--color-text)' : 'var(--color-text-secondary)', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer', transition: 'all 0.1s' }}
               >
                 <List size={13} /> Danh sách
               </button>
               <button
                 onClick={() => setViewMode('kanban')}
-                style={{ padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 5, background: viewMode === 'kanban' ? '#fff' : 'transparent', borderRadius: 4, boxShadow: viewMode === 'kanban' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none', color: viewMode === 'kanban' ? '#0f172a' : '#64748b', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer', transition: 'all 0.1s' }}
+                style={{ padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 5, background: viewMode === 'kanban' ? 'var(--color-surface-elevated)' : 'transparent', borderRadius: 4, boxShadow: viewMode === 'kanban' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none', color: viewMode === 'kanban' ? 'var(--color-text)' : 'var(--color-text-secondary)', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer', transition: 'all 0.1s' }}
               >
                 <LayoutGrid size={13} /> Kanban
               </button>
@@ -309,25 +317,41 @@ export default function TasksPage() {
               { key: 'plan',   label: 'Kế hoạch' },
               { key: 'budget', label: 'Ngân sách' },
               { key: 'manual', label: 'Tự tạo' },
-            ] as const).map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setCategoryFilter(key)}
-                style={{
-                  padding: '4px 12px',
-                  borderRadius: 16,
-                  border: '1px solid',
-                  fontSize: 12, fontWeight: 600,
-                  cursor: 'pointer',
-                  background: categoryFilter === key ? 'var(--color-primary)' : 'var(--color-bg-hover)',
-                  color: categoryFilter === key ? '#fff' : 'var(--color-text-secondary)',
-                  borderColor: categoryFilter === key ? 'var(--color-primary)' : 'var(--color-border)',
-                  transition: 'all 0.1s',
-                }}
-              >
-                {label}
-              </button>
-            ))}
+            ] as const).map(({ key, label }) => {
+              const isActive = categoryFilter === key;
+              const count = categoryCounts[key];
+              return (
+                <button
+                  key={key}
+                  onClick={() => setCategoryFilter(key)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    padding: '4px 10px 4px 12px',
+                    borderRadius: 16,
+                    border: '1px solid',
+                    fontSize: 12, fontWeight: 600,
+                    cursor: 'pointer',
+                    background: isActive ? 'var(--color-primary)' : 'var(--color-bg-hover)',
+                    color: isActive ? '#fff' : 'var(--color-text-secondary)',
+                    borderColor: isActive ? 'var(--color-primary)' : 'var(--color-border)',
+                    transition: 'all 0.1s',
+                  }}
+                >
+                  {label}
+                  {count > 0 && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      minWidth: 16, height: 16, padding: '0 4px',
+                      borderRadius: 8, fontSize: 10, fontWeight: 700,
+                      background: isActive ? 'rgba(255,255,255,0.25)' : 'var(--color-surface-hover)',
+                      color: isActive ? '#fff' : 'var(--color-text-secondary)',
+                    }}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -443,7 +467,7 @@ export default function TasksPage() {
               const cfg = PRIORITY_CONFIG[priority];
               const Icon = cfg.icon;
               return (
-                <div key={priority} style={{ display: 'flex', flexDirection: 'column', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', minHeight: 'calc(100vh - 200px)' }}>
+                <div key={priority} style={{ display: 'flex', flexDirection: 'column', background: 'var(--color-surface)', borderRadius: 8, border: '1px solid var(--color-border)', minHeight: 'calc(100vh - 200px)' }}>
                   <div style={{ padding: '14px 16px', background: cfg.bg, borderBottom: `2px solid ${cfg.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '8px 8px 0 0' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <Icon size={16} color={cfg.color} />
@@ -624,13 +648,13 @@ function TrackingView({
         </select>
 
         {/* Status quick-filter */}
-        <div style={{ display: 'flex', background: '#f1f5f9', padding: 2, borderRadius: 6, gap: 1, marginLeft: 'auto' }}>
+        <div style={{ display: 'flex', background: 'var(--color-surface-hover)', padding: 2, borderRadius: 6, gap: 1, marginLeft: 'auto' }}>
           {(['all', 'unsent', 'sent'] as const).map(s => (
             <button key={s} onClick={() => setFilterStatus(s)} style={{
               padding: '4px 10px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
               borderRadius: 4, transition: 'all 0.1s',
-              background: filterStatus === s ? '#fff' : 'transparent',
-              color: filterStatus === s ? '#0f172a' : '#64748b',
+              background: filterStatus === s ? 'var(--color-surface-elevated)' : 'transparent',
+              color: filterStatus === s ? 'var(--color-text)' : 'var(--color-text-secondary)',
               boxShadow: filterStatus === s ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
             }}>
               {s === 'all' ? 'Tất cả' : s === 'unsent' ? 'Chưa nộp KH' : 'Đã nộp KH'}
@@ -844,7 +868,7 @@ function TaskCard({
       style={{
         display: 'flex', alignItems: 'center', gap: 14,
         padding: '12px 14px',
-        background: hovered ? priorityCfg.bg : '#ffffff',
+        background: hovered ? priorityCfg.bg : 'var(--color-surface-elevated)',
         border: `1px solid ${hovered ? priorityCfg.border : 'var(--color-border)'}`,
         borderLeft: `3px solid ${leftBorderColor}`,
         borderRadius: 'var(--border-radius-erp)',
@@ -956,7 +980,7 @@ function TaskKanbanCard({
       style={{
         display: 'flex', flexDirection: 'column',
         padding: '12px 14px',
-        background: hovered ? priorityCfg.bg : '#ffffff',
+        background: hovered ? priorityCfg.bg : 'var(--color-surface-elevated)',
         border: `1px solid ${hovered ? priorityCfg.border : 'var(--color-border)'}`,
         borderLeft: `4px solid ${leftBorderColor}`,
         borderRadius: 8,
@@ -1069,8 +1093,8 @@ function CompletedSection({ tasks }: { tasks: Task[] }) {
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: '10px 14px',
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
                 borderLeft: '3px solid #86efac',
                 borderRadius: 'var(--border-radius-erp)',
                 opacity: 0.75,
