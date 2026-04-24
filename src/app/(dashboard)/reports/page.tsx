@@ -293,6 +293,15 @@ export default function ReportsPage() {
     return items.map(s => s.name);
   }, [showroomItems, isRestrictedRole, allowedShowroomName, effectiveRole, profile]);
 
+  // brands passed to tabs — filtered by both role restriction + user filter
+  const tableBrands = useMemo(() => {
+    let items = brandRestriction.length > 0
+      ? brands.filter(b => brandRestriction.includes(b.name))
+      : brands;
+    if (filters.brand) items = items.filter(b => b.name === filters.brand);
+    return items;
+  }, [brands, brandRestriction, filters.brand]);
+
   // showroomItems passed to tabs — filtered by both role + user filter
   const tableShowroomItems = useMemo(() => {
     let items = showroomItems;
@@ -489,7 +498,7 @@ export default function ReportsPage() {
               <BudgetSummaryTab
                 plansByMonth={plansByMonth}
                 actualsByMonth={actualsByMonth}
-                brands={brands}
+                brands={tableBrands}
                 showroomItems={tableShowroomItems}
                 showroomPayloadsByMonth={showroomPayloadsByMonth}
               />
@@ -505,7 +514,7 @@ export default function ReportsPage() {
                 cmpMonths={cmpMonths}
                 compareLabel={compareLabel}
                 showroomItems={tableShowroomItems}
-                brands={brands}
+                brands={tableBrands}
                 showroomMergedData={showroomMergedData}
               />
             )}
