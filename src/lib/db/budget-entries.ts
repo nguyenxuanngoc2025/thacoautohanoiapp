@@ -185,91 +185,73 @@ export async function fetchBudgetEntriesByShowroomIds(
 }
 
 export async function fetchViewBudgetByShowroom(
-  unitId: string,
+  unitId: string | null,
   year: number
 ): Promise<ViewBudgetByShowroom[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from('v_budget_by_showroom')
-    .select('*')
-    .eq('unit_id', unitId)
-    .eq('year', year);
-
+  let query = supabase.from('v_budget_by_showroom').select('*').eq('year', year);
+  if (unitId) query = query.eq('unit_id', unitId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as ViewBudgetByShowroom[];
 }
 
 export async function fetchViewKpiByShowroom(
-  unitId: string,
+  unitId: string | null,
   year: number
 ): Promise<ViewKpiByShowroom[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from('v_kpi_by_showroom_monthly')
-    .select('*')
-    .eq('unit_id', unitId)
-    .eq('year', year);
-
+  let query = supabase.from('v_kpi_by_showroom_monthly').select('*').eq('year', year);
+  if (unitId) query = query.eq('unit_id', unitId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as ViewKpiByShowroom[];
 }
 
 export async function fetchViewBudgetByChannel(
-  unitId: string,
+  unitId: string | null,
   year: number
 ): Promise<ViewBudgetByChannel[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from('v_budget_by_channel')
-    .select('*')
-    .eq('unit_id', unitId)
-    .eq('year', year);
-
+  let query = supabase.from('v_budget_by_channel').select('*').eq('year', year);
+  if (unitId) query = query.eq('unit_id', unitId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as ViewBudgetByChannel[];
 }
 
 export async function fetchViewBudgetByBrand(
-  unitId: string,
+  unitId: string | null,
   year: number
 ): Promise<ViewBudgetByBrand[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from('v_budget_by_brand')
-    .select('*')
-    .eq('unit_id', unitId)
-    .eq('year', year);
-
+  let query = supabase.from('v_budget_by_brand').select('*').eq('year', year);
+  if (unitId) query = query.eq('unit_id', unitId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as ViewBudgetByBrand[];
 }
 
 export async function fetchViewBudgetByShowroomBrand(
-  unitId: string,
+  unitId: string | null,
   year: number
 ): Promise<ViewBudgetByShowroomBrand[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from('v_budget_by_showroom_brand')
-    .select('*')
-    .eq('unit_id', unitId)
-    .eq('year', year);
-
+  let query = supabase.from('v_budget_by_showroom_brand').select('*').eq('year', year);
+  if (unitId) query = query.eq('unit_id', unitId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as ViewBudgetByShowroomBrand[];
 }
 
 export async function fetchViewBudgetMaster(
-  unitId: string,
+  unitId: string | null,
   year: number
 ): Promise<ViewBudgetMaster[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from('v_budget_master')
-    .select('*')
-    .eq('unit_id', unitId)
-    .eq('year', year);
-
+  let query = supabase.from('v_budget_master').select('*').eq('year', year);
+  if (unitId) query = query.eq('unit_id', unitId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as ViewBudgetMaster[];
 }

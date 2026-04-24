@@ -84,48 +84,48 @@ export const invalidateEventsByShowroom = (showroomCode: string, unitId?: string
 
 export function useViewBudgetByShowroom(unitId: string | null, year: number) {
   return useSWR<ViewBudgetByShowroom[]>(
-    unitId ? ['v_budget_by_showroom', unitId, year] : null,
-    () => fetchViewBudgetByShowroom(unitId!, year),
+    ['v_budget_by_showroom', unitId ?? 'all', year],
+    () => fetchViewBudgetByShowroom(unitId, year),
     BASE_OPTS
   );
 }
 
 export function useViewKpiByShowroom(unitId: string | null, year: number) {
   return useSWR<ViewKpiByShowroom[]>(
-    unitId ? ['v_kpi_by_showroom_monthly', unitId, year] : null,
-    () => fetchViewKpiByShowroom(unitId!, year),
+    ['v_kpi_by_showroom_monthly', unitId ?? 'all', year],
+    () => fetchViewKpiByShowroom(unitId, year),
     BASE_OPTS
   );
 }
 
 export function useViewBudgetByChannel(unitId: string | null, year: number) {
   return useSWR<ViewBudgetByChannel[]>(
-    unitId ? ['v_budget_by_channel', unitId, year] : null,
-    () => fetchViewBudgetByChannel(unitId!, year),
+    ['v_budget_by_channel', unitId ?? 'all', year],
+    () => fetchViewBudgetByChannel(unitId, year),
     BASE_OPTS
   );
 }
 
 export function useViewBudgetByBrand(unitId: string | null, year: number) {
   return useSWR<ViewBudgetByBrand[]>(
-    unitId ? ['v_budget_by_brand', unitId, year] : null,
-    () => fetchViewBudgetByBrand(unitId!, year),
+    ['v_budget_by_brand', unitId ?? 'all', year],
+    () => fetchViewBudgetByBrand(unitId, year),
     BASE_OPTS
   );
 }
 
 export function useViewBudgetByShowroomBrand(unitId: string | null, year: number) {
   return useSWR<ViewBudgetByShowroomBrand[]>(
-    unitId ? ['v_budget_by_showroom_brand', unitId, year] : null,
-    () => fetchViewBudgetByShowroomBrand(unitId!, year),
+    ['v_budget_by_showroom_brand', unitId ?? 'all', year],
+    () => fetchViewBudgetByShowroomBrand(unitId, year),
     BASE_OPTS
   );
 }
 
 export function useViewBudgetMaster(unitId: string | null, year: number) {
   return useSWR<ViewBudgetMaster[]>(
-    unitId ? ['v_budget_master', unitId, year] : null,
-    () => fetchViewBudgetMaster(unitId!, year),
+    ['v_budget_master', unitId ?? 'all', year],
+    () => fetchViewBudgetMaster(unitId, year),
     BASE_OPTS
   );
 }

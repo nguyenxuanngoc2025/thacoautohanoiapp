@@ -258,8 +258,7 @@ export function useFilteredBudget({
   const { data: viewByChannel }  = useViewBudgetByChannel(unitId, year);
   const { data: viewMaster }     = useViewBudgetMaster(unitId, year);
 
-  const isLoading = unitId !== null &&
-    (viewByShowroom === undefined || viewMaster === undefined);
+  const isLoading = viewByShowroom === undefined || viewMaster === undefined;
 
   // ── filterShowroomCodes ────────────────────────────────────────────────────
   const filterShowroomCodes = useMemo(() => {
