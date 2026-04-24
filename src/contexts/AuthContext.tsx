@@ -115,29 +115,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(p);
   }, [authUser, fetchProfile]);
 
-  // Timeout safety net: nếu auth không xong trong 5s thì force isLoading = false
+  // Timeout safety net: force isLoading = false sau 3s
   useEffect(() => {
-    const t = setTimeout(() => setIsLoading(false), 5000);
+    const t = setTimeout(() => {
+      console.warn('[AuthContext] TIMEOUT 3s — force isLoading=false');
+      setIsLoading(false);
+    }, 3000);
     return () => clearTimeout(t);
   }, []);
 
   // Khởi tạo session + lắng nghe thay đổi auth
-  //
-  // QUAN TRỌNG: setIsLoading(false) được gọi NGAY SAU khi biết session state
-  // (có user hay không). KHÔNG chờ fetchProfile vì query thaco_users + joins
-  // có thể chậm/treo trên production → gây stuck "Đang khởi tạo..."
-  // Profile load ngầm ở background, các component dùng profile sẽ render
-  // skeleton hoặc giá trị mặc định trong khi chờ.
   useEffect(() => {
     let mounted = true;
+    let resolved = false;
 
-    const handleSession = (s: Session | null) => {
+    const handleSession = (source: string, s: Session | null) => {
       if (!mounted) return;
+      console.log(`[AuthContext] handleSession from ${source}, user=${s?.user?.email ?? 'null'}`);
+      if (!resolved) {
+        resolved = true;
+      }
       setSession(s);
       setAuthUser(s?.user ?? null);
-      // ✅ Unblock UI ngay lập tức
       setIsLoading(false);
-      // Fetch profile ngầm, không block
       if (s?.user) {
         fetchProfile(s.user.id).then(p => {
           if (mounted) setProfile(p);
@@ -149,15 +149,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
+    console.log('[AuthContext] init — calling getSession()');
     supabase.auth.getSession().then(({ data: { session: s } }) => {
-      handleSession(s);
+      console.log('[AuthContext] getSession() resolved');
+      handleSession('getSession', s);
     }).catch(err => {
-      console.warn('[AuthContext] getSession failed:', err);
+      console.warn('[AuthContext] getSession() FAILED:', err);
       if (mounted) setIsLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
-      handleSession(s);
+    console.log('[AuthContext] registering onAuthStateChange');
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      console.log(`[AuthContext] onAuthStateChange event=${event}`);
+      handleSession('onAuthStateChange:' + event, s);
     });
 
     return () => {
