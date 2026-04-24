@@ -87,6 +87,16 @@ export function UnitProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isSuperAdmin, profile?.unit_id, authLoading]);
 
+  // Khi allUnits load xong và chưa có saved preference → auto-select unit đầu tiên
+  useEffect(() => {
+    if (isSuperAdmin && allUnits.length > 0) {
+      const saved = localStorage.getItem('thaco_active_unit_id');
+      if (!saved && activeUnitId === 'all') {
+        setActiveUnitIdState(allUnits[0].id);
+      }
+    }
+  }, [isSuperAdmin, allUnits, activeUnitId]);
+
   const setActiveUnitId = (id: ActiveUnitId) => {
     if (!canSwitchUnits) return; // Guard: chỉ super_admin được đổi
     setActiveUnitIdState(id);
