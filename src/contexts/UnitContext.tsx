@@ -71,9 +71,14 @@ export function UnitProvider({ children }: { children: React.ReactNode }) {
 
   const canSwitchUnits = isSuperAdmin;
 
-  // activeUnitId: super_admin mặc định 'all', role khác khoá vào unit_id
-  const defaultUnitId: ActiveUnitId = isSuperAdmin ? 'all' : (profile?.unit_id ?? 'all');
-  const [activeUnitId, setActiveUnitIdState] = useState<ActiveUnitId>(defaultUnitId);
+  // Đọc localStorage ngay khi khởi tạo để tránh double-fetch (all → unit)
+  const [activeUnitId, setActiveUnitIdState] = useState<ActiveUnitId>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('thaco_active_unit_id');
+      if (saved) return saved;
+    }
+    return 'all';
+  });
 
   // Khi auth thay đổi (đăng nhập/đăng xuất), khôi phục từ localStorage hoặc reset về default
   useEffect(() => {
@@ -82,6 +87,8 @@ export function UnitProvider({ children }: { children: React.ReactNode }) {
         const saved = localStorage.getItem('thaco_active_unit_id');
         setActiveUnitIdState(saved || 'all');
       } else {
+        // Non-super_admin: khoá vào unit_id, xóa saved nếu có
+        localStorage.removeItem('thaco_active_unit_id');
         setActiveUnitIdState(profile?.unit_id ?? 'all');
       }
     }
