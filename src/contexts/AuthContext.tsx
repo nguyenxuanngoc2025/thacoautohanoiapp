@@ -115,41 +115,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(p);
   }, [authUser, fetchProfile]);
 
-  // Timeout safety net: nếu auth không xong trong 8s thì force isLoading = false
-  // Nguyên nhân: Supabase token refresh có thể treo khi JWT hết hạn + mạng chậm
+  // Timeout safety net: nếu auth không xong trong 5s thì force isLoading = false
   useEffect(() => {
-    const t = setTimeout(() => setIsLoading(false), 8000);
+    const t = setTimeout(() => setIsLoading(false), 5000);
     return () => clearTimeout(t);
   }, []);
 
   // Khởi tạo session + lắng nghe thay đổi auth
+  //
+  // QUAN TRỌNG: setIsLoading(false) được gọi NGAY SAU khi biết session state
+  // (có user hay không). KHÔNG chờ fetchProfile vì query thaco_users + joins
+  // có thể chậm/treo trên production → gây stuck "Đang khởi tạo..."
+  // Profile load ngầm ở background, các component dùng profile sẽ render
+  // skeleton hoặc giá trị mặc định trong khi chờ.
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
+    const handleSession = (s: Session | null) => {
       if (!mounted) return;
       setSession(s);
       setAuthUser(s?.user ?? null);
+      // ✅ Unblock UI ngay lập tức
+      setIsLoading(false);
+      // Fetch profile ngầm, không block
       if (s?.user) {
-        const p = await fetchProfile(s.user.id);
-        if (!mounted) return;
-        setProfile(p);
-      }
-      if (mounted) setIsLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
-      if (!mounted) return;
-      setSession(s);
-      setAuthUser(s?.user ?? null);
-      if (s?.user) {
-        const p = await fetchProfile(s.user.id);
-        if (!mounted) return;
-        setProfile(p);
+        fetchProfile(s.user.id).then(p => {
+          if (mounted) setProfile(p);
+        }).catch(err => {
+          console.warn('[AuthContext] fetchProfile failed:', err);
+        });
       } else {
         setProfile(null);
       }
+    };
+
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      handleSession(s);
+    }).catch(err => {
+      console.warn('[AuthContext] getSession failed:', err);
       if (mounted) setIsLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      handleSession(s);
     });
 
     return () => {
