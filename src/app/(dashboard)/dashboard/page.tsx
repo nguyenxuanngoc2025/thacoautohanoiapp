@@ -372,7 +372,25 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventsData, isRestrictedRole, allowedShowroomName, filterShowroom, filterBrand, filterModel]);
 
-  if (!mounted) return null;
+  if (!mounted) return (
+    <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Skeleton KPI cards */}
+      <div style={{ display: 'flex', gap: 12 }}>
+        {[1,2,3,4].map(i => (
+          <div key={i} style={{ flex: 1, height: 80, borderRadius: 10, background: 'var(--color-border)', opacity: 0.5, animation: 'pulse 1.5s ease-in-out infinite' }} />
+        ))}
+      </div>
+      {/* Skeleton chart */}
+      <div style={{ height: 200, borderRadius: 10, background: 'var(--color-border)', opacity: 0.4, animation: 'pulse 1.5s ease-in-out infinite' }} />
+      {/* Skeleton table */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {[1,2,3,4,5].map(i => (
+          <div key={i} style={{ height: 36, borderRadius: 6, background: 'var(--color-border)', opacity: 0.3 + i * 0.05, animation: 'pulse 1.5s ease-in-out infinite' }} />
+        ))}
+      </div>
+      <style>{`@keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:0.7} }`}</style>
+    </div>
+  );
 
   const deltaColor = (val: number, plan: number, higherIsBad = false) => {
     if (plan === 0) return 'var(--color-text-muted)';
