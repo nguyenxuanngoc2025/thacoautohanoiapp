@@ -192,7 +192,11 @@ export async function fetchViewBudgetByShowroom(
   let query = supabase.from('v_budget_by_showroom').select('*').eq('year', year);
   if (unitId) query = query.eq('unit_id', unitId);
   const { data, error } = await query;
-  if (error) throw error;
+  if (error) {
+    console.error('[fetchViewBudgetByShowroom] error:', error.message, error.code, { unitId, year });
+    throw error;
+  }
+  console.log('[fetchViewBudgetByShowroom] rows:', data?.length, { unitId, year });
   return (data ?? []) as ViewBudgetByShowroom[];
 }
 
