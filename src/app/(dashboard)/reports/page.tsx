@@ -293,14 +293,19 @@ export default function ReportsPage() {
     return items.map(s => s.name);
   }, [showroomItems, isRestrictedRole, allowedShowroomName, effectiveRole, profile]);
 
-  // brands passed to tabs — filtered by both role restriction + user filter
+  // brands passed to tabs — filtered by role restriction + user brand filter + showroom filter
   const tableBrands = useMemo(() => {
     let items = brandRestriction.length > 0
       ? brands.filter(b => brandRestriction.includes(b.name))
       : brands;
     if (filters.brand) items = items.filter(b => b.name === filters.brand);
+    // Khi filter theo showroom, chỉ show brands thuộc showroom đó
+    if (filters.showroom) {
+      const sr = showroomItems.find(s => s.name === filters.showroom);
+      if (sr?.brands?.length) items = items.filter(b => sr.brands.includes(b.name));
+    }
     return items;
-  }, [brands, brandRestriction, filters.brand]);
+  }, [brands, brandRestriction, filters.brand, filters.showroom, showroomItems]);
 
   // showroomItems passed to tabs — filtered by both role + user filter
   const tableShowroomItems = useMemo(() => {
