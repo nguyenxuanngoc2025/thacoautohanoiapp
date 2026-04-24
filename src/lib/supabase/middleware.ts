@@ -42,21 +42,8 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Kiểm tra is_active: user bị deactivate → redirect về login
-  if (user && !isAuthPage && !isPublicPage) {
-    const { data: profile } = await supabase
-      .from('thaco_users')
-      .select('is_active')
-      .eq('id', user.id)
-      .single();
-    if (profile && profile.is_active === false) {
-      await supabase.auth.signOut();
-      const url = request.nextUrl.clone();
-      url.pathname = '/login';
-      url.searchParams.set('error', 'account_disabled');
-      return NextResponse.redirect(url);
-    }
-  }
+  // is_active check đã được xử lý ở client-side (AuthContext + profile fetch)
+  // Không query DB ở đây để tránh thêm latency trên mỗi request
 
   return supabaseResponse;
 }
