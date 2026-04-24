@@ -161,6 +161,10 @@ export default function ReportsPage() {
   // ── Role-based Scope ──────────────────────────────────────────────────────
   const isRestrictedRole = ['mkt_showroom', 'gd_showroom'].includes(effectiveRole as string);
   const allowedShowroomName = isRestrictedRole ? profile?.showroom?.name : null;
+  // mkt_brand: luôn lọc theo brands được giao (ngay cả khi chưa chọn filter)
+  const brandRestriction: string[] = (effectiveRole === 'mkt_brand' && profile?.brands?.length)
+    ? profile.brands
+    : [];
 
   const [compareMode, setCompareMode] = useState<'none' | 'prev' | 'prev_year'>('none');
 
@@ -189,7 +193,7 @@ export default function ReportsPage() {
   const { data: prevYearMasterRows }    = useViewBudgetMaster(unitIdForViews, filters.year - 1);
 
   // ── Filter resolution ─────────────────────────────────────────────────────
-  const hasAnyFilter = !!(filters.brand || filters.showroom || filters.channel);
+  const hasAnyFilter = !!(filters.brand || filters.showroom || filters.channel) || brandRestriction.length > 0;
 
   const filterShowroomId = useMemo(() => {
     if (!filters.showroom) return null;
@@ -207,20 +211,23 @@ export default function ReportsPage() {
     return viewMasterRows.filter(r => {
       if (filterShowroomId && r.showroom_id !== filterShowroomId) return false;
       if (filters.brand && r.brand_name !== filters.brand) return false;
+      // mkt_brand: lọc theo brand restriction nếu chưa chọn brand cụ thể
+      if (brandRestriction.length > 0 && !filters.brand && !brandRestriction.includes(r.brand_name)) return false;
       if (filterChannelCode && r.channel_code !== filterChannelCode) return false;
       return true;
     });
-  }, [viewMasterRows, hasAnyFilter, filterShowroomId, filters.brand, filterChannelCode]);
+  }, [viewMasterRows, hasAnyFilter, filterShowroomId, filters.brand, filterChannelCode, brandRestriction]);
 
   const filteredPrevYearMasterRows = useMemo<ViewBudgetMaster[] | null>(() => {
     if (!hasAnyFilter || !prevYearMasterRows) return null;
     return prevYearMasterRows.filter(r => {
       if (filterShowroomId && r.showroom_id !== filterShowroomId) return false;
       if (filters.brand && r.brand_name !== filters.brand) return false;
+      if (brandRestriction.length > 0 && !filters.brand && !brandRestriction.includes(r.brand_name)) return false;
       if (filterChannelCode && r.channel_code !== filterChannelCode) return false;
       return true;
     });
-  }, [prevYearMasterRows, hasAnyFilter, filterShowroomId, filters.brand, filterChannelCode]);
+  }, [prevYearMasterRows, hasAnyFilter, filterShowroomId, filters.brand, filterChannelCode, brandRestriction]);
 
   // ── Build MonthlyPayloads — ưu tiên master rows (kèm model data) ─────────
   // QUAN TRỌNG: CHỈ dùng channel keys + model keys.
@@ -360,7 +367,12 @@ export default function ReportsPage() {
     return `${filters.year - 1}`;
   }, [compareMode, filters]);
 
-  const brandNames = useMemo(() => brands.map(b => b.name), [brands]);
+  const brandNames = useMemo(
+    () => brandRestriction.length > 0
+      ? brands.filter(b => brandRestriction.includes(b.name)).map(b => b.name)
+      : brands.map(b => b.name),
+    [brands, brandRestriction]
+  );
 
   const channelOptions = useMemo(
     () => channels.filter(c => !c.isAggregate).map(c => ({ value: c.name, label: c.name })),

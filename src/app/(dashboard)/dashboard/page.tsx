@@ -109,6 +109,15 @@ export default function DashboardReuiPage() {
 
   const isCompanyLevel = visibleShowrooms.length > 1;
 
+  // mkt_brand: auto-restrict brand filter — luôn lọc theo brands được giao
+  const brandRestriction: string[] = (effectiveRole === 'mkt_brand' && profile?.brands?.length)
+    ? profile.brands
+    : [];
+  // Effective brand filter: nếu user đã chọn thủ công thì dùng đó, ngược lại dùng brandRestriction
+  const effectiveFilterBrand = brandRestriction.length > 0
+    ? (filterBrand.length > 0 ? filterBrand : brandRestriction)
+    : filterBrand;
+
   const unitIdForViews = activeUnitId === 'all' ? null : activeUnitId;
 
   // ── Events (chỉ dùng cho upcoming timeline) ───────────────────────────────
@@ -130,7 +139,7 @@ export default function DashboardReuiPage() {
     barChartData, totals, planKpis, sparkData, isLoading,
   } = useFilteredBudget({
     unitId: unitIdForViews, year, monthsInView, activeMonth: month,
-    filterShowroom, filterBrand, filterChannel,
+    filterShowroom, filterBrand: effectiveFilterBrand, filterChannel,
   });
 
   const { totalPlan, totalActual, totalKhqt, totalGdtd, totalKhd, cpl, budgetPct } = totals;
