@@ -115,6 +115,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(p);
   }, [authUser, fetchProfile]);
 
+  // Timeout safety net: nếu auth không xong trong 8s thì force isLoading = false
+  // Nguyên nhân: Supabase token refresh có thể treo khi JWT hết hạn + mạng chậm
+  useEffect(() => {
+    const t = setTimeout(() => setIsLoading(false), 8000);
+    return () => clearTimeout(t);
+  }, []);
+
   // Khởi tạo session + lắng nghe thay đổi auth
   useEffect(() => {
     let mounted = true;
