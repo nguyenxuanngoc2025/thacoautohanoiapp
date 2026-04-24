@@ -94,19 +94,16 @@ export function UnitProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isSuperAdmin, profile?.unit_id, authLoading]);
 
-  // Khi allUnits load xong và chưa có saved preference → auto-select unit của profile
+  // Khi profile load xong → set default unit = profile.unit_id (nếu chưa có saved preference)
+  // Chạy SAU khi profile available để tránh race condition với allUnits[0]
   useEffect(() => {
-    if (isSuperAdmin && allUnits.length > 0) {
-      const saved = localStorage.getItem('thaco_active_unit_id');
-      if (!saved && activeUnitId === 'all') {
-        // Ưu tiên unit của profile (unit_id), fallback unit đầu tiên
-        const defaultUnit = profile?.unit_id
-          ? allUnits.find(u => u.id === profile.unit_id) ?? allUnits[0]
-          : allUnits[0];
-        setActiveUnitIdState(defaultUnit.id);
-      }
+    if (!isSuperAdmin || !profile?.unit_id) return;
+    const saved = localStorage.getItem('thaco_active_unit_id');
+    if (!saved) {
+      localStorage.setItem('thaco_active_unit_id', profile.unit_id);
+      setActiveUnitIdState(profile.unit_id);
     }
-  }, [isSuperAdmin, allUnits, activeUnitId, profile?.unit_id]);
+  }, [isSuperAdmin, profile?.unit_id]);
 
   const setActiveUnitId = (id: ActiveUnitId) => {
     if (!canSwitchUnits) return; // Guard: chỉ super_admin được đổi

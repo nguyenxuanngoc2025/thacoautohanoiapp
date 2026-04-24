@@ -117,24 +117,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Timeout safety net: force isLoading = false sau 3s
   useEffect(() => {
-    const t = setTimeout(() => {
-      console.warn('[AuthContext] TIMEOUT 3s — force isLoading=false');
-      setIsLoading(false);
-    }, 3000);
+    const t = setTimeout(() => setIsLoading(false), 3000);
     return () => clearTimeout(t);
   }, []);
 
   // Khởi tạo session + lắng nghe thay đổi auth
   useEffect(() => {
     let mounted = true;
-    let resolved = false;
 
-    const handleSession = (source: string, s: Session | null) => {
+    const handleSession = (s: Session | null) => {
       if (!mounted) return;
-      console.log(`[AuthContext] handleSession from ${source}, user=${s?.user?.email ?? 'null'}`);
-      if (!resolved) {
-        resolved = true;
-      }
       setSession(s);
       setAuthUser(s?.user ?? null);
       setIsLoading(false);
@@ -149,19 +141,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    console.log('[AuthContext] init — calling getSession()');
     supabase.auth.getSession().then(({ data: { session: s } }) => {
-      console.log('[AuthContext] getSession() resolved');
-      handleSession('getSession', s);
+      handleSession(s);
     }).catch(err => {
-      console.warn('[AuthContext] getSession() FAILED:', err);
+      console.warn('[AuthContext] getSession failed:', err);
       if (mounted) setIsLoading(false);
     });
 
-    console.log('[AuthContext] registering onAuthStateChange');
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
-      console.log(`[AuthContext] onAuthStateChange event=${event}`);
-      handleSession('onAuthStateChange:' + event, s);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      handleSession(s);
     });
 
     return () => {
