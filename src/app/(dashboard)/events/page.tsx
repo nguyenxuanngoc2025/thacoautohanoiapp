@@ -343,7 +343,7 @@ export default function EventsPage() {
         }
       />
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
         {/* Row 1: KPI Cards */}
         <div style={{ display: 'flex', gap: 12 }}>
@@ -478,7 +478,7 @@ export default function EventsPage() {
                 <button onClick={() => setTableMode('actual')} style={{ padding: '4px 12px', fontSize: 11, fontWeight: 600, border: 'none', borderRadius: 4, cursor: 'pointer', background: tableMode === 'actual' ? '#059669' : 'transparent', color: tableMode === 'actual' ? '#fff' : 'var(--color-text-secondary)', transition: 'all 0.15s' }}>Thực hiện</button>
               </div>
             </div>
-            <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
               <table className="data-table">
                 <thead>
                   <tr>
