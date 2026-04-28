@@ -39,7 +39,15 @@ const CATEGORY_STYLE: Record<ArticleCategory, { bg: string; text: string }> = {
   other:        { bg: '#F9FAFB', text: '#6B7280' },
 };
 
-const COMPETITOR_BRANDS = ['Toyota', 'Hyundai', 'Honda', 'Mitsubishi', 'VinFast', 'MG', 'Ford', 'Suzuki'];
+// Đối thủ cạnh tranh theo từng thương hiệu THACO (từ dữ liệu thực tế)
+const BRAND_COMPETITOR_MAP: Record<string, string[]> = {
+  'KIA':        ['Hyundai', 'Toyota', 'Honda', 'Mitsubishi', 'Ford', 'Volkswagen'],
+  'Mazda':      ['Toyota', 'Honda', 'Ford', 'Mitsubishi', 'Hyundai'],
+  'STELLANTIS': ['Toyota', 'Honda', 'Hyundai', 'Ford', 'Mitsubishi'],
+  'BMW':        ['Mercedes', 'Lexus', 'Audi', 'Volvo'],
+  'MINI':       ['Toyota', 'Honda', 'Hyundai'],
+  'TẢI BUS':   ['Suzuki', 'Hyundai', 'Isuzu', 'Hino', 'TERACO', 'Do Thanh', 'Foton', 'Shineray', 'TMT', 'Vinfast', 'SAMCO', 'Kim Long'],
+};
 
 type TabId = 'published' | 'review';
 
@@ -214,9 +222,13 @@ export default function MarketIntelPage() {
     [articles, todayMidnight]
   );
 
-  // Dòng xe của brand THACO được chọn
-  const modelsOfSelected = filterBrand
-    ? (brands.find(b => b.name === filterBrand)?.models ?? [])
+  // Dòng xe + đối thủ của brand THACO được chọn
+  const selectedBrandObj = filterBrand ? brands.find(b => b.name === filterBrand) : null;
+  const modelsOfSelected = selectedBrandObj?.models ?? [];
+  // Chỉ hiện competitors khi đang chọn 1 THACO brand (không phải competitor brand)
+  const isThacoBrand = !!selectedBrandObj;
+  const competitorsOfSelected = isThacoBrand
+    ? (BRAND_COMPETITOR_MAP[filterBrand] ?? [])
     : [];
 
   // ── Chart data ─────────────────────────────────────────────────────────────
@@ -355,16 +367,25 @@ export default function MarketIntelPage() {
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <BrandChip label="Tất cả" active={filterBrand === ''} onClick={() => { setFilterBrand(''); setFilterModel(''); }} />
-            {brands.filter(b => !['TẢI BUS', 'BMW MTR'].includes(b.name)).map(b => (
+            {brands.filter(b => !b.name.startsWith('DVPT') && b.name !== 'BMW MTR').map(b => (
               <BrandChip key={b.name} label={b.name} active={filterBrand === b.name} color={b.color} onClick={() => selectBrand(b.name)} />
-            ))}
-            <div style={{ width: 1, height: 20, background: '#E5E7EB', margin: '0 4px' }} />
-            <span style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.8 }}>Đối thủ</span>
-            {COMPETITOR_BRANDS.map(name => (
-              <BrandChip key={name} label={name} active={filterBrand === name} onClick={() => selectBrand(name)} />
             ))}
           </div>
         </div>
+
+        {/* ── Competitor filter — chỉ hiện khi chọn 1 brand THACO ─────────── */}
+        {competitorsOfSelected.length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 5 }}>
+              Đối thủ cạnh tranh — {filterBrand}
+            </div>
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              {competitorsOfSelected.map(name => (
+                <BrandChip key={name} label={name} active={filterBrand === name} onClick={() => selectBrand(name)} />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── Model filter (chỉ hiện khi chọn THACO brand) ─────────────────── */}
         {modelsOfSelected.length > 0 && (

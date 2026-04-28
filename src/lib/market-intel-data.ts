@@ -67,7 +67,7 @@ export function useArticles(opts: {
   });
 
   return {
-    articles:   data ?? [],
+    articles:   Array.isArray(data) ? data : [],
     isLoading,
     isError:    !!error,
     revalidate,
@@ -81,9 +81,10 @@ export function useCrawlJobs() {
     { revalidateOnFocus: false }
   );
 
+  const jobs = Array.isArray(data) ? data : [];
   return {
-    jobs:       data ?? [],
-    latestJob:  data?.[0] ?? null,
+    jobs,
+    latestJob:  jobs[0] ?? null,
     isLoading,
     isError:    !!error,
     revalidate,

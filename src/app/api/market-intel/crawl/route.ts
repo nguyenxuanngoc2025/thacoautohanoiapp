@@ -41,7 +41,7 @@ export async function POST(req: Request) {
   try {
     // Lấy danh sách nguồn crawl (unique news_url)
     const { data: competitors, error: compErr } = await supabase
-      .from('thaco_competitors')
+      .from('thaco_competitor_mapping')
       .select('news_url, comp_brand, thaco_brand, thaco_model')
       .eq('is_active', true)
       .not('news_url', 'is', null);

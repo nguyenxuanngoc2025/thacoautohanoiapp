@@ -3,10 +3,18 @@
 // Usage: node scripts/seed-competitors.mjs
 
 import { createClient } from '@supabase/supabase-js';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const env = readFileSync(resolve(__dirname, '..', '.env.local'), 'utf8')
+  .split('\n').filter(l => l && !l.startsWith('#'))
+  .reduce((acc, l) => { const i = l.indexOf('='); if (i > 0) acc[l.slice(0, i).trim()] = l.slice(i + 1).trim(); return acc; }, {});
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  env.NEXT_PUBLIC_SUPABASE_URL,
+  env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 const COMPETITORS = [
@@ -247,10 +255,10 @@ const COMPETITORS = [
 async function seed() {
   console.log(`Seeding ${COMPETITORS.length} competitor records...`);
   // Xóa data cũ trước
-  const { error: delErr } = await supabase.from('thaco_competitors').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  const { error: delErr } = await supabase.from('thaco_competitor_mapping').delete().neq('id', '00000000-0000-0000-0000-000000000000');
   if (delErr) console.warn('Delete warning:', delErr.message);
 
-  const { data, error } = await supabase.from('thaco_competitors').insert(COMPETITORS);
+  const { data, error } = await supabase.from('thaco_competitor_mapping').insert(COMPETITORS);
   if (error) {
     console.error('Seed failed:', error.message);
     process.exit(1);
