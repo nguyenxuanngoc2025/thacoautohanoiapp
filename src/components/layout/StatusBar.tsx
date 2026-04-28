@@ -8,9 +8,10 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Building2, ChevronUp, Globe, CheckCircle2, Bell, ShieldCheck, Eye, ChevronDown } from 'lucide-react';
+import { Building2, ChevronUp, Globe, CheckCircle2, Bell, ShieldCheck, Eye, ChevronDown, Store } from 'lucide-react';
 import { useUnit } from '@/contexts/UnitContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useShowrooms } from '@/contexts/ShowroomsContext';
 import NotificationPanel from './NotificationPanel';
 import { generateNotifications, invalidateNotifCache } from '@/lib/notifications-engine';
 import {
@@ -134,6 +135,15 @@ function RoleSwitcherPopup({
 export default function StatusBar() {
   const { isSuperAdmin, profile, previewRole, setPreviewRole, effectiveRole: ctxEffectiveRole } = useAuth();
   const { activeUnitId, activeUnit, availableUnits, canSwitchUnits, setActiveUnitId } = useUnit();
+  const { allShowrooms } = useShowrooms();
+
+  // Showroom names cho mkt_showroom / gd_showroom
+  const assignedShowroomNames = React.useMemo(() => {
+    const codes = profile?.showroom_ids ?? [];
+    if (codes.length === 0) return null;
+    const names = allShowrooms.filter(s => codes.includes(s.code)).map(s => s.name);
+    return names.length > 0 ? names : null;
+  }, [profile?.showroom_ids, allShowrooms]);
 
   const [unitOpen, setUnitOpen] = useState(false);
   const [roleOpen, setRoleOpen] = useState(false);
@@ -260,6 +270,17 @@ export default function StatusBar() {
       </div>
 
       <div className="status-sep" />
+
+      {/* ── Showroom (chỉ hiển thị cho mkt_showroom / gd_showroom) ── */}
+      {assignedShowroomNames && (
+        <>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#4b5563', fontWeight: 500 }}>
+            <Store size={11} style={{ color: '#6b7280' }} />
+            {assignedShowroomNames.join(', ')}
+          </span>
+          <div className="status-sep" />
+        </>
+      )}
 
       {/* ── Unit Switcher ── */}
       <div ref={unitRef} style={{ position: 'relative' }}>

@@ -28,7 +28,8 @@ export async function GET(req: Request) {
 
   if (days > 0) {
     const since = new Date(Date.now() - days * 86400_000).toISOString();
-    query = query.gte('published_at', since);
+    // Dùng crawled_at (ngày ta phát hiện) thay vì published_at (ngày đăng gốc có thể null/cũ)
+    query = query.gte('crawled_at', since);
   }
 
   if (brand) {

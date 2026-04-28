@@ -326,11 +326,24 @@ export function useFilteredBudget({
 
   // ── brandBreakdown ─────────────────────────────────────────────────────────
   const brandBreakdown = useMemo<BrandBreakdownRow[]>(() => {
-    const brList = filterBrand.length === 0
+    let brList = filterBrand.length === 0
       ? brands
       : brands.filter(b => filterBrand.includes(b.name));
 
-    if (filteredRows) return aggregateByBrand(filteredRows, brList, monthsInView);
+    if (filteredRows) {
+      // Khi filter theo showroom, chỉ hiển thị brands được config cho showroom đó
+      if (filterShowroom.length > 0) {
+        const showroomBrands = new Set(
+          showrooms
+            .filter(s => filterShowroom.includes(s.name))
+            .flatMap(s => s.brands ?? [])
+        );
+        if (showroomBrands.size > 0) {
+          brList = brList.filter(b => showroomBrands.has(b.name));
+        }
+      }
+      return aggregateByBrand(filteredRows, brList, monthsInView);
+    }
 
     // Fallback: v_budget_by_brand
     return brList.map(br => {
@@ -345,7 +358,7 @@ export function useFilteredBudget({
       }
       return { name: br.name, plan, actual, khqt, gdtd, khd };
     });
-  }, [filteredRows, viewByBrand, brands, filterBrand, monthsInView]);
+  }, [filteredRows, viewByBrand, brands, filterBrand, filterShowroom, monthsInView]);
 
   // ── channelBreakdown ───────────────────────────────────────────────────────
   const channelBreakdown = useMemo<ChannelBreakdownRow[]>(() => {

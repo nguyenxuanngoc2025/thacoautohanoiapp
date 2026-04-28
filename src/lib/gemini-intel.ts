@@ -196,6 +196,50 @@ export async function classifyRSSItems(items: RSSItem[], domain: string): Promis
   }
 }
 
+// ── Firecrawl (JS-rendered sites) ─────────────────────────────────────────────
+
+const FIRECRAWL_URL = process.env.FIRECRAWL_API_URL ?? '';
+const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY ?? '';
+
+/** Scrape trang JS-rendered bằng Firecrawl self-hosted. Trả về Markdown text hoặc null. */
+export async function fetchPageTextFirecrawl(url: string): Promise<string | null> {
+  if (!FIRECRAWL_URL) return null; // Firecrawl chưa cấu hình
+  try {
+    const endpoint = `${FIRECRAWL_URL.replace(/\/$/, '')}/v1/scrape`;
+    const body: Record<string, unknown> = {
+      url,
+      formats: ['markdown'],
+      onlyMainContent: true,
+      timeout: 20000,
+    };
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (FIRECRAWL_KEY) headers['Authorization'] = `Bearer ${FIRECRAWL_KEY}`;
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(25000),
+    });
+    if (!res.ok) {
+      console.warn(`Firecrawl ${url}: ${res.status}`);
+      return null;
+    }
+    const data = await res.json() as { success?: boolean; data?: { markdown?: string } };
+    const md = data?.data?.markdown ?? '';
+    return md.length > 100 ? md.slice(0, 12000) : null;
+  } catch (err) {
+    console.warn(`Firecrawl error (${url}):`, (err as Error).message);
+    return null;
+  }
+}
+
+export function isFirecrawlAvailable(): boolean {
+  return !!FIRECRAWL_URL;
+}
+
 // ── HTML scraping fallback ─────────────────────────────────────────────────────
 
 function extractText(html: string): string {

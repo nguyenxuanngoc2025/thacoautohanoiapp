@@ -96,16 +96,29 @@ export default function DashboardReuiPage() {
   const [filterChannel, setFilterChannel] = useState<string | null>(null);
 
   // ── Role-based Scope ──────────────────────────────────────────────────────
+  const { accessibleShowroomCodes } = useAuth();
   const isRestrictedRole = ['mkt_showroom', 'gd_showroom'].includes(effectiveRole as string);
-  const allowedShowroomName = isRestrictedRole ? (profile?.showroom?.name ?? null) : null;
+  // Map showroom codes → names (hỗ trợ multi-showroom, không phụ thuộc legacy showroom_id)
+  const allowedShowroomNames = useMemo(() => {
+    if (!isRestrictedRole || accessibleShowroomCodes.length === 0) return null;
+    const names = showrooms
+      .filter(s => accessibleShowroomCodes.includes(s.code?.toUpperCase() ?? ''))
+      .map(s => s.name);
+    return names.length > 0 ? names : null;
+  }, [isRestrictedRole, accessibleShowroomCodes, showrooms]);
+  // legacy compat cho event filter
+  const allowedShowroomName = allowedShowroomNames?.[0] ?? null;
 
-  // mkt_brand: chỉ thấy showroom có brand được giao
+  // Showrooms hiển thị trong filter — lọc theo role
   const visibleShowrooms = useMemo(() => {
+    if (isRestrictedRole && accessibleShowroomCodes.length > 0) {
+      return showrooms.filter(s => accessibleShowroomCodes.includes(s.code?.toUpperCase() ?? ''));
+    }
     if (effectiveRole === 'mkt_brand' && profile?.brands && profile.brands.length > 0) {
       return showrooms.filter(s => s.brands.some(b => profile.brands!.includes(b)));
     }
     return showrooms;
-  }, [effectiveRole, profile, showrooms]);
+  }, [effectiveRole, isRestrictedRole, accessibleShowroomCodes, profile, showrooms]);
 
   const isCompanyLevel = visibleShowrooms.length > 1;
 
@@ -117,6 +130,26 @@ export default function DashboardReuiPage() {
   const effectiveFilterBrand = brandRestriction.length > 0
     ? (filterBrand.length > 0 ? filterBrand : brandRestriction)
     : filterBrand;
+
+  // Brands hiển thị trong dropdown — lọc theo showrooms đang chọn (nếu có)
+  const visibleBrandOptions = useMemo(() => {
+    let result = brandRestriction.length > 0
+      ? brands.filter(b => brandRestriction.includes(b.name))
+      : brands;
+    // Khi đang filter theo 1+ showroom, chỉ show brands thuộc các showroom đó
+    const activeShowrooms = isRestrictedRole && allowedShowroomNames
+      ? allowedShowroomNames
+      : filterShowroom;
+    if (activeShowrooms.length > 0) {
+      const srBrands = new Set(
+        showrooms
+          .filter(s => activeShowrooms.includes(s.name))
+          .flatMap(s => s.brands ?? [])
+      );
+      if (srBrands.size > 0) result = result.filter(b => srBrands.has(b.name));
+    }
+    return result;
+  }, [brands, brandRestriction, filterShowroom, isRestrictedRole, allowedShowroomNames, showrooms]);
 
   const unitIdForViews = activeUnitId === 'all' ? null : activeUnitId;
 
@@ -134,12 +167,17 @@ export default function DashboardReuiPage() {
   }, [viewMode, month]);
 
   // ── Chuẩn hóa filter — 1 hook xử lý tất cả ───────────────────────────────
+  // mkt_showroom/gd_showroom: force-restrict theo showroom được gán (không phụ thuộc dropdown)
+  const effectiveFilterShowroom = isRestrictedRole && allowedShowroomNames
+    ? allowedShowroomNames
+    : filterShowroom;
+
   const {
     showroomBreakdown, brandBreakdown, channelBreakdown,
     barChartData, totals, planKpis, sparkData, isLoading,
   } = useFilteredBudget({
     unitId: unitIdForViews, year, monthsInView, activeMonth: month,
-    filterShowroom, filterBrand: effectiveFilterBrand, filterChannel,
+    filterShowroom: effectiveFilterShowroom, filterBrand: effectiveFilterBrand, filterChannel,
   });
 
   const { totalPlan, totalActual, totalKhqt, totalGdtd, totalKhd, cpl, budgetPct } = totals;
@@ -360,9 +398,9 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
       .filter(e => {
         if (e.inferredStatus === 'completed' || !e._date) return false;
         if (e.daysUntil > 14) return false;
-        if (isRestrictedRole && allowedShowroomName && e.showroom !== allowedShowroomName) return false;
+        if (isRestrictedRole && allowedShowroomNames && !allowedShowroomNames.includes(e.showroom)) return false;
         const evBrands = Array.isArray(e.brands) ? e.brands : [];
-        if (filterShowroom.length > 0 && !filterShowroom.includes(e.showroom)) return false;
+        if (!isRestrictedRole && filterShowroom.length > 0 && !filterShowroom.includes(e.showroom)) return false;
         if (filterBrand.length > 0 && !filterBrand.some(fb => evBrands.includes(fb))) return false;
         if (filterModel.length > 0 && !filterModel.some(fm => evBrands.includes(fm))) return false;
         return true;
@@ -370,7 +408,7 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
       .sort((a, b) => a.daysUntil - b.daysUntil)
       .slice(0, 4);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventsData, isRestrictedRole, allowedShowroomName, filterShowroom, filterBrand, filterModel]);
+  }, [eventsData, isRestrictedRole, allowedShowroomNames, filterShowroom, filterBrand, filterModel]);
 
   if (!mounted) return (
     <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -430,7 +468,7 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
             <FilterDropdown
               isMulti
               value={filterBrand}
-              options={(effectiveRole === 'mkt_brand' && profile?.brands?.length ? brands.filter(b => profile.brands!.includes(b.name)) : brands).map(b => ({ value: b.name, label: b.name }))}
+              options={visibleBrandOptions.map(b => ({ value: b.name, label: b.name }))}
               onChange={(v) => { setFilterBrand(v); setFilterModel([]); }}
               width={140}
               placeholder="Tất cả Thương hiệu"
@@ -440,9 +478,10 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
                 isMulti
                 value={filterModel}
                 options={
-                  filterBrand.length > 0
-                    ? brands.filter(b => filterBrand.includes(b.name)).flatMap(b => b.models).map(m => ({ value: m, label: m }))
-                    : brands.flatMap(b => b.models).filter((m, i, a) => a.indexOf(m) === i).map(m => ({ value: m, label: m }))
+                  (filterBrand.length > 0
+                    ? visibleBrandOptions.filter(b => filterBrand.includes(b.name))
+                    : visibleBrandOptions
+                  ).flatMap(b => b.models).filter((m, i, a) => a.indexOf(m) === i).map(m => ({ value: m, label: m }))
                 }
                 onChange={setFilterModel}
                 width={140}

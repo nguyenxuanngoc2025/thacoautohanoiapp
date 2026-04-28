@@ -141,7 +141,7 @@ function mergeViewPayloads(
 export default function ReportsPage() {
   const { brands } = useBrands();
   const { showrooms: showroomItems } = useShowrooms();
-  const { profile, effectiveRole } = useAuth();
+  const { profile, effectiveRole, accessibleShowroomCodes } = useAuth();
   const { activeUnitId } = useUnit();
   const { channels } = useChannels();
 
@@ -160,7 +160,15 @@ export default function ReportsPage() {
 
   // ── Role-based Scope ──────────────────────────────────────────────────────
   const isRestrictedRole = ['mkt_showroom', 'gd_showroom'].includes(effectiveRole as string);
-  const allowedShowroomName = isRestrictedRole ? profile?.showroom?.name : null;
+  // Multi-showroom: map codes → names (hỗ trợ cả profile.showroom_ids mới)
+  const allowedShowroomNames = useMemo(() => {
+    if (!isRestrictedRole || accessibleShowroomCodes.length === 0) return null;
+    const names = showroomItems
+      .filter(s => accessibleShowroomCodes.includes(s.code?.toUpperCase() ?? ''))
+      .map(s => s.name);
+    return names.length > 0 ? names : null;
+  }, [isRestrictedRole, accessibleShowroomCodes, showroomItems]);
+  const allowedShowroomName = allowedShowroomNames?.[0] ?? null;
   // mkt_brand: luôn lọc theo brands được giao (ngay cả khi chưa chọn filter)
   const brandRestriction: string[] = (effectiveRole === 'mkt_brand' && profile?.brands?.length)
     ? profile.brands
@@ -285,13 +293,13 @@ export default function ReportsPage() {
   // Showroom list for dropdowns (role-filtered)
   const showrooms = useMemo(() => {
     let items = showroomItems;
-    if (isRestrictedRole && allowedShowroomName) {
-      items = items.filter(s => s.name === allowedShowroomName);
+    if (isRestrictedRole && allowedShowroomNames) {
+      items = items.filter(s => allowedShowroomNames.includes(s.name));
     } else if (effectiveRole === 'mkt_brand' && profile?.brands && profile.brands.length > 0) {
       items = items.filter(s => s.brands.some(b => profile.brands!.includes(b)));
     }
     return items.map(s => s.name);
-  }, [showroomItems, isRestrictedRole, allowedShowroomName, effectiveRole, profile]);
+  }, [showroomItems, isRestrictedRole, allowedShowroomNames, effectiveRole, profile]);
 
   // brands passed to tabs — filtered by role restriction + user brand filter + showroom filter
   const tableBrands = useMemo(() => {
@@ -300,18 +308,19 @@ export default function ReportsPage() {
       : brands;
     if (filters.brand) items = items.filter(b => b.name === filters.brand);
     // Khi filter theo showroom, chỉ show brands thuộc showroom đó
-    if (filters.showroom) {
-      const sr = showroomItems.find(s => s.name === filters.showroom);
+    const activeShowroom = filters.showroom || (allowedShowroomNames?.length === 1 ? allowedShowroomNames[0] : null);
+    if (activeShowroom) {
+      const sr = showroomItems.find(s => s.name === activeShowroom);
       if (sr?.brands?.length) items = items.filter(b => sr.brands.includes(b.name));
     }
     return items;
-  }, [brands, brandRestriction, filters.brand, filters.showroom, showroomItems]);
+  }, [brands, brandRestriction, filters.brand, filters.showroom, allowedShowroomNames, showroomItems]);
 
   // showroomItems passed to tabs — filtered by both role + user filter
   const tableShowroomItems = useMemo(() => {
     let items = showroomItems;
-    if (isRestrictedRole && allowedShowroomName) {
-      items = items.filter(s => s.name === allowedShowroomName);
+    if (isRestrictedRole && allowedShowroomNames) {
+      items = items.filter(s => allowedShowroomNames.includes(s.name));
     } else if (effectiveRole === 'mkt_brand' && profile?.brands && profile.brands.length > 0) {
       items = items.filter(s => s.brands.some(b => profile.brands!.includes(b)));
     }
@@ -319,7 +328,7 @@ export default function ReportsPage() {
       items = items.filter(s => s.name === filters.showroom);
     }
     return items.map(s => ({ name: s.name, weight: s.weight }));
-  }, [showroomItems, isRestrictedRole, allowedShowroomName, effectiveRole, profile, filters.showroom]);
+  }, [showroomItems, isRestrictedRole, allowedShowroomNames, effectiveRole, profile, filters.showroom]);
 
   // ── Per-showroom MonthlyPayloads (real data from v_budget_master) ────────────
   const reportMonths = useMemo(
@@ -385,12 +394,18 @@ export default function ReportsPage() {
     return `${filters.year - 1}`;
   }, [compareMode, filters]);
 
-  const brandNames = useMemo(
-    () => brandRestriction.length > 0
-      ? brands.filter(b => brandRestriction.includes(b.name)).map(b => b.name)
-      : brands.map(b => b.name),
-    [brands, brandRestriction]
-  );
+  const brandNames = useMemo(() => {
+    let result = brandRestriction.length > 0
+      ? brands.filter(b => brandRestriction.includes(b.name))
+      : brands;
+    // Khi filter theo showroom, chỉ show brands thuộc showroom đó
+    const activeShowroom = filters.showroom || (allowedShowroomNames?.length === 1 ? allowedShowroomNames[0] : null);
+    if (activeShowroom) {
+      const sr = showroomItems.find(s => s.name === activeShowroom);
+      if (sr?.brands?.length) result = result.filter(b => sr.brands.includes(b.name));
+    }
+    return result.map(b => b.name);
+  }, [brands, brandRestriction, filters.showroom, allowedShowroomNames, showroomItems]);
 
   const channelOptions = useMemo(
     () => channels.filter(c => !c.isAggregate).map(c => ({ value: c.name, label: c.name })),

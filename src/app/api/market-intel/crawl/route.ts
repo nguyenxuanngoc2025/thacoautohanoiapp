@@ -6,7 +6,8 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import {
   tryFetchRSS, classifyRSSItems,
-  fetchPageText, extractArticlesFromPage,
+  fetchPageText, fetchPageTextFirecrawl, isFirecrawlAvailable,
+  extractArticlesFromPage,
   getDomain,
   type ExtractedArticle,
 } from '@/lib/gemini-intel';
@@ -44,14 +45,14 @@ export async function POST(req: Request) {
     // Lấy danh sách nguồn crawl
     const { data: competitors, error: compErr } = await supabase
       .from('thaco_competitor_mapping')
-      .select('news_url, comp_brand, thaco_brand, thaco_model')
+      .select('news_url, comp_brand, thaco_brand, thaco_model, crawl_method')
       .eq('is_active', true)
       .not('news_url', 'is', null);
 
     if (compErr) throw new Error(compErr.message);
 
     // Deduplicate theo news_url, gộp thaco_brands
-    const urlMap = new Map<string, { comp_brand: string; thaco_brands: string[]; thaco_models: string[] }>();
+    const urlMap = new Map<string, { comp_brand: string; thaco_brands: string[]; thaco_models: string[]; crawl_method: string }>();
     for (const c of (competitors ?? [])) {
       if (!c.news_url) continue;
       const existing = urlMap.get(c.news_url);
@@ -63,25 +64,47 @@ export async function POST(req: Request) {
           comp_brand: c.comp_brand,
           thaco_brands: [c.thaco_brand],
           thaco_models: c.thaco_model ? [c.thaco_model] : [],
+          crawl_method: c.crawl_method ?? 'html',
         });
       }
     }
 
+    const firecrawlEnabled = isFirecrawlAvailable();
+    if (firecrawlEnabled) console.log('[crawl] Firecrawl enabled');
+
     for (const [url, meta] of urlMap.entries()) {
       const domain = getDomain(url);
-      console.log(`[crawl] ${domain}`);
+      const isJSSite = meta.crawl_method === 'js';
+      console.log(`[crawl] ${domain} (${meta.crawl_method})`);
+
+      // Skip JS sites khi Firecrawl chưa cấu hình
+      if (isJSSite && !firecrawlEnabled) {
+        console.log(`  → JS site, Firecrawl not configured, skip`);
+        continue;
+      }
 
       let articles: (ExtractedArticle & { source_url?: string })[] = [];
       let method = 'html';
 
-      // ── Thử RSS trước ──────────────────────────────────────────────────────
+      // ── Thử RSS trước (bất kể crawl_method) ───────────────────────────────
       const rssResult = await tryFetchRSS(url);
       if (rssResult) {
         console.log(`  → RSS OK (${rssResult.items.length} items)`);
         method = 'rss';
         articles = await classifyRSSItems(rssResult.items, domain);
+      } else if (isJSSite) {
+        // ── JS site: dùng Firecrawl ────────────────────────────────────────
+        const pageText = await fetchPageTextFirecrawl(url);
+        if (!pageText) {
+          console.log(`  → Firecrawl failed, skip`);
+          sourcesCrawled++;
+          continue;
+        }
+        method = 'firecrawl';
+        articles = await extractArticlesFromPage(pageText, domain);
+        console.log(`  → Firecrawl (${articles.length} articles)`);
       } else {
-        // ── Fallback: HTML scraping ─────────────────────────────────────────
+        // ── HTML static: fetch thường ──────────────────────────────────────
         const pageText = await fetchPageText(url);
         if (!pageText) {
           console.log(`  → fetch failed, skip`);
@@ -133,7 +156,7 @@ export async function POST(req: Request) {
             thaco_models:    meta.thaco_models,
             published_at:    a.published_date ? new Date(a.published_date).toISOString() : null,
             date_confidence: a.date_confidence,
-            status:          (a.date_confidence === 'low' || !a.published_date) && method === 'html'
+            status:          (a.date_confidence === 'low' || !a.published_date) && (method === 'html' || method === 'firecrawl')
                                ? 'review' : 'published',
           });
 

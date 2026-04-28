@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { RefreshCw, ExternalLink, CheckCircle, Archive, Clock, AlertCircle, TrendingUp } from 'lucide-react';
 import { useBrands } from '@/contexts/BrandsContext';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area, CartesianGrid,
@@ -46,7 +47,8 @@ const BRAND_COMPETITOR_MAP: Record<string, string[]> = {
   'STELLANTIS': ['Toyota', 'Honda', 'Hyundai', 'Ford', 'Mitsubishi'],
   'BMW':        ['Mercedes', 'Lexus', 'Audi', 'Volvo'],
   'MINI':       ['Toyota', 'Honda', 'Hyundai'],
-  'TẢI BUS':   ['Suzuki', 'Hyundai', 'Isuzu', 'Hino', 'TERACO', 'Do Thanh', 'Foton', 'Shineray', 'TMT', 'Vinfast', 'SAMCO', 'Kim Long'],
+  'Tải':        ['Suzuki', 'Hyundai', 'Isuzu', 'Hino', 'TERACO', 'Do Thanh', 'Foton', 'Shineray', 'TMT', 'Vinfast'],
+  'Bus':        ['Hino', 'SAMCO', 'Kim Long', 'Vinfast', 'Hyundai'],
 };
 
 type TabId = 'published' | 'review';
@@ -186,6 +188,7 @@ function BrandChip({ label, active, color, onClick }: { label: string; active: b
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MarketIntelPage() {
   const { brands } = useBrands();
+  const { isSuperAdmin } = useAuth();
 
   const [activeTab, setActiveTab]           = useState<TabId>('published');
   const [filterBrand, setFilterBrand]       = useState('');
@@ -451,14 +454,16 @@ export default function MarketIntelPage() {
             </span>
           )}
 
-          <button
-            onClick={handleCrawl}
-            disabled={isCrawling}
-            style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-table)', fontWeight: 600, padding: '5px 16px', background: isCrawling ? '#9CA3AF' : '#2563EB', color: '#fff', border: 'none', borderRadius: 6, cursor: isCrawling ? 'not-allowed' : 'pointer' }}
-          >
-            <RefreshCw size={12} style={{ animation: isCrawling ? 'spin 1s linear infinite' : 'none' }} />
-            {isCrawling ? 'Đang thu thập...' : 'Thu thập ngay'}
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={handleCrawl}
+              disabled={isCrawling}
+              style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-table)', fontWeight: 600, padding: '5px 16px', background: isCrawling ? '#9CA3AF' : '#2563EB', color: '#fff', border: 'none', borderRadius: 6, cursor: isCrawling ? 'not-allowed' : 'pointer' }}
+            >
+              <RefreshCw size={12} style={{ animation: isCrawling ? 'spin 1s linear infinite' : 'none' }} />
+              {isCrawling ? 'Đang thu thập...' : 'Thu thập ngay'}
+            </button>
+          )}
         </div>
       </div>
 
