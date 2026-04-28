@@ -1,248 +1,396 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
+import * as xlsx from 'xlsx';
 import PageHeader from '@/components/layout/PageHeader';
 import { formatNumber } from '@/lib/utils';
-import { fetchAllBudgetPlans } from '@/lib/budget-data';
-import { fetchAllActualEntries } from '@/lib/actual-data';
-import { fetchEventsFromDB } from '@/lib/events-data';
-import { useBrands } from '@/contexts/BrandsContext';
+import { inferEventStatus } from '@/lib/events-data';
+import { useEventsData } from '@/lib/use-data';
+import { useFilteredBudget } from '@/lib/use-filtered-budget';
 import { useShowrooms } from '@/contexts/ShowroomsContext';
 import { useUnit } from '@/contexts/UnitContext';
-import dynamic from 'next/dynamic';
-
-const BudgetBarChart = dynamic(() => import('@/components/charts/ChartComponents').then(mod => mod.BudgetBarChart), { ssr: false, loading: () => <div style={{height: 250, background: '#f8fafc', borderRadius: 8}} /> });
-const DonutChart = dynamic(() => import('@/components/charts/ChartComponents').then(mod => mod.DonutChart), { ssr: false, loading: () => <div style={{height: 200, background: '#f8fafc', borderRadius: 8, marginTop: 16}} /> });
+import { useBrands } from '@/contexts/BrandsContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useChannels } from '@/contexts/ChannelsContext';
 import {
   Users, UserCheck, FileSignature, TrendingDown,
-  AlertTriangle, CheckCircle, XCircle, ChevronUp, ChevronDown,
-  CalendarDays,
+  AlertTriangle, CheckCircle, ChevronUp, ChevronDown,
+  CalendarDays, CornerDownRight, DownloadCloud
 } from 'lucide-react';
 
-const DONUT_COLORS = ['#3b82f6','#10b981','#f59e0b','#6366f1','#ec4899','#06b6d4'];
+// Recharts (via shadcn chart)
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
+  PieChart, Pie, Cell, Area, AreaChart,
+  ResponsiveContainer, ComposedChart, Line
+} from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { FilterDropdown } from '@/components/erp/FilterDropdown';
+import { KpiCard, SparkLine } from '@/components/erp/KpiCard';
+import { FunnelChart3D } from '@/components/erp/FunnelChart3D';
+import { EmptyDataState } from '@/components/erp/EmptyDataState';
+
+// REUI Data Grid
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  createColumnHelper,
+  flexRender,
+  type SortingState,
+} from '@tanstack/react-table';
+import { DataGrid, DataGridContainer } from '@/components/reui/data-grid/data-grid';
+import { DataGridTable } from '@/components/reui/data-grid/data-grid-table';
+import { DataGridColumnHeader } from '@/components/reui/data-grid/data-grid-column-header';
+
 const CHANNELS = ['Google', 'Facebook', 'Khác', 'CSKH', 'Nhận diện'];
 
-// ── Spark line inline SVG ─────────────────────────────────────────────────────
-function SparkLine({ values, color }: { values: number[]; color: string }) {
-  if (!values.length) return null;
-  const max = Math.max(...values, 1);
-  const W = 64, H = 24;
-  const pts = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * W;
-    const y = H - (v / max) * H * 0.85 - 2;
-    return `${x},${y}`;
-  }).join(' ');
-  return (
-    <svg width={W} height={H} style={{ display: 'block' }}>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={parseFloat(pts.split(' ').at(-1)!.split(',')[0])} cy={parseFloat(pts.split(' ').at(-1)!.split(',')[1])} r={2.5} fill={color} />
-    </svg>
-  );
-}
+// ── Column Types ──────────────────────────────────────────────────────────────
+type ShowroomRow = { name: string; plan: number; actual: number; khqt: number; gdtd: number; khd: number };
+const col = createColumnHelper<ShowroomRow>();
 
-// ── Status icon ───────────────────────────────────────────────────────────────
-function StatusIcon({ pct }: { pct: number }) {
-  if (pct > 100) return <XCircle size={14} style={{ color: 'var(--color-danger)' }} />;
-  if (pct > 80) return <AlertTriangle size={14} style={{ color: 'var(--color-warning)' }} />;
-  return <CheckCircle size={14} style={{ color: 'var(--color-success)' }} />;
-}
 
-// ── Parse event date → Date ───────────────────────────────────────────────────
+// ── Parse event date ──────────────────────────────────────────────────────────
 function parseEventDate(dateStr: string): Date | null {
   if (!dateStr) return null;
   if (dateStr.includes('/')) {
     const [d, m, y] = dateStr.split('/').map(Number);
     if (!d || !m || !y) return null;
-    const dt = new Date(y, m - 1, d);
-    dt.setHours(0, 0, 0, 0);
-    return dt;
+    return new Date(y, m - 1, d);
   }
   const [y, m, d] = dateStr.split('-').map(Number);
   if (!y || !m || !d) return null;
-  const dt = new Date(y, m - 1, d);
-  dt.setHours(0, 0, 0, 0);
-  return dt;
+  return new Date(y, m - 1, d);
 }
 
-export default function DashboardPage() {
-  const { brands } = useBrands();
+const isChannelMatch = (key: string, filterChannel: string | null): boolean => {
+  if (!filterChannel) return true;
+  if (filterChannel === 'Tổng Digital') {
+    return key.includes('-Google-') || key.includes('-Facebook-') || key.includes('-Khác-');
+  }
+  const chSearchName = filterChannel === 'Khác (Digital)' ? 'Khác' : filterChannel;
+  return key.includes(`-${chSearchName}-`);
+};
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MAIN PAGE
+// ══════════════════════════════════════════════════════════════════════════════
+export default function DashboardReuiPage() {
   const { showrooms } = useShowrooms();
   const { activeUnitId } = useUnit();
+  const { brands } = useBrands();
+  const { profile, effectiveRole } = useAuth();
+  
   const [mounted, setMounted] = useState(false);
   const [year, setYear] = useState(2026);
+  const [viewMode, setViewMode] = useState<'month'|'quarter'|'year'>('month');
   const [month, setMonth] = useState(4);
-  const [viewMode, setViewMode] = useState<'month' | 'quarter' | 'year'>('month');
+  const [sorting, setSorting] = useState<SortingState>([]);
 
-  const [plansByMonth, setPlansByMonth] = useState<Record<number, Record<string, number>>>({});
-  const [actualsByMonth, setActualsByMonth] = useState<Record<number, Record<string, number>>>({});
-  const [eventsData, setEventsData] = useState<any[]>([]);
+  // ── Filters State ─────────────────────────────────────────────────────────
+  const [filterShowroom, setFilterShowroom] = useState<string[]>([]);
+  const [filterBrand, setFilterBrand] = useState<string[]>([]);
+  const [filterModel, setFilterModel] = useState<string[]>([]);
+  const [filterChannel, setFilterChannel] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
-    const [budgetPlans, actuals, eventsObj] = await Promise.all([
-      fetchAllBudgetPlans(activeUnitId),
-      fetchAllActualEntries(year, activeUnitId),
-      fetchEventsFromDB(activeUnitId),
-    ]);
-    const pm: Record<number, Record<string, number>> = {};
-    const am: Record<number, Record<string, number>> = {};
-    
-    if (budgetPlans && budgetPlans.length > 0) {
-      budgetPlans.forEach(p => { pm[p.month] = p.payload || {}; });
+  // ── Role-based Scope ──────────────────────────────────────────────────────
+  const isRestrictedRole = ['mkt_showroom', 'gd_showroom'].includes(effectiveRole as string);
+  const allowedShowroomName = isRestrictedRole ? (profile?.showroom?.name ?? null) : null;
+
+  // mkt_brand: chỉ thấy showroom có brand được giao
+  const visibleShowrooms = useMemo(() => {
+    if (effectiveRole === 'mkt_brand' && profile?.brands && profile.brands.length > 0) {
+      return showrooms.filter(s => s.brands.some(b => profile.brands!.includes(b)));
     }
-    setPlansByMonth(pm);
-    
-    if (actuals && actuals.length > 0) {
-      actuals.forEach(a => { am[a.month] = a.payload || {}; });
-    }
-    setActualsByMonth(am);
-    
-    setEventsData(eventsObj ? Object.values(eventsObj).flat() : []);
-  }, [year, activeUnitId]);
+    return showrooms;
+  }, [effectiveRole, profile, showrooms]);
 
-  useEffect(() => { loadData().then(() => setMounted(true)); }, [loadData]);
+  const isCompanyLevel = visibleShowrooms.length > 1;
 
+  // mkt_brand: auto-restrict brand filter — luôn lọc theo brands được giao
+  const brandRestriction: string[] = (effectiveRole === 'mkt_brand' && profile?.brands?.length)
+    ? profile.brands
+    : [];
+  // Effective brand filter: nếu user đã chọn thủ công thì dùng đó, ngược lại dùng brandRestriction
+  const effectiveFilterBrand = brandRestriction.length > 0
+    ? (filterBrand.length > 0 ? filterBrand : brandRestriction)
+    : filterBrand;
+
+  const unitIdForViews = activeUnitId === 'all' ? null : activeUnitId;
+
+  // ── Events (chỉ dùng cho upcoming timeline) ───────────────────────────────
+  const { data: eventsRaw } = useEventsData(activeUnitId);
+  const eventsData = useMemo<any[]>(() =>
+    eventsRaw ? Object.values(eventsRaw).flat() : [],
+  [eventsRaw]);
+
+  // ── Period ────────────────────────────────────────────────────────────────
   const monthsInView = useMemo(() => {
     if (viewMode === 'month') return [month];
-    if (viewMode === 'quarter') {
-      const q0 = (Math.ceil(month / 3) - 1) * 3 + 1;
-      return [q0, q0 + 1, q0 + 2];
-    }
+    if (viewMode === 'quarter') { const q0 = (Math.ceil(month / 3) - 1) * 3 + 1; return [q0, q0 + 1, q0 + 2]; }
     return Array.from({ length: 12 }, (_, i) => i + 1);
   }, [viewMode, month]);
 
-  const planData = useMemo(() => {
-    const merged: Record<string, number> = {};
-    monthsInView.forEach(m => { Object.entries(plansByMonth[m] || {}).forEach(([k, v]) => { merged[k] = (merged[k] || 0) + v; }); });
-    return merged;
-  }, [plansByMonth, monthsInView]);
+  // ── Chuẩn hóa filter — 1 hook xử lý tất cả ───────────────────────────────
+  const {
+    showroomBreakdown, brandBreakdown, channelBreakdown,
+    barChartData, totals, planKpis, sparkData, isLoading,
+  } = useFilteredBudget({
+    unitId: unitIdForViews, year, monthsInView, activeMonth: month,
+    filterShowroom, filterBrand: effectiveFilterBrand, filterChannel,
+  });
 
-  const actualData = useMemo(() => {
-    const merged: Record<string, number> = {};
-    monthsInView.forEach(m => { Object.entries(actualsByMonth[m] || {}).forEach(([k, v]) => { merged[k] = (merged[k] || 0) + v; }); });
-    return merged;
-  }, [actualsByMonth, monthsInView]);
+  const { totalPlan, totalActual, totalKhqt, totalGdtd, totalKhd, cpl, budgetPct } = totals;
+  const { pBudget, pKhqt, pGdtd, pKhd } = planKpis;
 
-  const eventsInView = useMemo(() => {
-    return eventsData.filter(e => {
-      if (!e.date) return false;
-      let evY: number, evM: number;
-      if (e.date.includes('/')) {
-        const parts = e.date.split('/');
-        evY = parseInt(parts[2]); evM = parseInt(parts[1]);
-      } else {
-        const parts = e.date.split('-');
-        evY = parseInt(parts[0]); evM = parseInt(parts[1]);
-      }
-      if (isNaN(evY) || isNaN(evM) || evY !== year) return false;
-      return monthsInView.includes(evM);
-    });
-  }, [eventsData, year, monthsInView]);
+  // ── Mounted ───────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isLoading && eventsRaw !== undefined) setMounted(true);
+  }, [isLoading, eventsRaw]);
 
-  const sumByMetric = useCallback((data: Record<string, number>, metric: string, excludeEvent = false) => {
-    let total = 0;
-    for (const [k, v] of Object.entries(data)) {
-      if (k.endsWith(`-${metric}`)) {
-        if (excludeEvent && k.includes('-Sự kiện-')) continue;
-        total += v;
-      }
+// ── Sortable Header ────────────────────────────────────────────────────────
+const SortableHeader = ({ column, title, align = 'left' }: { column: any, title: string, align?: 'left'|'right'|'center' }) => {
+  return (
+    <div 
+      onClick={column.getToggleSortingHandler()}
+      style={{ 
+        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, userSelect: 'none',
+        justifyContent: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start'
+      }}
+    >
+      {title}
+      {{
+        asc: <ChevronUp size={12} style={{ opacity: 0.8 }} />,
+        desc: <ChevronDown size={12} style={{ opacity: 0.8 }} />,
+      }[column.getIsSorted() as string] ?? <span style={{ width: 12 }} />}
+    </div>
+  );
+};
+
+  // mkt_brand: lọc bảng SR theo showroom được phép
+  const visibleShowroomBreakdown = useMemo(() => {
+    if (effectiveRole === 'mkt_brand' && visibleShowrooms.length < showrooms.length) {
+      const allowed = new Set(visibleShowrooms.map(s => s.name));
+      return showroomBreakdown.filter(r => allowed.has(r.name));
     }
-    return total;
-  }, []);
+    return showroomBreakdown;
+  }, [showroomBreakdown, effectiveRole, visibleShowrooms, showrooms]);
 
-  const sumByChannelValue = useCallback((data: Record<string, number>, chName: string) => {
-    let total = 0;
-    const name = chName === 'Khác (Digital)' ? 'Khác' : chName;
-    for (const [k, v] of Object.entries(data)) {
-      if (k.includes(`-${name}-`) && k.endsWith('-Ngân sách')) total += v;
-    }
-    return total;
-  }, []);
+  // ── REUI Table Columns (Showroom) ───────────────────────────────
+  const showroomColumns = useMemo(() => {
+    const totalPlan   = visibleShowroomBreakdown.reduce((s, r) => s + r.plan, 0);
+    const totalActual = visibleShowroomBreakdown.reduce((s, r) => s + r.actual, 0);
+    const totalKhqt   = visibleShowroomBreakdown.reduce((s, r) => s + r.khqt, 0);
+    const totalGdtd   = visibleShowroomBreakdown.reduce((s, r) => s + r.gdtd, 0);
+    const totalKhd    = visibleShowroomBreakdown.reduce((s, r) => s + r.khd, 0);
+    const cpl         = totalKhqt > 0 ? (totalActual / totalKhqt) : 0;
+    const budgetPct   = totalPlan > 0 ? (totalActual / totalPlan * 100) : 0;
 
-  // ── Spark data: last 5 months actuals ─────────────────────────────────────
-  const sparkData = useMemo(() => {
-    const last5 = Array.from({ length: 5 }, (_, i) => {
-      const m = month - 4 + i;
-      return m < 1 ? m + 12 : m;
-    });
-    return {
-      budget: last5.map(m => { const d = actualsByMonth[m] || {}; return Object.entries(d).filter(([k]) => k.endsWith('-Ngân sách')).reduce((s, [, v]) => s + v, 0); }),
-      khqt:   last5.map(m => { const d = actualsByMonth[m] || {}; return Object.entries(d).filter(([k]) => k.endsWith('-KHQT')).reduce((s, [, v]) => s + v, 0); }),
-      gdtd:   last5.map(m => { const d = actualsByMonth[m] || {}; return Object.entries(d).filter(([k]) => k.endsWith('-GDTD')).reduce((s, [, v]) => s + v, 0); }),
-      khd:    last5.map(m => { const d = actualsByMonth[m] || {}; return Object.entries(d).filter(([k]) => k.endsWith('-KHĐ')).reduce((s, [, v]) => s + v, 0); }),
-    };
-  }, [actualsByMonth, month]);
+    return [
+      col.accessor('name', {
+        header: ({ column }) => <SortableHeader column={column} title="Showroom" />,
+        cell: info => <span style={{ fontWeight: 500 }}>{info.getValue()}</span>,
+        footer: () => <span style={{ fontWeight: 700 }}>TỔNG CỘNG</span>,
+        meta: { headerClassName: 'text-left', cellClassName: 'text-left', footerClassName: 'text-left' } as any,
+      }),
+      col.accessor('plan', {
+        header: ({ column }) => <SortableHeader column={column} title="KH (tr)" align="center" />,
+        cell: info => <span style={{ color: 'var(--color-text-muted)' }}>{formatNumber(Math.round(info.getValue()))}</span>,
+        footer: () => <span style={{ fontWeight: 700 }}>{formatNumber(Math.round(totalPlan))}</span>,
+        meta: { headerClassName: 'text-center', cellClassName: 'text-center', footerClassName: 'text-center' } as any,
+      }),
+      col.accessor('actual', {
+        header: ({ column }) => <SortableHeader column={column} title="TH (tr)" align="center" />,
+        cell: info => {
+          const row = info.row.original;
+          const pct = row.plan > 0 ? (row.actual / row.plan * 100) : 0;
+          return <span style={{ fontWeight: 500, color: pct > 100 ? '#92400e' : 'var(--color-text)' }}>{formatNumber(Math.round(info.getValue()))}</span>;
+        },
+        footer: () => <span style={{ fontWeight: 700 }}>{formatNumber(Math.round(totalActual))}</span>,
+        meta: { headerClassName: 'text-center', cellClassName: 'text-center', footerClassName: 'text-center' } as any,
+      }),
+      col.accessor(row => row.plan > 0 ? (row.actual / row.plan * 100) : 0, {
+        id: 'pct', 
+        header: ({ column }) => <SortableHeader column={column} title="%Chi" align="center" />,
+        cell: info => {
+          const v = info.getValue();
+          const clr = v > 100 ? 'var(--color-danger)' : v > 80 ? 'var(--color-warning)' : 'var(--color-success)';
+          return <span style={{ fontWeight: 600, color: clr }}>{v.toFixed(0)}%</span>;
+        },
+        footer: () => <span style={{ fontWeight: 700 }}>{budgetPct.toFixed(0)}%</span>,
+        meta: { headerClassName: 'text-center', cellClassName: 'text-center', footerClassName: 'text-center' } as any,
+      }),
+      col.accessor('khqt', {
+        header: ({ column }) => <SortableHeader column={column} title="KHQT" align="center" />,
+        cell: info => formatNumber(Math.round(info.getValue())),
+        footer: () => <span style={{ fontWeight: 700 }}>{formatNumber(Math.round(totalKhqt))}</span>,
+        meta: { headerClassName: 'text-center', cellClassName: 'text-center', footerClassName: 'text-center' } as any,
+      }),
+      col.accessor('gdtd', {
+        header: ({ column }) => <SortableHeader column={column} title="GDTD" align="center" />,
+        cell: info => <span style={{ color: 'var(--color-text-secondary)' }}>{formatNumber(Math.round(info.getValue()))}</span>,
+        footer: () => <span style={{ fontWeight: 700 }}>{formatNumber(Math.round(totalGdtd))}</span>,
+        meta: { headerClassName: 'text-center', cellClassName: 'text-center', footerClassName: 'text-center' } as any,
+      }),
+      col.accessor('khd', {
+        header: ({ column }) => <SortableHeader column={column} title="KHĐ" align="center" />,
+        cell: info => <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{formatNumber(Math.round(info.getValue()))}</span>,
+        footer: () => <span style={{ fontWeight: 700 }}>{formatNumber(Math.round(totalKhd))}</span>,
+        meta: { headerClassName: 'text-center', cellClassName: 'text-center', footerClassName: 'text-center' } as any,
+      }),
+      col.accessor(row => row.khqt > 0 ? (row.actual / row.khqt) : 0, {
+        id: 'cpl', 
+        header: ({ column }) => <SortableHeader column={column} title="CPL (tr)" align="center" />,
+        cell: info => info.getValue() > 0 ? info.getValue().toFixed(1) : '—',
+        footer: () => <span style={{ fontWeight: 700 }}>{cpl > 0 ? cpl.toFixed(1) : '—'}</span>,
+        meta: { headerClassName: 'text-center', cellClassName: 'text-center', footerClassName: 'text-center' } as any,
+      }),
+    ];
+  }, [visibleShowroomBreakdown]);
 
-  const showroomBreakdown = useMemo(() => {
-    const gbPlan = sumByMetric(planData, 'Ngân sách', true);
-    const gbActual = sumByMetric(actualData, 'Ngân sách', true);
-    const gKhqtP = sumByMetric(planData, 'KHQT', true);
-    const gKhqtA = sumByMetric(actualData, 'KHQT', true);
-    const gGdtdP = sumByMetric(planData, 'GDTD', true);
-    const gGdtdA = sumByMetric(actualData, 'GDTD', true);
-    const gKhdP = sumByMetric(planData, 'KHĐ', true);
-    const gKhdA = sumByMetric(actualData, 'KHĐ', true);
+  const showroomTable = useReactTable({
+    data: visibleShowroomBreakdown,
+    columns: showroomColumns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
 
-    return showrooms.map(sr => {
-      const w = sr.weight;
-      const evs = eventsInView.filter(e => e.showroom === sr.name);
-      const evBudgetPlan    = evs.reduce((s, e) => s + (e.budget || 0), 0);
-      const evBudgetActual  = evs.reduce((s, e) => s + (e.budgetSpent || 0), 0);
-      const evKhqtActual    = evs.reduce((s, e) => s + (e.leadsActual || 0), 0);
-      const evGdtdActual    = evs.reduce((s, e) => s + (e.gdtdActual || 0), 0);
-      const evKhdActual     = evs.reduce((s, e) => s + (e.dealsActual || 0), 0);
+  // ── REUI Table Columns (Brand) ───────────────────────────────
+  const brandColumns = useMemo(() => {
+    const totalPlan   = brandBreakdown.reduce((s, r) => s + r.plan, 0);
+    const totalActual = brandBreakdown.reduce((s, r) => s + r.actual, 0);
+    const totalKhqt   = brandBreakdown.reduce((s, r) => s + r.khqt, 0);
+    const totalGdtd   = brandBreakdown.reduce((s, r) => s + r.gdtd, 0);
+    const totalKhd    = brandBreakdown.reduce((s, r) => s + r.khd, 0);
+    const cpl         = totalKhqt > 0 ? (totalActual / totalKhqt) : 0;
+    const budgetPct   = totalPlan > 0 ? (totalActual / totalPlan * 100) : 0;
 
-      const planNS   = (gbPlan * w) + evBudgetPlan;
-      const actualNS = (gbActual * w) + evBudgetActual;
-      const khqt     = (gKhqtA * w) + evKhqtActual;
-      const gdtd     = (gGdtdA * w) + evGdtdActual;
-      const khd      = (gKhdA * w) + evKhdActual;
+    return [
+      col.accessor('name', {
+        header: ({ column }) => <SortableHeader column={column} title="Thương hiệu" />,
+        cell: info => <span style={{ fontWeight: 500 }}>{info.getValue()}</span>,
+        footer: () => <span style={{ fontWeight: 700 }}>TỔNG CỘNG</span>,
+        meta: { headerClassName: 'text-left', cellClassName: 'text-left', footerClassName: 'text-left' } as any,
+      }),
+      col.accessor('plan', {
+        header: ({ column }) => <SortableHeader column={column} title="KH (tr)" align="center" />,
+        cell: info => <span style={{ color: 'var(--color-text-muted)' }}>{formatNumber(Math.round(info.getValue()))}</span>,
+        footer: () => <span style={{ fontWeight: 700 }}>{formatNumber(Math.round(totalPlan))}</span>,
+        meta: { headerClassName: 'text-center', cellClassName: 'text-center', footerClassName: 'text-center' } as any,
+      }),
+      col.accessor('actual', {
+        header: ({ column }) => <SortableHeader column={column} title="TH (tr)" align="center" />,
+        cell: info => {
+          const row = info.row.original;
+          const pct = row.plan > 0 ? (row.actual / row.plan * 100) : 0;
+          return <span style={{ fontWeight: 500, color: pct > 100 ? '#92400e' : 'var(--color-text)' }}>{formatNumber(Math.round(info.getValue()))}</span>;
+        },
+        footer: () => <span style={{ fontWeight: 700 }}>{formatNumber(Math.round(totalActual))}</span>,
+        meta: { headerClassName: 'text-center', cellClassName: 'text-center', footerClassName: 'text-center' } as any,
+      }),
+      col.accessor(row => row.plan > 0 ? (row.actual / row.plan * 100) : 0, {
+        id: 'pct', 
+        header: ({ column }) => <SortableHeader column={column} title="%Chi" align="center" />,
+        cell: info => {
+          const v = info.getValue();
+          const clr = v > 100 ? 'var(--color-danger)' : v > 80 ? 'var(--color-warning)' : 'var(--color-success)';
+          return <span style={{ fontWeight: 600, color: clr }}>{v.toFixed(0)}%</span>;
+        },
+        footer: () => <span style={{ fontWeight: 700 }}>{budgetPct.toFixed(0)}%</span>,
+        meta: { headerClassName: 'text-center', cellClassName: 'text-center', footerClassName: 'text-center' } as any,
+      }),
+      col.accessor('khqt', {
+        header: ({ column }) => <SortableHeader column={column} title="KHQT" align="center" />,
+        cell: info => formatNumber(Math.round(info.getValue())),
+        footer: () => <span style={{ fontWeight: 700 }}>{formatNumber(Math.round(totalKhqt))}</span>,
+        meta: { headerClassName: 'text-center', cellClassName: 'text-center', footerClassName: 'text-center' } as any,
+      }),
+      col.accessor('gdtd', {
+        header: ({ column }) => <SortableHeader column={column} title="GDTD" align="center" />,
+        cell: info => <span style={{ color: 'var(--color-text-secondary)' }}>{formatNumber(Math.round(info.getValue()))}</span>,
+        footer: () => <span style={{ fontWeight: 700 }}>{formatNumber(Math.round(totalGdtd))}</span>,
+        meta: { headerClassName: 'text-center', cellClassName: 'text-center', footerClassName: 'text-center' } as any,
+      }),
+      col.accessor('khd', {
+        header: ({ column }) => <SortableHeader column={column} title="KHĐ" align="center" />,
+        cell: info => <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{formatNumber(Math.round(info.getValue()))}</span>,
+        footer: () => <span style={{ fontWeight: 700 }}>{formatNumber(Math.round(totalKhd))}</span>,
+        meta: { headerClassName: 'text-center', cellClassName: 'text-center', footerClassName: 'text-center' } as any,
+      }),
+      col.accessor(row => row.khqt > 0 ? (row.actual / row.khqt) : 0, {
+        id: 'cpl', 
+        header: ({ column }) => <SortableHeader column={column} title="CPL (tr)" align="center" />,
+        cell: info => info.getValue() > 0 ? info.getValue().toFixed(1) : '—',
+        footer: () => <span style={{ fontWeight: 700 }}>{cpl > 0 ? cpl.toFixed(1) : '—'}</span>,
+        meta: { headerClassName: 'text-center', cellClassName: 'text-center', footerClassName: 'text-center' } as any,
+      }),
+    ];
+  }, [brandBreakdown]);
 
-      return { name: sr.name, plan: planNS, actual: actualNS, khqt, gdtd, khd };
-    });
-  }, [planData, actualData, eventsInView, sumByMetric, showrooms]);
+  const brandTable = useReactTable({
+    data: brandBreakdown,
+    columns: brandColumns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
 
-  const channelBreakdown = useMemo(() => {
-    const list = CHANNELS.map(name => ({ name, amount: sumByChannelValue(actualData, name) }));
-    const evAmt = eventsInView.reduce((s, e) => s + (e.budgetSpent || 0), 0);
-    list.push({ name: 'Sự kiện', amount: evAmt });
-    const total = list.reduce((s, c) => s + c.amount, 0);
-    return list.map((ch, i) => ({ ...ch, color: DONUT_COLORS[i % DONUT_COLORS.length], pct: total > 0 ? Math.round((ch.amount / total) * 100) : 0 })).sort((a, b) => b.amount - a.amount);
-  }, [actualData, eventsInView, sumByChannelValue]);
 
-  const barChartData = useMemo(() => Array.from({ length: 12 }, (_, i) => {
-    const m = i + 1;
-    const plan   = Object.entries(plansByMonth[m]   || {}).filter(([k]) => k.endsWith('-Ngân sách')).reduce((s, [, v]) => s + v, 0);
-    const actual = Object.entries(actualsByMonth[m] || {}).filter(([k]) => k.endsWith('-Ngân sách')).reduce((s, [, v]) => s + v, 0);
-    return { month: m, plan, actual };
-  }), [plansByMonth, actualsByMonth]);
+  const alertShowrooms = useMemo(() =>
+    showroomBreakdown
+      .filter(sr => sr.plan > 0 && (sr.actual / sr.plan) > 1)
+      .sort((a, b) => (b.actual / b.plan) - (a.actual / a.plan))
+      .slice(0, 3),
+  [showroomBreakdown]);
 
-  if (!mounted) return null;
+  const upcomingEvents = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return eventsData
+      .map(e => {
+        const _date = parseEventDate(e.date);
+        const inferredStatus = inferEventStatus(e, today);
+        const daysUntil = _date ? Math.ceil((_date.getTime() - today.getTime()) / 86400000) : 999;
+        return { ...e, _date, inferredStatus, daysUntil };
+      })
+      .filter(e => {
+        if (e.inferredStatus === 'completed' || !e._date) return false;
+        if (e.daysUntil > 14) return false;
+        if (isRestrictedRole && allowedShowroomName && e.showroom !== allowedShowroomName) return false;
+        const evBrands = Array.isArray(e.brands) ? e.brands : [];
+        if (filterShowroom.length > 0 && !filterShowroom.includes(e.showroom)) return false;
+        if (filterBrand.length > 0 && !filterBrand.some(fb => evBrands.includes(fb))) return false;
+        if (filterModel.length > 0 && !filterModel.some(fm => evBrands.includes(fm))) return false;
+        return true;
+      })
+      .sort((a, b) => a.daysUntil - b.daysUntil)
+      .slice(0, 4);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventsData, isRestrictedRole, allowedShowroomName, filterShowroom, filterBrand, filterModel]);
 
-  const totalPlan   = showroomBreakdown.reduce((s, r) => s + r.plan, 0);
-  const totalActual = showroomBreakdown.reduce((s, r) => s + r.actual, 0);
-  const totalKhqt   = showroomBreakdown.reduce((s, r) => s + r.khqt, 0);
-  const totalGdtd   = showroomBreakdown.reduce((s, r) => s + r.gdtd, 0);
-  const totalKhd    = showroomBreakdown.reduce((s, r) => s + r.khd, 0);
-  const cpl         = totalKhqt > 0 ? (totalActual / totalKhqt) : 0;
-  const budgetPct   = totalPlan > 0 ? (totalActual / totalPlan * 100) : 0;
-  const pKhqt       = sumByMetric(planData, 'KHQT');
-  const pGdtd       = sumByMetric(planData, 'GDTD');
-  const pKhd        = sumByMetric(planData, 'KHĐ');
-  const pBudget     = sumByMetric(planData, 'Ngân sách');
-
-  // Alerts: showrooms over budget (> 100%), sorted by overage
-  const alertShowrooms = showroomBreakdown
-    .filter(sr => sr.plan > 0 && (sr.actual / sr.plan) > 1)
-    .sort((a, b) => (b.actual / b.plan) - (a.actual / a.plan))
-    .slice(0, 3);
-
-  // Upcoming events (future, sorted by date)
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const upcomingEvents = eventsData
-    .map(e => ({ ...e, _date: parseEventDate(e.date) }))
-    .filter(e => e._date && e._date >= today)
-    .sort((a, b) => a._date!.getTime() - b._date!.getTime())
-    .slice(0, 4);
+  if (!mounted) return (
+    <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Skeleton KPI cards */}
+      <div style={{ display: 'flex', gap: 12 }}>
+        {[1,2,3,4].map(i => (
+          <div key={i} style={{ flex: 1, height: 80, borderRadius: 10, background: 'var(--color-border)', opacity: 0.5, animation: 'pulse 1.5s ease-in-out infinite' }} />
+        ))}
+      </div>
+      {/* Skeleton chart */}
+      <div style={{ height: 200, borderRadius: 10, background: 'var(--color-border)', opacity: 0.4, animation: 'pulse 1.5s ease-in-out infinite' }} />
+      {/* Skeleton table */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {[1,2,3,4,5].map(i => (
+          <div key={i} style={{ height: 36, borderRadius: 6, background: 'var(--color-border)', opacity: 0.3 + i * 0.05, animation: 'pulse 1.5s ease-in-out infinite' }} />
+        ))}
+      </div>
+      <style>{`@keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:0.7} }`}</style>
+    </div>
+  );
 
   const deltaColor = (val: number, plan: number, higherIsBad = false) => {
     if (plan === 0) return 'var(--color-text-muted)';
@@ -251,34 +399,80 @@ export default function DashboardPage() {
     return up ? 'var(--color-success)' : 'var(--color-danger)';
   };
   const deltaBg = (val: number, plan: number, higherIsBad = false) => {
-    if (plan === 0) return '#f1f5f9';
+    if (plan === 0) return 'var(--color-surface-hover)';
     const up = val >= plan;
-    if (higherIsBad) return up ? '#fef2f2' : '#ecfdf5';
-    return up ? '#ecfdf5' : '#fef2f2';
+    if (higherIsBad) return up ? 'var(--color-danger-bg)' : 'var(--color-success-bg)';
+    return up ? 'var(--color-success-bg)' : 'var(--color-danger-bg)';
   };
 
+  // ════════════════════════════════════════════════════════════════════════════
+  //   R E N D E R
+  // ════════════════════════════════════════════════════════════════════════════
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 8, padding: 8 }}>
       <PageHeader
-        title="Tổng quan ngân sách toàn đơn vị"
+        title="Tổng quan"
         year={year} month={month} viewMode={viewMode}
         onPeriodChange={(y, m) => { setYear(y); setMonth(m); }}
         onViewModeChange={setViewMode}
+        filters={
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {isCompanyLevel && (
+              <FilterDropdown
+                isMulti
+                value={filterShowroom}
+                options={visibleShowrooms.map(s => ({ value: s.name, label: s.name }))}
+                onChange={setFilterShowroom}
+                width={130}
+                placeholder="Tất cả Showroom"
+              />
+            )}
+            <FilterDropdown
+              isMulti
+              value={filterBrand}
+              options={(effectiveRole === 'mkt_brand' && profile?.brands?.length ? brands.filter(b => profile.brands!.includes(b.name)) : brands).map(b => ({ value: b.name, label: b.name }))}
+              onChange={(v) => { setFilterBrand(v); setFilterModel([]); }}
+              width={140}
+              placeholder="Tất cả Thương hiệu"
+            />
+            {!isCompanyLevel && (
+              <FilterDropdown
+                isMulti
+                value={filterModel}
+                options={
+                  filterBrand.length > 0
+                    ? brands.filter(b => filterBrand.includes(b.name)).flatMap(b => b.models).map(m => ({ value: m, label: m }))
+                    : brands.flatMap(b => b.models).filter((m, i, a) => a.indexOf(m) === i).map(m => ({ value: m, label: m }))
+                }
+                onChange={setFilterModel}
+                width={140}
+                placeholder="Tất cả Dòng xe"
+              />
+            )}
+            <FilterDropdown
+              value={filterChannel || 'all'}
+              options={[{ value: 'all', label: 'Tất cả Kênh' }, { value: 'Tổng Digital', label: 'Tổng Digital' }, ...CHANNELS.concat(['Sự kiện']).map(c => ({ value: c, label: c }))]}
+              onChange={(v: string) => setFilterChannel(v === 'all' ? null : v)}
+              width={160}
+              placeholder="Tất cả Kênh"
+            />
+          </div>
+        }
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, overflow: 'auto' }}>
 
-        {/* ── ROW 1: KPI Grid ───────────────────────────────────────────────── */}
+        {/* ── ROW 1: KPI Grid — same 2fr + 4×1fr ───────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: '2fr repeat(4, 1fr)', gap: 8 }}>
 
-          {/* Hero — Ngân sách */}
+          {/* Hero — Ngân sách (giữ y hệt bản gốc) */}
           <div style={{
             background: 'var(--color-primary)', borderRadius: 'var(--border-radius-md)',
             padding: '14px 16px', position: 'relative', overflow: 'hidden',
             border: '1px solid #003d82', display: 'flex', flexDirection: 'column', gap: 4,
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.7)', letterSpacing: '0.03em' }}>
                 Ngân sách thực hiện
               </div>
               <div style={{
@@ -294,283 +488,389 @@ export default function DashboardPage() {
               <span style={{ fontSize: 13, fontWeight: 400, color: 'rgba(255,255,255,0.6)', marginLeft: 4 }}>triệu đ</span>
             </div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
-              Kế hoạch: <strong style={{ color: 'rgba(255,255,255,0.8)' }}>{formatNumber(Math.round(pBudget))} tr</strong>
+              KH: <strong style={{ color: 'rgba(255,255,255,0.8)' }}>{formatNumber(Math.round(pBudget))} tr</strong>
               {totalActual > pBudget && (
                 <span style={{ marginLeft: 6, color: '#fca5a5' }}>↑ vượt {formatNumber(Math.round(totalActual - pBudget))} tr</span>
               )}
             </div>
-            {/* Progress bar */}
             <div style={{ height: 3, background: 'rgba(255,255,255,0.15)', borderRadius: 99, marginTop: 8, overflow: 'hidden' }}>
               <div style={{ height: '100%', borderRadius: 99, background: 'rgba(255,255,255,0.75)', width: `${Math.min(budgetPct, 100)}%` }} />
             </div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
               <span>0%</span>
-              <span style={{ color: budgetPct > 100 ? '#fca5a5' : 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
-                {budgetPct.toFixed(0)}% đạt
-              </span>
+              <span style={{ color: budgetPct > 100 ? '#fca5a5' : 'rgba(255,255,255,0.6)', fontWeight: 600 }}>{budgetPct.toFixed(0)}% đạt</span>
               <span>KH</span>
             </div>
           </div>
 
-          {/* KHQT */}
-          <KpiCard
-            label="Khách quan tâm" value={totalKhqt} plan={pKhqt}
-            icon={<Users size={14} strokeWidth={2} />} iconBg="#eff6ff" iconColor="#3b82f6"
+          <KpiCard label="Khách hàng quan tâm" value={totalKhqt} plan={pKhqt}
             spark={sparkData.khqt} sparkColor="#3b82f6" higherIsBad={false}
-            deltaColor={deltaColor} deltaBg={deltaBg}
-          />
-
-          {/* GDTD */}
-          <KpiCard
-            label="Giao dịch theo dõi" value={totalGdtd} plan={pGdtd}
-            icon={<UserCheck size={14} strokeWidth={2} />} iconBg="#fffbeb" iconColor="#f59e0b"
+            deltaColor={deltaColor} deltaBg={deltaBg} />
+          <KpiCard label="Giao dịch theo dõi" value={totalGdtd} plan={pGdtd}
             spark={sparkData.gdtd} sparkColor="#f59e0b" higherIsBad={false}
-            deltaColor={deltaColor} deltaBg={deltaBg}
-          />
-
-          {/* KHĐ */}
-          <KpiCard
-            label="Ký hợp đồng" value={totalKhd} plan={pKhd}
-            icon={<FileSignature size={14} strokeWidth={2} />} iconBg="#ecfdf5" iconColor="#10b981"
+            deltaColor={deltaColor} deltaBg={deltaBg} />
+          <KpiCard label="Ký hợp đồng" value={totalKhd} plan={pKhd}
             spark={sparkData.khd} sparkColor="#10b981" higherIsBad={false}
-            deltaColor={deltaColor} deltaBg={deltaBg}
-          />
-
+            deltaColor={deltaColor} deltaBg={deltaBg} />
           {/* CPL */}
-          <div className="panel" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Cost Per Lead
+          {/* CPL */}
+          <div className="panel" style={{ padding: '16px 14px', display: 'flex', flexDirection: 'column', minWidth: 0, height: '100%' }}>
+            {/* Label: Top Center */}
+            <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--color-text-muted)', letterSpacing: '0.02em', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              Cost Per Lead
+            </div>
+            
+            {/* Center Block: Number and CPA */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4 }}>
+              <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--color-text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                {cpl > 0 ? cpl.toFixed(2) : <span style={{ color: 'var(--color-text-muted)' }}>— —</span>}
+                {cpl > 0 && <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--color-text-muted)', marginLeft: 3 }}>tr/lead</span>}
               </div>
-              <div style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <TrendingDown size={14} color="var(--color-primary)" strokeWidth={2} />
+              <div style={{ fontSize: 10.5, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                CPA: <strong style={{ color: 'var(--color-text)', fontWeight: 700 }}>{totalKhd > 0 ? (totalActual / totalKhd).toFixed(1) : '—'} tr/sale</strong>
               </div>
             </div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--color-text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
-              {cpl > 0 ? cpl.toFixed(2) : <span style={{ color: 'var(--color-text-muted)' }}>— —</span>}
-              {cpl > 0 && <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--color-text-muted)', marginLeft: 3 }}>tr/lead</span>}
-            </div>
-            <div style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)' }}>
-              CPA: <strong style={{ color: 'var(--color-primary)' }}>
-                {totalKhd > 0 ? (totalActual / totalKhd).toFixed(1) : '—'} tr/sale
-              </strong>
-            </div>
-            <div style={{ marginTop: 4 }}>
+    
+            {/* Bottom Block: Sparkline */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
               <SparkLine values={sparkData.budget.map((b, i) => sparkData.khqt[i] > 0 ? b / sparkData.khqt[i] : 0)} color="var(--color-primary)" />
             </div>
           </div>
         </div>
 
-        {/* ── ROW 2: Showroom table + Funnel + Alerts/Events ─────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 0.85fr', gap: 8 }}>
+        {/* ── ROW 2: Showroom table (REUI) + Funnel + Donut/Events ─────────── */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', flex: 1, gap: 8, minWidth: 0 }}>
+          {/* ★ REUI DataGrid — Thay thế bảng tĩnh cũ bằng Stack (Showroom + Brand) ★ */}
+          <div style={{ flex: '100 1 500px', display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+            {/* --- Bảng Thương hiệu --- */}
+            <div className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
+              <div className="panel-header">
+                <div className="panel-header-title">
+                  <span className="panel-header-accent" />
+                  Hiệu quả ngân sách theo Thương hiệu
+                </div>
+                <button
+                  onClick={() => {
+                    const showroomRows = showroomTable.getCoreRowModel().rows.map(r => r.original);
+                    const brandRows = brandTable.getCoreRowModel().rows.map(r => r.original);
+                    
+                    if (showroomRows.length === 0 && brandRows.length === 0) return;
+                    
+                    const showroomData = [
+                      ['Showroom', 'Ngân sách', 'Thực chi', 'KHQT', 'GDTD', 'KHD'],
+                      ...showroomRows.map(r => [
+                        r.name.includes('\\n') ? r.name.split('\\n')[1] : r.name,
+                        r.plan,
+                        r.actual,
+                        r.khqt,
+                        r.gdtd,
+                        r.khd
+                      ])
+                    ];
+                    
+                    const brandData = [
+                      ['Thương hiệu', 'Ngân sách', 'Thực chi', 'KHQT', 'GDTD', 'KHD'],
+                      ...brandRows.map(r => [
+                        r.name,
+                        r.plan,
+                        r.actual,
+                        r.khqt,
+                        r.gdtd,
+                        r.khd
+                      ])
+                    ];
 
-          {/* Showroom table */}
-          <div className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
-            <div className="toolbar" style={{ borderTop: 'none', justifyContent: 'space-between' }}>
-              <div style={{ fontWeight: 600, color: 'var(--color-text)' }}>
-                Hiệu quả chi tiêu theo Showroom — {viewMode === 'month' ? `Tháng ${month}/${year}` : `Năm ${year}`}
+                    const wb = xlsx.utils.book_new();
+                    const wsShowroom = xlsx.utils.aoa_to_sheet(showroomData);
+                    xlsx.utils.book_append_sheet(wb, wsShowroom, "Theo Showroom");
+                    
+                    const wsBrand = xlsx.utils.aoa_to_sheet(brandData);
+                    xlsx.utils.book_append_sheet(wb, wsBrand, "Theo Thương hiệu");
+                    
+                    xlsx.writeFile(wb, `THACO_MKT_Data_${month}_${year}.xlsx`);
+                  }}
+                  title="Xuất Excel"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '4px 8px', borderRadius: 6,
+                    background: 'var(--color-success)', color: '#fff',
+                    border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600
+                  }}
+                >
+                  <DownloadCloud size={14} /> Xuất Excel
+                </button>
+              </div>
+              <div style={{ overflowX: 'auto', padding: '0 16px 16px 16px' }}>
+                {brandBreakdown.length === 0 ? (
+                  <div style={{ padding: '40px 0', width: '100%' }}><EmptyDataState message="Không có dữ liệu thương hiệu nào" /></div>
+                ) : (
+                  <DataGrid
+                    table={brandTable}
+                    recordCount={brandBreakdown.length}
+                    tableLayout={{ stripped: true, cellBorder: false, rowBorder: true, headerSticky: true, dense: true, width: 'fixed', headerBackground: true }}
+                    tableClassNames={{ base: 'data-table' }}
+                  >
+                    <DataGridContainer border={false}>
+                      <DataGridTable
+                        footerContent={brandTable.getFooterGroups().map(group => (
+                          <tr key={group.id} style={{ background: 'var(--color-surface-elevated)', color: 'var(--color-primary)' }}>
+                            {group.headers.map(header => (
+                              <td key={header.id} className={(header.column.columnDef.meta as any)?.footerClassName as string || ''} style={{ borderTop: '2px solid var(--color-primary)', padding: '10px 8px', ...(header.getSize() !== 150 ? { width: header.getSize() } : {})}}>
+                                {header.isPlaceholder ? null : flexRender(header.column.columnDef.footer, header.getContext())}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      />
+                    </DataGridContainer>
+                  </DataGrid>
+                )}
               </div>
             </div>
-            <div style={{ overflowX: 'auto', flex: 1 }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Showroom</th>
-                    <th style={{ textAlign: 'right' }}>KH (tr)</th>
-                    <th style={{ textAlign: 'right' }}>TH (tr)</th>
-                    <th style={{ textAlign: 'right' }}>%Chi</th>
-                    <th style={{ textAlign: 'right' }}>KHQT</th>
-                    <th style={{ textAlign: 'right' }}>GDTD</th>
-                    <th style={{ textAlign: 'right' }}>KHĐ</th>
-                    <th style={{ textAlign: 'right' }}>CPL (tr)</th>
-                    <th style={{ textAlign: 'center' }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {showroomBreakdown.map((sr) => {
-                    const pct = sr.plan > 0 ? (sr.actual / sr.plan * 100) : 0;
-                    const srCpl = sr.khqt > 0 ? (sr.actual / sr.khqt) : 0;
-                    const pctColor = pct > 100 ? 'var(--color-danger)' : pct > 80 ? 'var(--color-warning)' : 'var(--color-success)';
+
+            {/* --- Bảng Showroom --- */}
+            <div className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
+              <div className="panel-header">
+                <div className="panel-header-title">
+                  <span className="panel-header-accent" />
+                  Hiệu quả ngân sách theo Showroom
+                </div>
+              </div>
+              <div style={{ overflowX: 'auto', padding: '0 16px 16px 16px' }}>
+                {visibleShowroomBreakdown.length === 0 ? (
+                  <div style={{ padding: '40px 0', width: '100%' }}><EmptyDataState message="Không có dữ liệu showroom nào" /></div>
+                ) : (
+                  <DataGrid
+                    table={showroomTable}
+                    recordCount={visibleShowroomBreakdown.length}
+                    tableLayout={{ stripped: true, cellBorder: false, rowBorder: true, headerSticky: true, dense: true, width: 'fixed', headerBackground: true }}
+                    tableClassNames={{ base: 'data-table' }}
+                  >
+                    <DataGridContainer border={false}>
+                      <DataGridTable
+                        footerContent={showroomTable.getFooterGroups().map(group => (
+                          <tr key={group.id} style={{ background: 'var(--color-surface-elevated)', color: 'var(--color-primary)' }}>
+                            {group.headers.map(header => (
+                              <td key={header.id} className={(header.column.columnDef.meta as any)?.footerClassName as string || ''} style={{ borderTop: '2px solid var(--color-primary)', padding: '10px 8px', ...(header.getSize() !== 150 ? { width: header.getSize() } : {})}}>
+                                {header.isPlaceholder ? null : flexRender(header.column.columnDef.footer, header.getContext())}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      />
+                    </DataGridContainer>
+                  </DataGrid>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Funnel & Donut Column */}
+          <div style={{ flex: '1 1 260px', display: 'flex', flexDirection: 'column', gap: 8, minWidth: 240, maxWidth: '100%' }}>
+              <div className="panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <div className="panel-header">
+                  <div className="panel-header-title">
+                    <span className="panel-header-accent" />
+                    Phễu chuyển đổi
+                  </div>
+                </div>
+                <FunnelChart3D
+                  totalKhqt={totalKhqt || pKhqt}
+                  totalGdtd={totalGdtd || pGdtd}
+                  totalKhd={totalKhd || pKhd}
+                  isFallback={!totalKhqt && !totalGdtd && !totalKhd}
+                />
+              </div>
+
+              {/* ★ Donut — Recharts PieChart thay thế SVG vẽ tay ★ */}
+              <div className="panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <div className="panel-header">
+                  <div className="panel-header-title">
+                    <span className="panel-header-accent" />
+                    Phân bổ Kênh
+                  </div>
+                </div>
+                <div style={{ padding: '10px 12px', display: 'flex', gap: 12, alignItems: 'center', flex: 1 }}>
+                  {channelBreakdown.length === 0 ? (
+                    <div style={{ width: '100%', height: '100%' }}>
+                      <EmptyDataState message="Chưa có thiết lập kênh phân phối" />
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ flexShrink: 0, width: 115, height: 115, contain: 'layout style paint' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie 
+                              data={channelBreakdown} 
+                              dataKey="amount" 
+                              nameKey="name" 
+                              cx="50%" cy="50%" innerRadius={30} outerRadius={52} strokeWidth={2} stroke="#fff"
+                              onClick={(data) => {
+                                if (data?.name) {
+                                  setFilterChannel(prev => prev === data.name ? null : (data.name as string));
+                                }
+                              }}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              {channelBreakdown.map((entry, i) => (
+                                <Cell key={i} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <RechartsTooltip
+                              contentStyle={{ fontSize: 11, borderRadius: 6, border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-dropdown)' }}
+                              formatter={(value: any, name: any) => [`${formatNumber(Math.round(value))} tr`, name]}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5, paddingTop: 2 }}>
+                        {channelBreakdown.map(ch => (
+                          <div
+                            key={ch.name}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+                            onClick={() => setFilterChannel(prev => prev === ch.name ? null : ch.name)}
+                          >
+                            <div style={{ width: 7, height: 7, borderRadius: 2, background: ch.color, flexShrink: 0 }} />
+                            <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.name}</span>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text)' }}>{ch.pct}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+          {/* Events Column */}
+          <div className="panel" style={{ flex: '1 1 260px', display: 'flex', flexDirection: 'column', minWidth: 240, maxWidth: '100%' }}>
+              <div className="panel-header">
+                <div className="panel-header-title">
+                  <span className="panel-header-accent" />
+                  Sự kiện sắp tới
+                </div>
+              </div>
+                <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 5, flex: 1, overflowY: 'auto' }}>
+                  {upcomingEvents.length === 0 ? (
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)', padding: '6px 0' }}>Không có sự kiện sắp tới</div>
+                  ) : upcomingEvents.map((ev, i) => {
+                    const d = ev._date as Date;
+                    const diff = ev.daysUntil;
+                    const isOverdue = ev.inferredStatus === 'overdue' || diff < 0;
+                    const isUrgent = diff >= 0 && diff <= 3;
+                    const urgBg  = isOverdue ? 'var(--color-danger-bg)' : diff === 0 ? 'var(--color-primary-light)' : isUrgent ? 'var(--color-warning-bg)' : 'var(--color-surface-hover)';
+                    const urgClr = isOverdue ? 'var(--color-danger)' : diff === 0 ? 'var(--color-primary)' : isUrgent ? 'var(--color-warning)' : 'var(--color-text-muted)';
+                    const urgTxt = isOverdue ? `Trễ ${Math.abs(diff)}n` : diff === 0 ? 'Đang diễn ra' : diff === 1 ? 'Ngày mai' : `Còn ${diff}n`;
                     return (
-                      <tr key={sr.name}>
-                        <td style={{ fontWeight: 500 }}>{sr.name}</td>
-                        <td style={{ textAlign: 'right', color: 'var(--color-text-muted)' }}>{formatNumber(Math.round(sr.plan))}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 500, color: pct > 100 ? '#92400e' : 'var(--color-text)' }}>{formatNumber(Math.round(sr.actual))}</td>
-                        <td style={{ textAlign: 'right' }}>
-                          <span style={{ color: pctColor, fontWeight: 600 }}>{pct.toFixed(0)}%</span>
-                        </td>
-                        <td style={{ textAlign: 'right' }}>{formatNumber(Math.round(sr.khqt))}</td>
-                        <td style={{ textAlign: 'right', color: 'var(--color-text-secondary)' }}>{formatNumber(Math.round(sr.gdtd))}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--color-primary)' }}>{formatNumber(Math.round(sr.khd))}</td>
-                        <td style={{ textAlign: 'right' }}>{srCpl > 0 ? srCpl.toFixed(1) : '—'}</td>
-                        <td style={{ textAlign: 'center' }}><StatusIcon pct={pct} /></td>
-                      </tr>
+                      <Link href={`/events?eventId=${ev.id}`} key={i} style={{ display: 'flex', gap: 8, padding: '6px 8px', borderRadius: 4, background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)', alignItems: 'center', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }} className="transition-colors"
+                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover)'}
+                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-elevated)'}
+                      >
+                        <div style={{ width: 32, height: 32, borderRadius: 4, background: 'var(--color-primary)', color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 800, lineHeight: 1 }}>{d.getDate()}</div>
+                          <div style={{ fontSize: 8, fontWeight: 600, opacity: 0.8 }}>T{d.getMonth() + 1}</div>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.name || ev.eventName || 'Sự kiện'}</div>
+                          <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 1 }}>{ev.showroom || ''}</div>
+                        </div>
+                        <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 5px', borderRadius: 10, background: urgBg, color: urgClr, flexShrink: 0 }}>{urgTxt}</span>
+                      </Link>
                     );
                   })}
-                  <tr className="grand-total">
-                    <td style={{ fontWeight: 700 }}>TỔNG CỘNG</td>
-                    <td style={{ textAlign: 'right' }}>{formatNumber(Math.round(totalPlan))}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatNumber(Math.round(totalActual))}</td>
-                    <td style={{ textAlign: 'right' }}>{budgetPct.toFixed(0)}%</td>
-                    <td style={{ textAlign: 'right' }}>{formatNumber(Math.round(totalKhqt))}</td>
-                    <td style={{ textAlign: 'right' }}>{formatNumber(Math.round(totalGdtd))}</td>
-                    <td style={{ textAlign: 'right' }}>{formatNumber(Math.round(totalKhd))}</td>
-                    <td style={{ textAlign: 'right' }}>{cpl > 0 ? cpl.toFixed(1) : '—'}</td>
-                    <td></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Funnel */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div className="panel" style={{ flex: 1 }}>
-              <div className="toolbar" style={{ borderTop: 'none' }}>
-                <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Phễu chuyển đổi</span>
-              </div>
-              <div style={{ padding: '12px 14px' }}>
-                {[
-                  { label: 'KHQT', sublabel: 'Quan tâm', value: totalKhqt, plan: pKhqt, color: 'var(--color-info)', pct: 100 },
-                  { label: 'GDTD', sublabel: 'Theo dõi',   value: totalGdtd, plan: pGdtd, color: 'var(--color-warning)', pct: totalKhqt > 0 ? totalGdtd / totalKhqt * 100 : 0 },
-                  { label: 'KHĐ',  sublabel: 'Ký HĐ',      value: totalKhd,  plan: pKhd,  color: 'var(--color-success)', pct: totalKhqt > 0 ? totalKhd  / totalKhqt * 100 : 0 },
-                ].map((step, i) => (
-                  <div key={step.label} style={{ marginBottom: i < 2 ? 16 : 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text)' }}>{step.label}</span>
-                        <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>{step.sublabel}</span>
-                      </div>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text)' }}>{formatNumber(Math.round(step.value))}</span>
-                    </div>
-                    {/* Plan bar */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                      <span style={{ fontSize: 9, color: 'var(--color-text-muted)', fontWeight: 600, width: 18 }}>KH</span>
-                      <div style={{ flex: 1, height: 4, background: 'var(--color-border)', borderRadius: 99, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', borderRadius: 99, background: 'var(--color-border-dark)', width: `${step.plan > 0 ? Math.min(step.plan / (pKhqt || 1) * 100, 100) : 0}%` }} />
-                      </div>
-                      <span style={{ fontSize: 10, color: 'var(--color-text-muted)', width: 36, textAlign: 'right' }}>{formatNumber(Math.round(step.plan))}</span>
-                    </div>
-                    {/* Actual bar */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{ fontSize: 9, color: 'var(--color-text-muted)', fontWeight: 600, width: 18 }}>TH</span>
-                      <div style={{ flex: 1, height: 5, background: 'var(--color-border)', borderRadius: 99, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', borderRadius: 99, background: step.color, width: `${step.plan > 0 ? Math.min(step.value / (pKhqt || 1) * 100, 100) : 0}%` }} />
-                      </div>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text)', width: 36, textAlign: 'right' }}>{formatNumber(Math.round(step.value))}</span>
-                    </div>
-                    {i < 2 && (
-                      <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textAlign: 'right', marginTop: 2 }}>
-                        Chuyển đổi: {step.pct.toFixed(1)}%
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Donut + channel */}
-            <div className="panel">
-              <div className="toolbar" style={{ borderTop: 'none' }}>
-                <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Phân bổ Kênh</span>
-              </div>
-              <div style={{ padding: '10px 12px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <div style={{ flexShrink: 0 }}>
-                  <DonutChart data={channelBreakdown.map(ch => ({ name: ch.name, value: ch.amount, color: ch.color }))} size={90} innerRadius={28} />
-                </div>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5, paddingTop: 2 }}>
-                  {channelBreakdown.map(ch => (
-                    <div key={ch.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div style={{ width: 7, height: 7, borderRadius: 2, background: ch.color, flexShrink: 0 }} />
-                      <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.name}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text)' }}>{ch.pct}%</span>
-                    </div>
-                  ))}
                 </div>
               </div>
-            </div>
           </div>
 
-          {/* Alerts + Upcoming Events */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-
-            {/* Alerts — over budget showrooms */}
-            <div className="panel">
-              <div className="toolbar" style={{ borderTop: 'none' }}>
-                <AlertTriangle size={13} color="var(--color-danger)" />
-                <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Vượt ngân sách</span>
-              </div>
-              <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 5 }}>
-                {alertShowrooms.length === 0 ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 0', color: 'var(--color-success)' }}>
-                    <CheckCircle size={13} />
-                    <span style={{ fontSize: 12 }}>Tất cả showroom trong ngân sách</span>
-                  </div>
-                ) : alertShowrooms.map(sr => {
-                  const pct = sr.plan > 0 ? (sr.actual / sr.plan * 100) : 0;
-                  const over = sr.actual - sr.plan;
-                  return (
-                    <div key={sr.name} style={{
-                      display: 'flex', alignItems: 'flex-start', gap: 8, padding: '7px 9px',
-                      borderRadius: 4, borderLeft: '3px solid var(--color-danger)',
-                      background: '#fef2f2',
-                    }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sr.name}</div>
-                        <div style={{ fontSize: 10.5, color: 'var(--color-text-secondary)', marginTop: 1 }}>
-                          Vượt {formatNumber(Math.round(over))} tr
-                        </div>
-                      </div>
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 5px', borderRadius: 4, background: '#fee2e2', color: '#991b1b', flexShrink: 0 }}>
-                        {pct.toFixed(0)}%
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Upcoming events */}
-            <div className="panel" style={{ flex: 1 }}>
-              <div className="toolbar" style={{ borderTop: 'none' }}>
-                <CalendarDays size={13} color="var(--color-primary)" />
-                <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Sự kiện sắp tới</span>
-              </div>
-              <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 5 }}>
-                {upcomingEvents.length === 0 ? (
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', padding: '6px 0' }}>Không có sự kiện sắp tới</div>
-                ) : upcomingEvents.map((ev, i) => {
-                  const d = ev._date as Date;
-                  const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
-                  const urgBg   = diff <= 3 ? '#fef2f2' : diff <= 7 ? '#fffbeb' : '#eff6ff';
-                  const urgClr  = diff <= 3 ? '#991b1b' : diff <= 7 ? '#92400e' : '#1e40af';
-                  const urgTxt  = diff === 0 ? 'Hôm nay' : diff === 1 ? 'Ngày mai' : diff <= 3 ? `${diff} ngày` : `${diff}n`;
-                  return (
-                    <div key={i} style={{ display: 'flex', gap: 8, padding: '6px 8px', borderRadius: 4, background: '#f8fafc', border: '1px solid var(--color-border)', alignItems: 'center' }}>
-                      <div style={{ width: 32, height: 32, borderRadius: 4, background: 'var(--color-primary)', color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 800, lineHeight: 1 }}>{d.getDate()}</div>
-                        <div style={{ fontSize: 8, fontWeight: 600, opacity: 0.8 }}>T{d.getMonth() + 1}</div>
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.name || ev.eventName || 'Sự kiện'}</div>
-                        <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 1 }}>{ev.showroom || ''}</div>
-                      </div>
-                      <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 5px', borderRadius: 10, background: urgBg, color: urgClr, flexShrink: 0 }}>{urgTxt}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── ROW 3: Bar chart 12 tháng ─────────────────────────────────── */}
+        {/* ── ROW 3: ★ Recharts BarChart thay thế SVG vẽ tay ★ ──────── */}
         <div className="panel">
-          <div className="toolbar" style={{ borderTop: 'none' }}>
-            <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Ngân sách 12 tháng / {year}</span>
+          <div className="panel-header">
+            <div className="panel-header-title">
+              <span className="panel-header-accent" />
+              Ngân sách 12 tháng / {year}
+            </div>
+            <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--color-text-secondary)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 14, height: 0, borderBottom: '2px dashed #f59e0b', display: 'inline-block' }} /> Kế hoạch
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--color-primary)', display: 'inline-block' }} /> Thực hiện
+              </span>
+            </div>
           </div>
-          <div style={{ padding: '8px 12px' }}>
-            <BudgetBarChart data={barChartData} highlightMonth={month} height={130} />
+          <div style={{ padding: '8px 12px', height: 180, contain: 'layout style paint' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={barChartData} margin={{ top: 12, right: 4, left: -20, bottom: 0 }} barGap={0}>
+                <defs>
+                  <linearGradient id="modernBarGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.9}/>
+                    <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={1}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--color-border-light)" />
+                <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--color-text-muted)', fontWeight: 500 }} dy={8} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} tickFormatter={(v) => v === 0 ? '0' : `${(v / 1000).toFixed(1).replace('.0', '')} Tỷ`} />
+                <RechartsTooltip
+                  content={({ active, payload, label }: any) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div style={{
+                          background: 'var(--color-surface-elevated)',
+                          border: '1px solid var(--color-border)',
+                          boxShadow: 'var(--shadow-dropdown)',
+                          borderRadius: 8,
+                          padding: '10px 14px',
+                          minWidth: 160
+                        }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text)', marginBottom: 8, borderBottom: '1px solid rgba(0,0,0,0.05)', paddingBottom: 4 }}>Tháng {label?.replace('T', '')}</div>
+                          {payload.map((entry: any, index: number) => (
+                            <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, marginBottom: 4 }}>
+                              <span style={{ color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ width: 8, height: 8, borderRadius: 2, background: entry.color === 'url(#modernBarGradient)' ? 'var(--color-primary)' : entry.color }} />
+                                {entry.dataKey === 'plan' ? 'Kế hoạch' : 'Thực hiện'}
+                              </span>
+                              <span style={{ fontWeight: 600, color: 'var(--color-text)', fontVariantNumeric: 'tabular-nums' }}>{formatNumber(Math.round(entry.value))} tr</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                  cursor={{ fill: 'rgba(0, 75, 155, 0.04)' }}
+                />
+                <Bar 
+                  dataKey="actual" 
+                  fill="url(#modernBarGradient)" 
+                  radius={[4, 4, 0, 0]} 
+                  maxBarSize={32} 
+                  style={{ cursor: 'pointer' }}
+                  onClick={(data: any) => {
+                    if (data?.activePayload?.[0]?.payload?.name) {
+                       const nameStr = data.activePayload[0].payload.name;
+                       const mStr = nameStr.replace('T', '');
+                       const m = parseInt(mStr);
+                       if (!isNaN(m)) setMonth(m);
+                    } else if (data?.name) {
+                       const mStr = data.name.replace('T', '');
+                       const m = parseInt(mStr);
+                       if (!isNaN(m)) setMonth(m);
+                    }
+                  }}
+                />
+
+                {/* 2. Target Line (Kế hoạch) - Đường Line đứt đoạn (dashed) màu Cam (Amber) */}
+                <Line
+                  type="monotone"
+                  dataKey="plan"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  strokeDasharray="4 4"
+                  dot={false}
+                  activeDot={{ r: 4, fill: '#f59e0b', stroke: '#fff', strokeWidth: 2 }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
@@ -579,44 +879,3 @@ export default function DashboardPage() {
   );
 }
 
-// ── KPI Card component ────────────────────────────────────────────────────────
-function KpiCard({
-  label, value, plan, icon, iconBg, iconColor,
-  spark, sparkColor, higherIsBad, deltaColor, deltaBg,
-}: {
-  label: string; value: number; plan: number;
-  icon: React.ReactNode; iconBg: string; iconColor: string;
-  spark: number[]; sparkColor: string; higherIsBad: boolean;
-  deltaColor: (v: number, p: number, bad: boolean) => string;
-  deltaBg: (v: number, p: number, bad: boolean) => string;
-}) {
-  const delta = plan > 0 ? ((value - plan) / plan * 100) : 0;
-  const isUp = delta >= 0;
-  const clr = deltaColor(value, plan, higherIsBad);
-  const bg  = deltaBg(value, plan, higherIsBad);
-  return (
-    <div className="panel" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {label}
-        </div>
-        <div style={{ width: 28, height: 28, borderRadius: 6, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: iconColor }}>
-          {icon}
-        </div>
-      </div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-        {value > 0 ? formatNumber(Math.round(value)) : <span style={{ color: 'var(--color-text-muted)' }}>— —</span>}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 11, fontWeight: 600, padding: '1px 5px', borderRadius: 4, background: bg, color: clr }}>
-          {isUp ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-          {Math.abs(delta).toFixed(1)}%
-        </span>
-        <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>vs KH {formatNumber(Math.round(plan))}</span>
-      </div>
-      <div style={{ marginTop: 2 }}>
-        <SparkLine values={spark} color={sparkColor} />
-      </div>
-    </div>
-  );
-}

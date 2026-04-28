@@ -1,586 +1,534 @@
+// app/src/app/(dashboard)/reports/page.tsx
 'use client';
-
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import PageHeader from '@/components/layout/PageHeader';
-import { formatNumber } from '@/lib/utils';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
-  FileText, Wallet, Users, TrendingUp, FileSignature, BarChart3,
-  ArrowUpRight, ArrowDownRight, Minus, ChevronDown, ChevronRight,
-  CalendarCheck, Target, Activity, Zap, Download, Eye, MapPin, Flag,
-} from 'lucide-react';
+  useViewBudgetByBrand, useViewBudgetByChannel, useViewBudgetMaster,
+} from '@/lib/use-data';
 import { useBrands } from '@/contexts/BrandsContext';
-import { fetchAllBudgetPlans } from '@/lib/budget-data';
-import { fetchAllActualEntries } from '@/lib/actual-data';
-import { fetchEventsFromDB, type EventsByMonth, STATUS_CONFIG, type EventStatus } from '@/lib/events-data';
+import { useShowrooms } from '@/contexts/ShowroomsContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUnit } from '@/contexts/UnitContext';
+import { useChannels } from '@/contexts/ChannelsContext';
+import PageHeader from '@/components/layout/PageHeader';
+import { FilterDropdown } from '@/components/erp/FilterDropdown';
+import { ReportTabBar, type ReportTabId } from '@/components/reports/ReportTabBar';
+import { BudgetSummaryTab } from '@/components/reports/tabs/BudgetSummaryTab';
+import { PlanVsActualTab } from '@/components/reports/tabs/PlanVsActualTab';
+import { getMonthsForPeriod, mergePayloads, type MonthlyPayloads } from '@/lib/report-data';
+import type { ViewBudgetByBrand, ViewBudgetByChannel, ViewBudgetMaster } from '@/types/database';
 
-// ─── Channels (same structure) ──────────────────────────────────────────────
-const CHANNELS = [
-  { name: 'Google',       category: 'DIGITAL',    color: '#EA4335' },
-  { name: 'Facebook',     category: 'DIGITAL',    color: '#1877F2' },
-  { name: 'Khác (Digital)', category: 'DIGITAL',  color: '#64748B' },
-  { name: 'Sự kiện',      category: 'SỰ KIỆN',   color: '#10B981' },
-  { name: 'CSKH',         category: 'CSKH',       color: '#F59E0B' },
-  { name: 'Nhận diện',    category: 'NHẬN DIỆN',  color: '#8B5CF6' },
-] as const;
+// ── Convert view rows → MonthlyPayloads ──────────────────────────────────────
+//
+// Sentinel prefix used for channel rows so brand lookups don't clash:
+//   channel row key: "__ch__-{channel_code}-{metric}"   → sumByChannelMetric picks parts[-2]
+//   brand row key:   "{brand_name}-__all__-{metric}"    → sumByBrandMetric picks parts[0]
 
-const METRICS = ['Ngân sách', 'KHQT', 'GDTD', 'KHĐ'];
+const METRIC_SUFFIXES = ['ns', 'khqt', 'gdtd', 'khd'] as const;
+const METRIC_NAMES: Record<string, string> = { ns: 'Ngân sách', khqt: 'KHQT', gdtd: 'GDTD', khd: 'KHĐ' };
 
-type PayloadData = Record<string, number>;
+function buildChannelPayloads(
+  rows: ViewBudgetByChannel[] | undefined,
+  type: 'plan' | 'actual',
+  codeToName: Map<string, string>,
+): MonthlyPayloads {
+  if (!rows) return {};
+  const pm: MonthlyPayloads = {};
+  const prefix = type === 'plan' ? 'plan_' : 'actual_';
+  for (const row of rows) {
+    const chName = codeToName.get(row.channel_code) ?? row.channel_code;
+    if (!pm[row.month]) pm[row.month] = {};
+    const payload = pm[row.month];
+    for (const sfx of METRIC_SUFFIXES) {
+      const field = `${prefix}${sfx}` as keyof ViewBudgetByChannel;
+      const key = `__ch__-${chName}-${METRIC_NAMES[sfx]}`;
+      payload[key] = (payload[key] ?? 0) + (row[field] as number);
+    }
+  }
+  return pm;
+}
 
-// ──────────────────────────────────────────────────────────────────────────────
+function buildBrandPayloads(
+  rows: ViewBudgetByBrand[] | undefined,
+  type: 'plan' | 'actual',
+): MonthlyPayloads {
+  if (!rows) return {};
+  const pm: MonthlyPayloads = {};
+  const prefix = type === 'plan' ? 'plan_' : 'actual_';
+  for (const row of rows) {
+    if (!pm[row.month]) pm[row.month] = {};
+    const payload = pm[row.month];
+    for (const sfx of METRIC_SUFFIXES) {
+      const field = `${prefix}${sfx}` as keyof ViewBudgetByBrand;
+      const key = `${row.brand_name}-__all__-${METRIC_NAMES[sfx]}`;
+      payload[key] = (payload[key] ?? 0) + (row[field] as number);
+    }
+  }
+  return pm;
+}
+
+// Build channel payloads from v_budget_master (used when any filter is active)
+function buildChannelPayloadsFromMaster(
+  rows: ViewBudgetMaster[],
+  type: 'plan' | 'actual',
+  codeToName: Map<string, string>,
+): MonthlyPayloads {
+  const pm: MonthlyPayloads = {};
+  const prefix = type === 'plan' ? 'plan_' : 'actual_';
+  for (const row of rows) {
+    const chName = codeToName.get(row.channel_code) ?? row.channel_code;
+    if (!pm[row.month]) pm[row.month] = {};
+    const payload = pm[row.month];
+    for (const sfx of METRIC_SUFFIXES) {
+      const field = `${prefix}${sfx}` as keyof ViewBudgetMaster;
+      const key = `__ch__-${chName}-${METRIC_NAMES[sfx]}`;
+      payload[key] = (payload[key] ?? 0) + (row[field] as number);
+    }
+  }
+  return pm;
+}
+
+// Build brand payloads from v_budget_master (used when any filter is active)
+function buildBrandPayloadsFromMaster(
+  rows: ViewBudgetMaster[],
+  type: 'plan' | 'actual',
+): MonthlyPayloads {
+  const pm: MonthlyPayloads = {};
+  const prefix = type === 'plan' ? 'plan_' : 'actual_';
+  for (const row of rows) {
+    if (!pm[row.month]) pm[row.month] = {};
+    const payload = pm[row.month];
+    for (const sfx of METRIC_SUFFIXES) {
+      const field = `${prefix}${sfx}` as keyof ViewBudgetMaster;
+      const key = `${row.brand_name}-__all__-${METRIC_NAMES[sfx]}`;
+      payload[key] = (payload[key] ?? 0) + (row[field] as number);
+    }
+  }
+  return pm;
+}
+
+// Build model payloads from v_budget_master — key: {brand}-{model}-__total__-{metric}
+// sumByModelMetric expects: parts.slice(0, -2).join('-') === brand-model
+function buildModelPayloadsFromMaster(
+  rows: ViewBudgetMaster[],
+  type: 'plan' | 'actual',
+): MonthlyPayloads {
+  const pm: MonthlyPayloads = {};
+  const prefix = type === 'plan' ? 'plan_' : 'actual_';
+  for (const row of rows) {
+    if (!pm[row.month]) pm[row.month] = {};
+    const payload = pm[row.month];
+    for (const sfx of METRIC_SUFFIXES) {
+      const field = `${prefix}${sfx}` as keyof ViewBudgetMaster;
+      const key = `${row.brand_name}-${row.model_name}-__total__-${METRIC_NAMES[sfx]}`;
+      payload[key] = (payload[key] ?? 0) + (row[field] as number);
+    }
+  }
+  return pm;
+}
+
+function mergeViewPayloads(
+  channelPm: MonthlyPayloads,
+  brandPm: MonthlyPayloads,
+): MonthlyPayloads {
+  const months = new Set([...Object.keys(channelPm), ...Object.keys(brandPm)].map(Number));
+  const merged: MonthlyPayloads = {};
+  for (const m of months) {
+    merged[m] = { ...(channelPm[m] ?? {}), ...(brandPm[m] ?? {}) };
+  }
+  return merged;
+}
+
 export default function ReportsPage() {
   const { brands } = useBrands();
+  const { showrooms: showroomItems } = useShowrooms();
+  const { profile, effectiveRole } = useAuth();
+  const { activeUnitId } = useUnit();
+  const { channels } = useChannels();
+
+  // Map channel_code ↔ display name
+  const codeToName = useMemo(
+    () => new Map<string, string>(channels.map(c => [c.code, c.name])),
+    [channels],
+  );
+  const nameToCode = useMemo(
+    () => new Map<string, string>(channels.filter(c => !c.isAggregate).map(c => [c.name, c.code])),
+    [channels],
+  );
+
   const [mounted, setMounted] = useState(false);
-  const [year, setYear] = useState(2026);
-  const [month, setMonth] = useState(4);
-  const [viewMode, setViewMode] = useState<'month' | 'quarter' | 'year'>('month');
+  const [activeTab, setActiveTab] = useState<ReportTabId>('plan-vs-actual');
 
-  // Raw data
-  const [plansByMonth, setPlansByMonth] = useState<Record<number, PayloadData>>({});
-  const [actualsByMonth, setActualsByMonth] = useState<Record<number, PayloadData>>({});
-  const [eventsByMonth, setEventsByMonth] = useState<EventsByMonth>({});
+  // ── Role-based Scope ──────────────────────────────────────────────────────
+  const isRestrictedRole = ['mkt_showroom', 'gd_showroom'].includes(effectiveRole as string);
+  const allowedShowroomName = isRestrictedRole ? profile?.showroom?.name : null;
+  // mkt_brand: luôn lọc theo brands được giao (ngay cả khi chưa chọn filter)
+  const brandRestriction: string[] = (effectiveRole === 'mkt_brand' && profile?.brands?.length)
+    ? profile.brands
+    : [];
 
-  const loadData = useCallback(async () => {
-    const [budgetPlans, actuals, events] = await Promise.all([
-      fetchAllBudgetPlans(),
-      fetchAllActualEntries(year),
-      fetchEventsFromDB(),
-    ]);
+  const [compareMode, setCompareMode] = useState<'none' | 'prev' | 'prev_year'>('none');
 
-    const pm: Record<number, PayloadData> = {};
-    budgetPlans.forEach(p => { pm[p.month] = p.payload || {}; });
-    setPlansByMonth(pm);
+  // Shared filter state
+  const [filters, setFilters] = useState({
+    year: 2026,
+    viewMode: 'month' as 'month' | 'quarter' | 'year',
+    month: new Date().getMonth() + 1,
+    brand: '',
+    showroom: '',
+    channel: '',
+  });
 
-    const am: Record<number, PayloadData> = {};
-    actuals.forEach(a => { am[a.month] = a.payload || {}; });
-    setActualsByMonth(am);
+  const updateFilters = (partial: Partial<typeof filters>) =>
+    setFilters(prev => ({ ...prev, ...partial }));
 
-    setEventsByMonth(events);
-  }, [year]);
+  // ── Unit ID for views ─────────────────────────────────────────────────────
+  const unitIdForViews = activeUnitId === 'all' ? null : activeUnitId;
+
+  // ── SWR view-based data ───────────────────────────────────────────────────
+  const { data: viewBrandRows }         = useViewBudgetByBrand(unitIdForViews, filters.year);
+  const { data: viewChannelRows }       = useViewBudgetByChannel(unitIdForViews, filters.year);
+  const { data: prevYearBrandRows }     = useViewBudgetByBrand(unitIdForViews, filters.year - 1);
+  const { data: prevYearChannelRows }   = useViewBudgetByChannel(unitIdForViews, filters.year - 1);
+  const { data: viewMasterRows }        = useViewBudgetMaster(unitIdForViews, filters.year);
+  const { data: prevYearMasterRows }    = useViewBudgetMaster(unitIdForViews, filters.year - 1);
+
+  // ── Filter resolution ─────────────────────────────────────────────────────
+  const hasAnyFilter = !!(filters.brand || filters.showroom || filters.channel) || brandRestriction.length > 0;
+
+  const filterShowroomId = useMemo(() => {
+    if (!filters.showroom) return null;
+    return showroomItems.find(s => s.name === filters.showroom)?.id ?? null;
+  }, [filters.showroom, showroomItems]);
+
+  const filterChannelCode = useMemo(() => {
+    if (!filters.channel) return null;
+    return nameToCode.get(filters.channel) ?? filters.channel;
+  }, [filters.channel, nameToCode]);
+
+  // ── Filtered master rows — áp dụng tất cả filters lên v_budget_master ─────
+  const filteredMasterRows = useMemo<ViewBudgetMaster[] | null>(() => {
+    if (!hasAnyFilter || !viewMasterRows) return null;
+    return viewMasterRows.filter(r => {
+      if (filterShowroomId && r.showroom_id !== filterShowroomId) return false;
+      if (filters.brand && r.brand_name !== filters.brand) return false;
+      // mkt_brand: lọc theo brand restriction nếu chưa chọn brand cụ thể
+      if (brandRestriction.length > 0 && !filters.brand && !brandRestriction.includes(r.brand_name)) return false;
+      if (filterChannelCode && r.channel_code !== filterChannelCode) return false;
+      return true;
+    });
+  }, [viewMasterRows, hasAnyFilter, filterShowroomId, filters.brand, filterChannelCode, brandRestriction]);
+
+  const filteredPrevYearMasterRows = useMemo<ViewBudgetMaster[] | null>(() => {
+    if (!hasAnyFilter || !prevYearMasterRows) return null;
+    return prevYearMasterRows.filter(r => {
+      if (filterShowroomId && r.showroom_id !== filterShowroomId) return false;
+      if (filters.brand && r.brand_name !== filters.brand) return false;
+      if (brandRestriction.length > 0 && !filters.brand && !brandRestriction.includes(r.brand_name)) return false;
+      if (filterChannelCode && r.channel_code !== filterChannelCode) return false;
+      return true;
+    });
+  }, [prevYearMasterRows, hasAnyFilter, filterShowroomId, filters.brand, filterChannelCode, brandRestriction]);
+
+  // ── Build MonthlyPayloads — ưu tiên master rows (kèm model data) ─────────
+  // QUAN TRỌNG: CHỈ dùng channel keys + model keys.
+  // KHÔNG dùng buildBrandPayloadsFromMaster (tạo __all__ keys) cùng lúc với
+  // buildModelPayloadsFromMaster (tạo __total__ keys) — vì sumByBrandMetric
+  // match cả hai → brand totals bị nhân đôi.
+  // Model __total__ keys đã đủ để sumByBrandMetric aggregate lên brand level.
+  function buildFromMaster(rows: ViewBudgetMaster[], type: 'plan' | 'actual'): MonthlyPayloads {
+    const ch    = buildChannelPayloadsFromMaster(rows, type, codeToName);
+    const model = buildModelPayloadsFromMaster(rows, type);
+    return mergeViewPayloads(ch, model);
+  }
+
+  const plansByMonth = useMemo<MonthlyPayloads>(() => {
+    const rows = filteredMasterRows ?? viewMasterRows;
+    if (rows) return buildFromMaster(rows, 'plan');
+    return mergeViewPayloads(
+      buildChannelPayloads(viewChannelRows, 'plan', codeToName),
+      buildBrandPayloads(viewBrandRows, 'plan'),
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredMasterRows, viewMasterRows, viewChannelRows, viewBrandRows, codeToName]);
+
+  const actualsByMonth = useMemo<MonthlyPayloads>(() => {
+    const rows = filteredMasterRows ?? viewMasterRows;
+    if (rows) return buildFromMaster(rows, 'actual');
+    return mergeViewPayloads(
+      buildChannelPayloads(viewChannelRows, 'actual', codeToName),
+      buildBrandPayloads(viewBrandRows, 'actual'),
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredMasterRows, viewMasterRows, viewChannelRows, viewBrandRows, codeToName]);
+
+  const prevYearActualsByMonth = useMemo<MonthlyPayloads>(() => {
+    if (compareMode !== 'prev_year') return {};
+    const rows = filteredPrevYearMasterRows ?? prevYearMasterRows;
+    if (rows) return buildFromMaster(rows, 'actual');
+    return mergeViewPayloads(
+      buildChannelPayloads(prevYearChannelRows, 'actual', codeToName),
+      buildBrandPayloads(prevYearBrandRows, 'actual'),
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredPrevYearMasterRows, prevYearMasterRows, prevYearChannelRows, prevYearBrandRows, compareMode, codeToName]);
+
+  // When unitIdForViews is null (super_admin "all" mode), views are skipped — treat as ready
+  const viewsReady = unitIdForViews === null
+    ? true
+    : viewMasterRows !== undefined;
+  const loading = !viewsReady;
 
   useEffect(() => {
-    loadData().then(() => setMounted(true));
-  }, [loadData]);
+    if (!loading) setMounted(true);
+  }, [loading]);
 
-  // ── Merged data for selected period ────────────────────────────────────────
-  const monthsInView = useMemo(() => {
-    if (viewMode === 'month') return [month];
-    if (viewMode === 'quarter') {
-      const q0 = (Math.ceil(month / 3) - 1) * 3 + 1;
-      return [q0, q0 + 1, q0 + 2];
+  // Showroom list for dropdowns (role-filtered)
+  const showrooms = useMemo(() => {
+    let items = showroomItems;
+    if (isRestrictedRole && allowedShowroomName) {
+      items = items.filter(s => s.name === allowedShowroomName);
+    } else if (effectiveRole === 'mkt_brand' && profile?.brands && profile.brands.length > 0) {
+      items = items.filter(s => s.brands.some(b => profile.brands!.includes(b)));
     }
-    return Array.from({ length: 12 }, (_, i) => i + 1);
-  }, [viewMode, month]);
+    return items.map(s => s.name);
+  }, [showroomItems, isRestrictedRole, allowedShowroomName, effectiveRole, profile]);
 
-  const planData = useMemo(() => {
-    const merged: PayloadData = {};
-    monthsInView.forEach(m => {
-      const p = plansByMonth[m] || {};
-      Object.entries(p).forEach(([k, v]) => { merged[k] = (merged[k] || 0) + v; });
-    });
-    return merged;
-  }, [plansByMonth, monthsInView]);
-
-  const actualData = useMemo(() => {
-    const merged: PayloadData = {};
-    monthsInView.forEach(m => {
-      const a = actualsByMonth[m] || {};
-      Object.entries(a).forEach(([k, v]) => { merged[k] = (merged[k] || 0) + v; });
-    });
-    return merged;
-  }, [actualsByMonth, monthsInView]);
-
-  const events = useMemo(() => {
-    return monthsInView.flatMap(m => eventsByMonth[m] || []);
-  }, [eventsByMonth, monthsInView]);
-
-  // ── Aggregate helpers ──────────────────────────────────────────────────────
-  const sumByMetric = (data: PayloadData, metric: string) => {
-    let total = 0;
-    for (const [key, val] of Object.entries(data)) {
-      if (key.endsWith(`-${metric}`)) total += val;
+  // brands passed to tabs — filtered by role restriction + user brand filter + showroom filter
+  const tableBrands = useMemo(() => {
+    let items = brandRestriction.length > 0
+      ? brands.filter(b => brandRestriction.includes(b.name))
+      : brands;
+    if (filters.brand) items = items.filter(b => b.name === filters.brand);
+    // Khi filter theo showroom, chỉ show brands thuộc showroom đó
+    if (filters.showroom) {
+      const sr = showroomItems.find(s => s.name === filters.showroom);
+      if (sr?.brands?.length) items = items.filter(b => sr.brands.includes(b.name));
     }
-    return total;
-  };
+    return items;
+  }, [brands, brandRestriction, filters.brand, filters.showroom, showroomItems]);
 
-  const sumByChannel = (data: PayloadData, channelName: string, metric: string) => {
-    let total = 0;
-    // Map display name to data key
-    const dataChannelName = channelName === 'Khác (Digital)' ? 'Khác' : channelName;
-    for (const [key, val] of Object.entries(data)) {
-      if (key.includes(`-${dataChannelName}-`) && key.endsWith(`-${metric}`)) total += val;
+  // showroomItems passed to tabs — filtered by both role + user filter
+  const tableShowroomItems = useMemo(() => {
+    let items = showroomItems;
+    if (isRestrictedRole && allowedShowroomName) {
+      items = items.filter(s => s.name === allowedShowroomName);
+    } else if (effectiveRole === 'mkt_brand' && profile?.brands && profile.brands.length > 0) {
+      items = items.filter(s => s.brands.some(b => profile.brands!.includes(b)));
     }
-    return total;
-  };
-
-  const sumByBrand = (data: PayloadData, brandName: string, metric: string) => {
-    let total = 0;
-    for (const [key, val] of Object.entries(data)) {
-      if (key.startsWith(`${brandName}-`) && key.endsWith(`-${metric}`)) total += val;
+    if (filters.showroom) {
+      items = items.filter(s => s.name === filters.showroom);
     }
-    return total;
-  };
+    return items.map(s => ({ name: s.name, weight: s.weight }));
+  }, [showroomItems, isRestrictedRole, allowedShowroomName, effectiveRole, profile, filters.showroom]);
 
-  // ── KPIs ───────────────────────────────────────────────────────────────────
-  const kpis = useMemo(() => {
-    const pb = sumByMetric(planData, 'Ngân sách');
-    const ab = sumByMetric(actualData, 'Ngân sách');
-    const pk = sumByMetric(planData, 'KHQT');
-    const ak = sumByMetric(actualData, 'KHQT');
-    const pg = sumByMetric(planData, 'GDTD');
-    const ag = sumByMetric(actualData, 'GDTD');
-    const pd = sumByMetric(planData, 'KHĐ');
-    const ad = sumByMetric(actualData, 'KHĐ');
+  // ── Per-showroom MonthlyPayloads (real data from v_budget_master) ────────────
+  const reportMonths = useMemo(
+    () => getMonthsForPeriod(filters.viewMode, filters.month),
+    [filters.viewMode, filters.month],
+  );
 
-    // Event-specific
-    const evBudgetPlan = events.reduce((s, e) => s + (e.budget || 0), 0);
-    const evBudgetActual = events.reduce((s, e) => s + (e.budgetSpent || 0), 0);
-    const evLeadsPlan = events.reduce((s, e) => s + (e.leads || 0), 0);
-    const evLeadsActual = events.reduce((s, e) => s + (e.leadsActual || 0), 0);
-    const evDealsPlan = events.reduce((s, e) => s + (e.deals || 0), 0);
-    const evDealsActual = events.reduce((s, e) => s + (e.dealsActual || 0), 0);
+  const showroomPayloadsByMonth = useMemo<Record<string, { plan: MonthlyPayloads; actual: MonthlyPayloads }>>(() => {
+    if (!viewMasterRows) return {};
+    const result: Record<string, { plan: MonthlyPayloads; actual: MonthlyPayloads }> = {};
+    for (const sr of showroomItems) {
+      const srRows = viewMasterRows.filter(r => r.showroom_id === sr.id);
+      result[sr.name] = {
+        plan:   buildChannelPayloadsFromMaster(srRows, 'plan',   codeToName),
+        actual: buildChannelPayloadsFromMaster(srRows, 'actual', codeToName),
+      };
+    }
+    return result;
+  }, [viewMasterRows, showroomItems, codeToName]);
 
-    return {
-      planBudget: pb, actualBudget: ab,
-      planKhqt: pk, actualKhqt: ak,
-      planGdtd: pg, actualGdtd: ag,
-      planKhd: pd, actualKhd: ad,
-      evBudgetPlan, evBudgetActual, evLeadsPlan, evLeadsActual, evDealsPlan, evDealsActual,
-      totalEvents: events.length,
-      completedEvents: events.filter(e => e.status === 'completed').length,
-    };
-  }, [planData, actualData, events]);
+  // Pre-merge per-showroom data for current period (passed to PlanVsActualTab)
+  const showroomMergedData = useMemo<Record<string, { plan: Record<string, number>; actual: Record<string, number> }>>(() => {
+    const result: Record<string, { plan: Record<string, number>; actual: Record<string, number> }> = {};
+    for (const [name, payloads] of Object.entries(showroomPayloadsByMonth)) {
+      result[name] = {
+        plan:   mergePayloads(payloads.plan,   reportMonths),
+        actual: mergePayloads(payloads.actual, reportMonths),
+      };
+    }
+    return result;
+  }, [showroomPayloadsByMonth, reportMonths]);
 
-  // ── Render helpers ─────────────────────────────────────────────────────────
-  const pct = (a: number, p: number) => p > 0 ? Math.round((a / p) * 100) : 0;
-  const pctColor = (p: number) => p >= 80 ? '#059669' : p >= 50 ? '#d97706' : '#dc2626';
-  const pctBg = (p: number) => p >= 80 ? '#ecfdf5' : p >= 50 ? '#fffbeb' : '#fef2f2';
-  const deltaIcon = (a: number, p: number) => {
-    const d = pct(a, p);
-    if (d >= 100) return <ArrowUpRight size={12} style={{ color: '#059669' }} />;
-    if (d >= 80) return <ArrowUpRight size={12} style={{ color: '#d97706' }} />;
-    return <ArrowDownRight size={12} style={{ color: '#dc2626' }} />;
-  };
+  const { cmpPlansByMonth, cmpActualsByMonth, cmpMonths } = useMemo(() => {
+    if (compareMode === 'none') {
+      return { cmpPlansByMonth: {} as MonthlyPayloads, cmpActualsByMonth: {} as MonthlyPayloads, cmpMonths: [] as number[] };
+    }
+    if (compareMode === 'prev') {
+      const prevM  = filters.month === 1 ? 12 : filters.month - 1;
+      const months = getMonthsForPeriod(filters.viewMode, prevM);
+      return { cmpPlansByMonth: plansByMonth, cmpActualsByMonth: actualsByMonth, cmpMonths: months };
+    }
+    // prev_year: same month(s) but from prev year data
+    const months = getMonthsForPeriod(filters.viewMode, filters.month);
+    return { cmpPlansByMonth: plansByMonth, cmpActualsByMonth: prevYearActualsByMonth, cmpMonths: months };
+  }, [compareMode, filters, plansByMonth, actualsByMonth, prevYearActualsByMonth]);
 
-  if (!mounted) return null;
+  const compareLabel = useMemo(() => {
+    if (compareMode === 'none') return '';
+    if (compareMode === 'prev') {
+      const prevM = filters.month === 1 ? 12 : filters.month - 1;
+      const prevY = filters.month === 1 ? filters.year - 1 : filters.year;
+      if (filters.viewMode === 'month')   return `T${prevM}/${prevY}`;
+      if (filters.viewMode === 'quarter') {
+        const prevM = filters.month === 1 ? 12 : filters.month - 1;
+        const prevY = filters.month <= 3 ? filters.year - 1 : filters.year;
+        return `Q${Math.ceil(prevM / 3)}/${prevY}`;
+      }
+      return `${filters.year - 1}`;
+    }
+    // prev_year
+    if (filters.viewMode === 'month')   return `T${filters.month}/${filters.year - 1}`;
+    if (filters.viewMode === 'quarter') return `Q${Math.ceil(filters.month / 3)}/${filters.year - 1}`;
+    return `${filters.year - 1}`;
+  }, [compareMode, filters]);
 
-  const periodLabel = viewMode === 'month' ? `Tháng ${month}/${year}` : viewMode === 'quarter' ? `Q${Math.ceil(month / 3)}/${year}` : `Năm ${year}`;
+  const brandNames = useMemo(
+    () => brandRestriction.length > 0
+      ? brands.filter(b => brandRestriction.includes(b.name)).map(b => b.name)
+      : brands.map(b => b.name),
+    [brands, brandRestriction]
+  );
+
+  const channelOptions = useMemo(
+    () => channels.filter(c => !c.isAggregate).map(c => ({ value: c.name, label: c.name })),
+    [channels],
+  );
+
+  // Tab-specific filter visibility
+  const showBrandFilter    = ['budget-summary', 'plan-vs-actual'].includes(activeTab);
+  const showShowroomFilter = activeTab === 'plan-vs-actual';
+  const showChannelFilter  = activeTab === 'budget-summary';
+  const showAnyFilter      = showBrandFilter || showShowroomFilter || showChannelFilter;
+
+  if (!mounted) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-text-muted)', fontSize: 'var(--fs-body)', gap: 10 }}>
+      <span style={{ display: 'inline-block', width: 18, height: 18, border: '2px solid #e2e8f0', borderTopColor: 'var(--color-primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      Đang tải báo cáo...
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <PageHeader
-        title="Báo cáo thực hiện"
-        year={year} month={month} viewMode={viewMode}
-        onPeriodChange={(y, m) => { setYear(y); setMonth(m); }}
-        onViewModeChange={setViewMode}
-        actions={
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-              Kỳ: <strong>{periodLabel}</strong>
-            </span>
+        year={filters.year}
+        month={filters.month}
+        viewMode={filters.viewMode}
+        onPeriodChange={(y, m) => updateFilters({ year: y, month: m })}
+        onViewModeChange={(mode) => updateFilters({ viewMode: mode })}
+        filters={showAnyFilter ? (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {showBrandFilter && (
+              <FilterDropdown
+                value={filters.brand || 'all'}
+                options={[{ value: 'all', label: 'Tất cả Thương hiệu' }, ...brandNames.map(b => ({ value: b, label: b }))]}
+                onChange={(v: string) => updateFilters({ brand: v === 'all' ? '' : v })}
+                placeholder="Tất cả Thương hiệu"
+                width={150}
+              />
+            )}
+            {showShowroomFilter && (
+              <FilterDropdown
+                value={filters.showroom || 'all'}
+                options={[{ value: 'all', label: 'Tất cả Showroom' }, ...showrooms.map(s => ({ value: s, label: s }))]}
+                onChange={(v: string) => updateFilters({ showroom: v === 'all' ? '' : v })}
+                placeholder="Tất cả Showroom"
+                width={150}
+              />
+            )}
+            {showChannelFilter && (
+              <FilterDropdown
+                value={filters.channel || 'all'}
+                options={[{ value: 'all', label: 'Tất cả Kênh' }, ...channelOptions]}
+                onChange={(v: string) => updateFilters({ channel: v === 'all' ? '' : v })}
+                placeholder="Tất cả Kênh"
+                width={130}
+              />
+            )}
+            {hasAnyFilter && (
+              <button
+                onClick={() => updateFilters({ brand: '', showroom: '', channel: '' })}
+                style={{ fontSize: 11, padding: '3px 8px', border: '1px solid #fecaca', borderRadius: 4, background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontWeight: 600 }}
+              >✕ Bỏ lọc</button>
+            )}
           </div>
-        }
+        ) : undefined}
       />
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Body */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+        {/* Tab bar */}
+        <ReportTabBar
+          activeTab={activeTab}
+          onTabChange={(tab) => {
+            setActiveTab(tab);
+            // Reset filters khi đổi tab vì mỗi tab có bộ lọc khác nhau
+            updateFilters({ brand: '', showroom: '', channel: '' });
+          }}
+        />
 
-        {/* ═══ Row 1: Executive KPI Cards ═══ */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-          {[
-            { icon: Wallet, label: 'Ngân sách', planVal: kpis.planBudget, actualVal: kpis.actualBudget, unit: ' tr', color: '#3B82F6' },
-            { icon: Users, label: 'KHQT', planVal: kpis.planKhqt, actualVal: kpis.actualKhqt, unit: '', color: '#F59E0B' },
-            { icon: TrendingUp, label: 'GDTD', planVal: kpis.planGdtd, actualVal: kpis.actualGdtd, unit: '', color: '#06B6D4' },
-            { icon: FileSignature, label: 'KHĐ', planVal: kpis.planKhd, actualVal: kpis.actualKhd, unit: '', color: '#10B981' },
-          ].map(({ icon: Icon, label, planVal, actualVal, unit, color }) => {
-            const p = pct(actualVal, planVal);
-            return (
-              <div key={label} className="panel" style={{ padding: '16px 20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Icon size={18} style={{ color }} />
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>{label}</span>
-                  </div>
-                  <span style={{
-                    fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
-                    background: pctBg(p), color: pctColor(p),
-                  }}>
-                    {p}% đạt
-                  </span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
-                  <div>
-                    <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 2 }}>KẾ HOẠCH</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', fontVariantNumeric: 'tabular-nums' }}>
-                      {formatNumber(Math.round(planVal))}{unit}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, color: '#92400e', marginBottom: 2 }}>THỰC HIỆN</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: '#92400e', fontVariantNumeric: 'tabular-nums' }}>
-                      {formatNumber(Math.round(actualVal))}{unit}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.min(p, 100)}%`, height: '100%', background: `linear-gradient(90deg, ${color}, ${color}cc)`, borderRadius: 3, transition: 'width 0.5s ease' }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* ═══ Row 2: Channel Analysis + Conversion Funnel ═══ */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 12 }}>
-
-          {/* Channel Bar Chart */}
-          <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <BarChart3 size={15} style={{ color: '#3B82F6' }} />
-              <span style={{ fontSize: 13, fontWeight: 700 }}>Ngân sách KH vs TH theo Kênh</span>
-            </div>
-            <div style={{ padding: 16 }}>
-              {CHANNELS.map(ch => {
-                const planVal = sumByChannel(planData, ch.name, 'Ngân sách');
-                const actualVal = sumByChannel(actualData, ch.name, 'Ngân sách');
-                // For "Sự kiện" channel, use events data
-                const displayPlan = ch.name === 'Sự kiện' ? kpis.evBudgetPlan : planVal;
-                const displayActual = ch.name === 'Sự kiện' ? kpis.evBudgetActual : actualVal;
-                const maxVal = Math.max(displayPlan, displayActual, 1);
-                const p = pct(displayActual, displayPlan);
-
-                return (
-                  <div key={ch.name} style={{ marginBottom: 16 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 12 }}>
-                      <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: 2, background: ch.color, display: 'inline-block' }} />
-                        {ch.name}
-                      </span>
-                      <span style={{ color: pctColor(p), fontWeight: 700, fontSize: 11 }}>{p}%</span>
-                    </div>
-                    {/* Plan bar */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                      <span style={{ fontSize: 9, color: '#94a3b8', width: 20, textAlign: 'right' }}>KH</span>
-                      <div style={{ flex: 1, height: 12, background: '#f1f5f9', borderRadius: 2, overflow: 'hidden' }}>
-                        <div style={{ width: `${(displayPlan / maxVal) * 100}%`, height: '100%', background: `${ch.color}40`, borderRadius: 2 }} />
-                      </div>
-                      <span style={{ fontSize: 10, color: '#94a3b8', width: 50, textAlign: 'right' }}>{formatNumber(Math.round(displayPlan))} tr</span>
-                    </div>
-                    {/* Actual bar */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 9, color: '#92400e', width: 20, textAlign: 'right', fontWeight: 600 }}>TH</span>
-                      <div style={{ flex: 1, height: 12, background: '#f1f5f9', borderRadius: 2, overflow: 'hidden' }}>
-                        <div style={{ width: `${(displayActual / maxVal) * 100}%`, height: '100%', background: ch.color, borderRadius: 2, transition: 'width 0.3s' }} />
-                      </div>
-                      <span style={{ fontSize: 10, color: '#92400e', width: 50, textAlign: 'right', fontWeight: 600 }}>{formatNumber(Math.round(displayActual))} tr</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+        {/* Comparison toolbar — plan-vs-actual tab only */}
+        {activeTab === 'plan-vs-actual' && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0',
+            borderBottom: '1px solid var(--color-border-light)', marginBottom: 12,
+            flexWrap: 'wrap',
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-muted)' }}>So sánh với:</span>
+            {(['none', 'prev', 'prev_year'] as const).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setCompareMode(mode)}
+                style={{
+                  padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  border: `1px solid ${compareMode === mode ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                  background: compareMode === mode ? 'var(--color-primary)' : 'var(--color-surface-elevated)',
+                  color: compareMode === mode ? '#fff' : 'var(--color-text)',
+                }}
+              >
+                {mode === 'none' ? 'Không' : mode === 'prev' ? 'Kỳ liền trước' : 'Cùng kỳ năm trước'}
+              </button>
+            ))}
+            {compareMode !== 'none' && compareLabel && (
+              <span style={{ fontSize: 11, color: 'var(--color-primary)', background: 'var(--color-primary-light)', padding: '2px 8px', borderRadius: 4 }}>
+                So với: {compareLabel}
+              </span>
+            )}
           </div>
+        )}
 
-          {/* Conversion Funnel — KH vs TH */}
-          <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Activity size={15} style={{ color: '#8B5CF6' }} />
-              <span style={{ fontSize: 13, fontWeight: 700 }}>Phễu chuyển đổi: KH vs TH</span>
-            </div>
-            <div style={{ padding: 16 }}>
-              {[
-                { label: 'KHQT', sub: 'Khách hàng quan tâm', planVal: kpis.planKhqt, actualVal: kpis.actualKhqt, color: '#3B82F6' },
-                { label: 'GDTD', sub: 'Giao dịch theo dõi', planVal: kpis.planGdtd, actualVal: kpis.actualGdtd, color: '#F59E0B' },
-                { label: 'KHĐ', sub: 'Ký hợp đồng', planVal: kpis.planKhd, actualVal: kpis.actualKhd, color: '#10B981' },
-              ].map((step, i) => {
-                const p = pct(step.actualVal, step.planVal);
-                const planPct = kpis.planKhqt > 0 ? (step.planVal / kpis.planKhqt * 100) : 100;
-                const actualPct = kpis.actualKhqt > 0 ? (step.actualVal / kpis.actualKhqt * 100) : 0;
-
-                return (
-                  <div key={step.label} style={{ marginBottom: i < 2 ? 20 : 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <div>
-                        <span style={{ fontSize: 12, fontWeight: 700 }}>{step.label}</span>
-                        <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 6 }}>{step.sub}</span>
-                      </div>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: pctColor(p) }}>{p}%</span>
-                    </div>
-
-                    {/* Two side-by-side bars */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                      <div>
-                        <div style={{ fontSize: 9, color: '#94a3b8', marginBottom: 2 }}>KH: {formatNumber(Math.round(step.planVal))}</div>
-                        <div style={{ height: 8, background: '#f1f5f9', borderRadius: 2, overflow: 'hidden' }}>
-                          <div style={{ width: `${Math.min(planPct, 100)}%`, height: '100%', background: `${step.color}40`, borderRadius: 2 }} />
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 9, color: '#92400e', marginBottom: 2, fontWeight: 600 }}>TH: {formatNumber(Math.round(step.actualVal))}</div>
-                        <div style={{ height: 8, background: '#f1f5f9', borderRadius: 2, overflow: 'hidden' }}>
-                          <div style={{ width: `${Math.min(actualPct, 100)}%`, height: '100%', background: step.color, borderRadius: 2 }} />
-                        </div>
-                      </div>
-                    </div>
-
-                    {i < 2 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 10, color: '#94a3b8' }}>
-                        <span>KH CR: {planPct.toFixed(1)}%</span>
-                        <span style={{ color: '#92400e' }}>TH CR: {actualPct.toFixed(1)}%</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* Summary row */}
-              <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--color-border)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <div style={{ background: '#f0f9ff', padding: '8px 10px', borderRadius: 4, textAlign: 'center', border: '1px solid #bfdbfe' }}>
-                  <div style={{ fontSize: 10, color: '#64748b', marginBottom: 2 }}>KH: KHQT→KHĐ</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: '#2563eb' }}>
-                    {kpis.planKhqt > 0 ? (kpis.planKhd / kpis.planKhqt * 100).toFixed(1) : '—'}%
-                  </div>
-                </div>
-                <div style={{ background: '#fef3c7', padding: '8px 10px', borderRadius: 4, textAlign: 'center', border: '1px solid #fde68a' }}>
-                  <div style={{ fontSize: 10, color: '#92400e', marginBottom: 2 }}>TH: KHQT→KHĐ</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: '#92400e' }}>
-                    {kpis.actualKhqt > 0 ? (kpis.actualKhd / kpis.actualKhqt * 100).toFixed(1) : '—'}%
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ═══ Row 3: Brand × Metric pivot ═══ */}
-        <div className="panel" style={{ overflow: 'hidden' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Flag size={15} style={{ color: '#EF4444' }} />
-            <span style={{ fontSize: 13, fontWeight: 700 }}>So sánh KH / TH theo Thương hiệu</span>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ width: '100%' }}>
-              <thead>
-                <tr>
-                  <th style={{ minWidth: 100 }}>Thương hiệu</th>
-                  {METRICS.map(m => (
-                    <React.Fragment key={m}>
-                      <th style={{ textAlign: 'right', minWidth: 65, fontSize: 10, borderLeft: '2px solid #e2e8f0' }}>KH {m === 'Ngân sách' ? 'NS' : m}</th>
-                      <th style={{ textAlign: 'right', minWidth: 65, fontSize: 10, color: '#92400e' }}>TH {m === 'Ngân sách' ? 'NS' : m}</th>
-                      <th style={{ textAlign: 'center', minWidth: 45, fontSize: 10 }}>%</th>
-                    </React.Fragment>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {brands.map(brand => {
-                  return (
-                    <tr key={brand.name}>
-                      <td style={{ fontWeight: 600 }}>{brand.name}</td>
-                      {METRICS.map(metric => {
-                        const planVal = sumByBrand(planData, brand.name, metric);
-                        const actualVal = sumByBrand(actualData, brand.name, metric);
-                        const p = pct(actualVal, planVal);
-                        const isBudget = metric === 'Ngân sách';
-                        const fmt = (v: number) => formatNumber(isBudget ? Math.round(v * 10) / 10 : Math.round(v));
-                        return (
-                          <React.Fragment key={metric}>
-                            <td style={{ textAlign: 'right', color: '#94a3b8', borderLeft: '2px solid #e2e8f0' }}>{planVal > 0 ? fmt(planVal) : '—'}</td>
-                            <td style={{ textAlign: 'right', fontWeight: 600, color: '#92400e' }}>{actualVal > 0 ? fmt(actualVal) : '—'}</td>
-                            <td style={{ textAlign: 'center' }}>
-                              {planVal > 0 && actualVal > 0 ? (
-                                <span style={{ fontSize: 11, fontWeight: 700, color: pctColor(p), padding: '1px 6px', borderRadius: 3, background: pctBg(p) }}>
-                                  {p}%
-                                </span>
-                              ) : '—'}
-                            </td>
-                          </React.Fragment>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-                {/* Grand total */}
-                <tr className="grand-total">
-                  <td style={{ fontWeight: 700 }}>TỔNG CỘNG</td>
-                  {METRICS.map(metric => {
-                    const planVal = sumByMetric(planData, metric);
-                    const actualVal = sumByMetric(actualData, metric);
-                    const p = pct(actualVal, planVal);
-                    const isBudget = metric === 'Ngân sách';
-                    const fmt = (v: number) => formatNumber(isBudget ? Math.round(v * 10) / 10 : Math.round(v));
-                    return (
-                      <React.Fragment key={metric}>
-                        <td style={{ textAlign: 'right', borderLeft: '2px solid #e2e8f0' }}>{fmt(planVal)}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 700, color: '#1e40af' }}>{fmt(actualVal)}</td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span style={{ fontWeight: 700, color: pctColor(p), padding: '1px 8px', borderRadius: 3, background: pctBg(p), fontSize: 12 }}>
-                            {p}%
-                          </span>
-                        </td>
-                      </React.Fragment>
-                    );
-                  })}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* ═══ Row 4: Event Performance ═══ */}
-        <div className="panel" style={{ overflow: 'hidden' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <CalendarCheck size={15} style={{ color: '#10B981' }} />
-              <span style={{ fontSize: 13, fontWeight: 700 }}>Hiệu quả sự kiện</span>
-              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>({kpis.totalEvents} sự kiện · {kpis.completedEvents} hoàn thành)</span>
-            </div>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ width: '100%' }}>
-              <thead>
-                <tr>
-                  <th style={{ width: 28, textAlign: 'center' }}>#</th>
-                  <th style={{ minWidth: 160 }}>Sự kiện</th>
-                  <th style={{ width: 90 }}>Trạng thái</th>
-                  <th style={{ width: 100 }}>Showroom</th>
-                  <th style={{ width: 60, textAlign: 'right', borderLeft: '2px solid #e2e8f0' }}>KH NS</th>
-                  <th style={{ width: 60, textAlign: 'right' }}>TH NS</th>
-                  <th style={{ width: 45, textAlign: 'center' }}>%</th>
-                  <th style={{ width: 55, textAlign: 'right', borderLeft: '2px solid #e2e8f0' }}>KH KQ</th>
-                  <th style={{ width: 55, textAlign: 'right' }}>TH KQ</th>
-                  <th style={{ width: 45, textAlign: 'center' }}>%</th>
-                  <th style={{ width: 50, textAlign: 'right', borderLeft: '2px solid #e2e8f0' }}>KH HĐ</th>
-                  <th style={{ width: 50, textAlign: 'right' }}>TH HĐ</th>
-                  <th style={{ width: 45, textAlign: 'center' }}>%</th>
-                </tr>
-              </thead>
-              <tbody>
-                {events.length === 0 ? (
-                  <tr><td colSpan={13} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-muted)' }}>
-                    Chưa có sự kiện trong kỳ này
-                  </td></tr>
-                ) : events.map((ev, i) => {
-                  const stCfg = STATUS_CONFIG[(ev.status || 'upcoming') as EventStatus] || STATUS_CONFIG.upcoming;
-                  const nsPct = pct(ev.budgetSpent || 0, ev.budget || 0);
-                  const kqPct = pct(ev.leadsActual || 0, ev.leads || 0);
-                  const hdPct = pct(ev.dealsActual || 0, ev.deals || 0);
-
-                  return (
-                    <tr key={ev.id}>
-                      <td style={{ textAlign: 'center', color: 'var(--color-text-muted)' }}>{i + 1}</td>
-                      <td>
-                        <div style={{ fontWeight: 600 }}>{ev.name}</div>
-                        <div style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{ev.date} · {ev.location}</div>
-                      </td>
-                      <td><span style={{ fontSize: 11, fontWeight: 600, color: stCfg.color }}>{stCfg.label}</span></td>
-                      <td style={{ fontSize: 11 }}>{ev.showroom}</td>
-                      {/* NS */}
-                      <td style={{ textAlign: 'right', color: '#94a3b8', borderLeft: '2px solid #e2e8f0' }}>{ev.budget || '—'}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600, color: '#92400e' }}>{ev.budgetSpent || '—'}</td>
-                      <td style={{ textAlign: 'center' }}>
-                        {(ev.budget && ev.budgetSpent) ? <span style={{ fontSize: 10, fontWeight: 700, color: pctColor(nsPct) }}>{nsPct}%</span> : '—'}
-                      </td>
-                      {/* KHQT */}
-                      <td style={{ textAlign: 'right', color: '#94a3b8', borderLeft: '2px solid #e2e8f0' }}>{ev.leads || '—'}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600, color: '#92400e' }}>{ev.leadsActual || '—'}</td>
-                      <td style={{ textAlign: 'center' }}>
-                        {(ev.leads && ev.leadsActual) ? <span style={{ fontSize: 10, fontWeight: 700, color: pctColor(kqPct) }}>{kqPct}%</span> : '—'}
-                      </td>
-                      {/* KHĐ */}
-                      <td style={{ textAlign: 'right', color: '#94a3b8', borderLeft: '2px solid #e2e8f0' }}>{ev.deals || '—'}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600, color: '#92400e' }}>{ev.dealsActual || '—'}</td>
-                      <td style={{ textAlign: 'center' }}>
-                        {(ev.deals && ev.dealsActual) ? <span style={{ fontSize: 10, fontWeight: 700, color: pctColor(hdPct) }}>{hdPct}%</span> : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {/* Event totals */}
-                {events.length > 0 && (
-                  <tr className="grand-total" style={{ background: '#f0f9ff' }}>
-                    <td colSpan={4} style={{ fontWeight: 700 }}>TỔNG CỘNG</td>
-                    <td style={{ textAlign: 'right', borderLeft: '2px solid #e2e8f0' }}>{formatNumber(kpis.evBudgetPlan)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#1e40af' }}>{formatNumber(kpis.evBudgetActual)}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span style={{ fontWeight: 700, color: pctColor(pct(kpis.evBudgetActual, kpis.evBudgetPlan)), fontSize: 11 }}>
-                        {pct(kpis.evBudgetActual, kpis.evBudgetPlan)}%
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'right', borderLeft: '2px solid #e2e8f0' }}>{formatNumber(kpis.evLeadsPlan)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#1e40af' }}>{formatNumber(kpis.evLeadsActual)}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span style={{ fontWeight: 700, color: pctColor(pct(kpis.evLeadsActual, kpis.evLeadsPlan)), fontSize: 11 }}>
-                        {pct(kpis.evLeadsActual, kpis.evLeadsPlan)}%
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'right', borderLeft: '2px solid #e2e8f0' }}>{formatNumber(kpis.evDealsPlan)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#1e40af' }}>{formatNumber(kpis.evDealsActual)}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span style={{ fontWeight: 700, color: pctColor(pct(kpis.evDealsActual, kpis.evDealsPlan)), fontSize: 11 }}>
-                        {pct(kpis.evDealsActual, kpis.evDealsPlan)}%
-                      </span>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* ═══ Row 5: Cost Efficiency ═══ */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-          {[
-            {
-              label: 'CPL (Cost Per Lead)',
-              planVal: kpis.planKhqt > 0 ? (kpis.planBudget / kpis.planKhqt * 1_000_000) : 0,
-              actualVal: kpis.actualKhqt > 0 ? (kpis.actualBudget / kpis.actualKhqt * 1_000_000) : 0,
-              unit: 'đ', color: '#3B82F6', icon: Target, lowerIsBetter: true,
-            },
-            {
-              label: 'CPA (Cost Per Acquisition)',
-              planVal: kpis.planKhd > 0 ? (kpis.planBudget / kpis.planKhd * 1_000_000) : 0,
-              actualVal: kpis.actualKhd > 0 ? (kpis.actualBudget / kpis.actualKhd * 1_000_000) : 0,
-              unit: 'đ', color: '#10B981', icon: Zap, lowerIsBetter: true,
-            },
-            {
-              label: 'Tỷ lệ KHQT → KHĐ',
-              planVal: kpis.planKhqt > 0 ? (kpis.planKhd / kpis.planKhqt * 100) : 0,
-              actualVal: kpis.actualKhqt > 0 ? (kpis.actualKhd / kpis.actualKhqt * 100) : 0,
-              unit: '%', color: '#F59E0B', icon: TrendingUp, lowerIsBetter: false,
-            },
-            {
-              label: 'SL Sự kiện hoàn thành',
-              planVal: kpis.totalEvents,
-              actualVal: kpis.completedEvents,
-              unit: '', color: '#8B5CF6', icon: CalendarCheck, lowerIsBetter: false,
-            },
-          ].map(({ label, planVal, actualVal, unit, color, icon: Icon, lowerIsBetter }) => {
-            const isBetter = lowerIsBetter ? actualVal <= planVal : actualVal >= planVal;
-            return (
-              <div key={label} className="panel" style={{ padding: '14px 16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                  <Icon size={15} style={{ color }} />
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>{label}</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div>
-                    <div style={{ fontSize: 9, color: '#94a3b8' }}>KẾ HOẠCH</div>
-                    <div style={{ fontSize: 16, fontWeight: 700 }}>
-                      {planVal > 0 ? formatNumber(Math.round(planVal)) : '—'}{unit && planVal > 0 ? <span style={{ fontSize: 10, fontWeight: 400, color: '#94a3b8' }}>{unit}</span> : ''}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 9, color: '#92400e' }}>THỰC HIỆN</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: actualVal > 0 ? (isBetter ? '#059669' : '#dc2626') : 'var(--color-text)' }}>
-                      {actualVal > 0 ? formatNumber(Math.round(actualVal)) : '—'}{unit && actualVal > 0 ? <span style={{ fontSize: 10, fontWeight: 400 }}>{unit}</span> : ''}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
+        {/* Tab content */}
+        {!loading && (
+          <>
+            {activeTab === 'budget-summary' && (
+              <BudgetSummaryTab
+                plansByMonth={plansByMonth}
+                actualsByMonth={actualsByMonth}
+                brands={tableBrands}
+                showroomItems={tableShowroomItems}
+                showroomPayloadsByMonth={showroomPayloadsByMonth}
+              />
+            )}
+            {activeTab === 'plan-vs-actual' && (
+              <PlanVsActualTab
+                plansByMonth={plansByMonth}
+                actualsByMonth={actualsByMonth}
+                viewMode={filters.viewMode}
+                month={filters.month}
+                cmpPlansByMonth={cmpPlansByMonth}
+                cmpActualsByMonth={cmpActualsByMonth}
+                cmpMonths={cmpMonths}
+                compareLabel={compareLabel}
+                showroomItems={tableShowroomItems}
+                brands={tableBrands}
+                showroomMergedData={showroomMergedData}
+              />
+            )}
+          </>
+        )}
       </div>
     </div>
   );

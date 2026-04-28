@@ -10,18 +10,25 @@ import StatusBar from '@/components/layout/StatusBar';
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { profile, isLoading, authUser } = useAuth();
+  const { profile, isLoading, authUser, effectiveRole, previewRole } = useAuth();
   const { activeUnit, activeUnitId } = useUnit();
   const [collapsed, setCollapsed] = useState(false);
+
+  // Catch unauthenticated case via client-side redirect safely
+  React.useEffect(() => {
+    if (!isLoading && !authUser) {
+      router.replace('/login');
+    }
+  }, [isLoading, authUser, router]);
 
   // Chờ auth xong trước khi render shell. Quá trình fetch profile có thể mất chút ms.
   if (isLoading) {
     return (
-      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9' }}>
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
             {/* Bộ khung xương Skeleton cơ bản */}
-            <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid #cbd5e1', borderTopColor: '#004B9B', animation: 'spin 1s linear infinite' }} />
-            <span style={{ color: '#64748b', fontSize: 13, fontWeight: 500 }}>Đang khởi tạo phiên làm việc...</span>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid var(--color-border)', borderTopColor: 'var(--color-primary)', animation: 'spin 1s linear infinite' }} />
+            <span style={{ color: 'var(--color-text-muted)', fontSize: 13, fontWeight: 500 }}>Đang khởi tạo phiên làm việc...</span>
             <style>
               {`
                 @keyframes spin {
@@ -35,15 +42,17 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     );
   }
 
-  // Middleware đã redirect những case chưa auth, nhưng client-side catch lại cho an toàn
   if (!authUser) {
-    router.replace('/login');
     return null;
   }
 
-  const userRole = profile?.role ?? 'mkt_showroom';
+  // effectiveRole: role giả lập (khi preview) hoặc role thực của user
+  const userRole = (effectiveRole ?? profile?.role ?? 'mkt_showroom') as import('@/types/database').UserRole;
   const userName = profile?.full_name ?? (authUser.email ?? 'Unknown');
-  const userSubtitle = profile?.role ? ROLE_LABELS[profile.role] : 'Unknown Role';
+  // Subtitle hiển thị role đang active (có thể là preview)
+  const userSubtitle = previewRole
+    ? `${ROLE_LABELS[previewRole]} (Preview)`
+    : (profile?.role ? ROLE_LABELS[profile.role] : 'Unknown Role');
 
   // companyName: ưu tiên activeUnit (khi super_admin chọn Unit cụ thể)
   // → 'all' → hiển thị 'TOÀN HỆ THỐNG'
@@ -77,7 +86,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             transition: 'flex 0.25s cubic-bezier(0.4,0,0.2,1)',
           }}
         >
-          <main style={{ flex: 1, overflowY: 'auto', background: 'var(--color-bg)', position: 'relative' }}>
+          <main style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: 'var(--color-bg)', position: 'relative' }}>
             {children}
           </main>
         </div>

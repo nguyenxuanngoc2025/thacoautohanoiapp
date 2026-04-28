@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { UserCircle, Building2, Shield, Tag, MapPin, Mail, KeyRound, CheckCircle2, XCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ROLE_LABELS, type UserRole } from '@/types/database';
+import { createClient } from '@/lib/supabase/client';
 
 // ─── Info Row ─────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ const ROLE_META: Record<string, { color: string; bg: string; label: string }> = 
 
 export default function ProfilePage() {
   const { profile, isLoading } = useAuth();
+  const supabase = React.useMemo(() => createClient(), []);
 
   if (isLoading) {
     return (
@@ -152,16 +154,66 @@ export default function ProfilePage() {
         />
       </div>
 
+      {/* ── Change Password ── */}
+      <div id="password" style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px' }}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <KeyRound size={16} style={{ color: '#2563eb' }} />
+          Thay đổi mật khẩu
+        </h3>
+        
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          const p1 = (e.target as any).newPassword.value;
+          const p2 = (e.target as any).confirmPassword.value;
+          
+          if (p1 !== p2) {
+            alert('Mật khẩu xác nhận không khớp');
+            return;
+          }
+          if (p1.length < 6) {
+            alert('Mật khẩu phải có ít nhất 6 ký tự');
+            return;
+          }
+
+          try {
+            const { error } = await supabase.auth.updateUser({ password: p1 });
+            if (error) throw error;
+            alert('Đổi mật khẩu thành công. Vui lòng đăng nhập lại vào lần sau.');
+            (e.target as HTMLFormElement).reset();
+          } catch (e: any) {
+            alert(e.message || 'Lỗi đổi mật khẩu');
+          }
+        }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>Mật khẩu mới</label>
+              <input type="password" name="newPassword" required minLength={6}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: 13, outline: 'none' }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>Xác nhận mật khẩu</label>
+              <input type="password" name="confirmPassword" required minLength={6}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: 13, outline: 'none' }} />
+            </div>
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <button type="submit" className="button-erp-primary" style={{ padding: '8px 20px', fontSize: 13 }}>
+              Cập nhật mật khẩu
+            </button>
+          </div>
+        </form>
+      </div>
+
       {/* ── Note ── */}
       <div style={{
-        background: '#f0f9ff', border: '1px solid #bae6fd',
+        background: '#f8fafc', border: '1px solid #e2e8f0',
         borderRadius: 10, padding: '12px 16px',
-        fontSize: 12, color: '#0369a1',
+        fontSize: 12, color: '#64748b',
         display: 'flex', alignItems: 'flex-start', gap: 8,
       }}>
-        <KeyRound size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+        <div style={{ flexShrink: 0, marginTop: 1, width: 4, height: 4, borderRadius: '50%', background: '#cbd5e1', alignSelf: 'center' }} />
         <span>
-          Để thay đổi mật khẩu hoặc quyền truy cập, vui lòng liên hệ <strong>Super Admin</strong> của hệ thống.
+          Để thay đổi quyền truy cập hoặc trường hợp quên mật khẩu, vui lòng liên hệ <strong>PT Marketing</strong> để được hỗ trợ.
         </span>
       </div>
 

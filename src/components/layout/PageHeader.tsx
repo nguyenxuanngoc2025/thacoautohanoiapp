@@ -35,8 +35,7 @@ export default function PageHeader({
   const currentQuarter = Math.ceil(month / 3);
 
   const periodControls = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Thời gian:</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <div className="period-tabs">
         {(['month', 'quarter', 'year'] as const).map((mode) => (
         <button
@@ -52,7 +51,6 @@ export default function PageHeader({
       {/* Month quick-select */}
       {viewMode === 'month' && (
         <div style={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-          <span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: 4 }}>Tháng:</span>
           {MONTHS.map((m) => (
             <button
               key={m.value}
@@ -62,7 +60,7 @@ export default function PageHeader({
                 height: 24,
                 border: '1px solid',
                 borderColor: month === m.value ? 'var(--color-brand)' : 'var(--color-border)',
-                background: month === m.value ? 'var(--color-brand)' : '#fff',
+                background: month === m.value ? 'var(--color-brand)' : 'var(--color-surface-elevated)',
                 color: month === m.value ? 'white' : 'var(--color-text-muted)',
                 fontSize: 'var(--fs-label)',
                 fontWeight: month === m.value ? 700 : 400,
@@ -79,15 +77,15 @@ export default function PageHeader({
       {/* Quarter selection */}
       {viewMode === 'quarter' && (
         <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: 4 }}>Quý:</span>
           {QUARTERS.map((q) => (
             <button
               key={q.value}
+              onClick={() => onPeriodChange?.(year, Math.min(q.value * 3, 12))}
               style={{
                 padding: '2px 10px',
                 border: '1px solid',
                 borderColor: currentQuarter === q.value ? 'var(--color-brand)' : 'var(--color-border)',
-                background: currentQuarter === q.value ? 'var(--color-brand)' : '#fff',
+                background: currentQuarter === q.value ? 'var(--color-brand)' : 'var(--color-surface-elevated)',
                 color: currentQuarter === q.value ? 'white' : 'var(--color-text-muted)',
                 fontSize: 'var(--fs-table)',
                 fontWeight: currentQuarter === q.value ? 700 : 400,
@@ -127,8 +125,8 @@ export default function PageHeader({
         gap: 8,
         flexWrap: 'nowrap',
         flexShrink: 0,
-        height: 36,
-        minHeight: 36,
+        height: 44,
+        minHeight: 44,
         overflow: 'visible',
         position: 'relative',
         zIndex: 100,

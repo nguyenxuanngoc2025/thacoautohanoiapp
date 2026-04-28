@@ -119,8 +119,8 @@ const SQL_CREATE_AUTH_USER = (email: string) =>
 -- Sau đó chạy SQL gán super_admin ở bước 3`;
 
 export default function SystemPage() {
-  const { profile, isSuperAdmin, refreshProfile } = useAuth();
-  const supabase = createClient();
+  const { profile, effectiveIsSuperAdmin: isSuperAdmin, refreshProfile } = useAuth();
+  const supabase = React.useMemo(() => createClient(), []);
   const userEmail = profile?.email ?? 'nguyenxuanngoc@thaco.com.vn';
 
   const [checks, setChecks] = useState<CheckItem[]>([

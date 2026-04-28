@@ -17,6 +17,16 @@ import { useBrands } from '@/contexts/BrandsContext';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function autoGenCode(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .replace(/\s+/g, '')
+    .toUpperCase()
+    .slice(0, 10);
+}
+
 const BRAND_COLORS = [
   '#EF4444', '#F97316', '#EAB308', '#22C55E', '#10B981',
   '#06B6D4', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899',
@@ -37,15 +47,19 @@ export default function BrandSettingsPage() {
   // Edit states
   const [editingBrandId, setEditingBrandId] = useState<number | null>(null);
   const [editingBrandName, setEditingBrandName] = useState('');
+  const [editingBrandCode, setEditingBrandCode] = useState('');
   const [editingBrandColor, setEditingBrandColor] = useState('');
   const [addingBrand, setAddingBrand] = useState(false);
   const [newBrandName, setNewBrandName] = useState('');
+  const [newBrandCode, setNewBrandCode] = useState('');
   const [newBrandColor, setNewBrandColor] = useState(BRAND_COLORS[0]);
 
   const [editingModelId, setEditingModelId] = useState<number | null>(null);
   const [editingModelName, setEditingModelName] = useState('');
+  const [editingModelCode, setEditingModelCode] = useState('');
   const [addingModelForBrand, setAddingModelForBrand] = useState<string | null>(null);
   const [newModelName, setNewModelName] = useState('');
+  const [newModelCode, setNewModelCode] = useState('');
   const [newModelAggregate, setNewModelAggregate] = useState(false);
   const [newModelAggregateGroup, setNewModelAggregateGroup] = useState<string | null>(null);
 
@@ -91,6 +105,7 @@ export default function BrandSettingsPage() {
     const maxOrder = brands.length > 0 ? Math.max(...brands.map(b => b.sort_order)) : 0;
     const result = await createBrand({
       name: newBrandName.trim(),
+      code: newBrandCode.trim() || autoGenCode(newBrandName.trim()),
       color: newBrandColor,
       sort_order: maxOrder + 1,
     });
@@ -98,6 +113,7 @@ export default function BrandSettingsPage() {
       showAlert('success', `Đã thêm thương hiệu "${result.name}"`);
       setAddingBrand(false);
       setNewBrandName('');
+      setNewBrandCode('');
       setNewBrandColor(BRAND_COLORS[0]);
       await loadAll();
       refreshBrands();
@@ -110,7 +126,7 @@ export default function BrandSettingsPage() {
   const handleSaveBrand = async (id: number) => {
     if (!editingBrandName.trim()) return;
     setSaving(true);
-    const ok = await updateBrand(id, { name: editingBrandName.trim(), color: editingBrandColor });
+    const ok = await updateBrand(id, { name: editingBrandName.trim(), code: editingBrandCode.trim() || autoGenCode(editingBrandName.trim()), color: editingBrandColor });
     if (ok) {
       showAlert('success', 'Đã cập nhật thương hiệu');
       setEditingBrandId(null);
@@ -143,6 +159,7 @@ export default function BrandSettingsPage() {
     const result = await createModel({
       brand_name: brandName,
       name: newModelName.trim(),
+      code: newModelCode.trim() || autoGenCode(newModelName.trim()),
       sort_order: maxOrder + 1,
       is_aggregate: newModelAggregate,
       aggregate_group: newModelAggregateGroup,
@@ -151,6 +168,7 @@ export default function BrandSettingsPage() {
       showAlert('success', `Đã thêm dòng xe "${result.name}" vào ${brandName}`);
       setAddingModelForBrand(null);
       setNewModelName('');
+      setNewModelCode('');
       setNewModelAggregate(false);
       setNewModelAggregateGroup(null);
       await loadAll();
@@ -164,7 +182,7 @@ export default function BrandSettingsPage() {
   const handleSaveModel = async (id: number) => {
     if (!editingModelName.trim()) return;
     setSaving(true);
-    const ok = await updateModel(id, { name: editingModelName.trim() });
+    const ok = await updateModel(id, { name: editingModelName.trim(), code: editingModelCode.trim() || autoGenCode(editingModelName.trim()) });
     if (ok) {
       showAlert('success', 'Đã cập nhật dòng xe');
       setEditingModelId(null);
@@ -340,7 +358,7 @@ export default function BrandSettingsPage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: 12, fontSize: 12, color: 'var(--color-text-muted)' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-brand)', display: 'inline-block' }} />
               {activeCount} thương hiệu
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -350,7 +368,7 @@ export default function BrandSettingsPage() {
           </div>
           <button
             onClick={() => loadAll()}
-            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: '#f8fafc', border: '1px solid var(--color-border)', borderRadius: 6, fontSize: 12, color: 'var(--color-text-muted)', cursor: 'pointer' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 6, fontSize: 12, color: 'var(--color-text)', cursor: 'pointer' }}
           >
             <RefreshCw size={13} />
             Làm mới
@@ -375,27 +393,37 @@ export default function BrandSettingsPage() {
 
       {/* Add Brand Form */}
       {addingBrand && (
-        <div style={{ background: '#f0f9ff', border: '2px solid var(--color-brand)', borderRadius: 8, padding: 16, marginBottom: 16, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-brand)' }}>Tên thương hiệu mới:</span>
+        <div style={{ background: '#fafafa', border: '1px solid var(--color-border)', borderRadius: 8, padding: 16, marginBottom: 16, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text)' }}>Tên thương hiệu mới:</span>
           <input
             autoFocus
             type="text"
             className="form-input"
             value={newBrandName}
-            onChange={e => setNewBrandName(e.target.value)}
+            onChange={e => { setNewBrandName(e.target.value); setNewBrandCode(autoGenCode(e.target.value)); }}
             onKeyDown={e => { if (e.key === 'Enter') handleAddBrand(); if (e.key === 'Escape') setAddingBrand(false); }}
             style={{ width: 220, fontSize: 13 }}
+          />
+          <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Mã:</span>
+          <input
+            type="text"
+            className="form-input"
+            value={newBrandCode}
+            onChange={e => setNewBrandCode(e.target.value.toUpperCase().slice(0, 10))}
+            onKeyDown={e => { if (e.key === 'Enter') handleAddBrand(); if (e.key === 'Escape') setAddingBrand(false); }}
+            style={{ width: 100, fontSize: 13, fontFamily: 'monospace' }}
+            placeholder="VD: KIA"
           />
           <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Màu:</span>
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {BRAND_COLORS.map(c => (
-              <button key={c} onClick={() => setNewBrandColor(c)} style={{ width: 20, height: 20, background: c, borderRadius: 4, border: newBrandColor === c ? '2px solid #1e293b' : '2px solid transparent', cursor: 'pointer', padding: 0 }} />
+              <button key={c} onClick={() => setNewBrandColor(c)} style={{ width: 20, height: 20, background: c, borderRadius: 4, border: newBrandColor === c ? '2px solid #1e293b' : '1px solid var(--color-border)', opacity: newBrandColor === c ? 1 : 0.7, cursor: 'pointer', padding: 0 }} />
             ))}
           </div>
-          <button disabled={saving || !newBrandName.trim()} onClick={handleAddBrand} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', background: '#22c55e', border: 'none', borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+          <button disabled={saving || !newBrandName.trim()} onClick={handleAddBrand} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', background: 'var(--color-brand)', border: 'none', borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
             <Check size={13} /> Lưu
           </button>
-          <button onClick={() => setAddingBrand(false)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', background: '#f1f5f9', border: 'none', borderRadius: 6, color: '#64748b', fontSize: 12, cursor: 'pointer' }}>
+          <button onClick={() => setAddingBrand(false)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text)', fontSize: 12, cursor: 'pointer' }}>
             <X size={13} /> Hủy
           </button>
         </div>
@@ -444,7 +472,7 @@ export default function BrandSettingsPage() {
                   opacity: brand.is_active ? (draggedBrandId === brand.id ? 0.3 : 1) : 0.55 
                 }}>
                 {/* Brand Row */}
-                <div style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', background: brand.is_active ? '#fafafa' : '#f1f5f9', gap: 10, cursor: isEditingBrand ? 'default' : 'grab' }} onClick={() => {
+                <div style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', background: brand.is_active ? '#fff' : '#f8fafc', gap: 10, cursor: isEditingBrand ? 'default' : 'grab' }} onClick={() => {
                   if (isEditingBrand) return;
                   setExpandedBrands(prev => {
                     const s = new Set(prev);
@@ -458,30 +486,36 @@ export default function BrandSettingsPage() {
                   <div style={{ width: 12, height: 12, borderRadius: 3, background: brand.color ?? '#94a3b8', flexShrink: 0, border: '1px solid rgba(0,0,0,0.1)' }} />
 
                   {isEditingBrand ? (
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flex: 1 }} onClick={e => e.stopPropagation()}>
-                      <input autoFocus type="text" className="form-input" value={editingBrandName} onChange={e => setEditingBrandName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleSaveBrand(brand.id); if (e.key === 'Escape') setEditingBrandId(null); }} style={{ width: 200, fontSize: 13 }} />
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flex: 1, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
+                      <input autoFocus type="text" className="form-input" value={editingBrandName} onChange={e => { setEditingBrandName(e.target.value); if (!editingBrandCode || editingBrandCode === autoGenCode(brand.name)) setEditingBrandCode(autoGenCode(e.target.value)); }} onKeyDown={e => { if (e.key === 'Enter') handleSaveBrand(brand.id); if (e.key === 'Escape') setEditingBrandId(null); }} style={{ width: 180, fontSize: 13 }} placeholder="Tên thương hiệu" />
+                      <input type="text" className="form-input" value={editingBrandCode} onChange={e => setEditingBrandCode(e.target.value.toUpperCase().slice(0, 10))} onKeyDown={e => { if (e.key === 'Enter') handleSaveBrand(brand.id); if (e.key === 'Escape') setEditingBrandId(null); }} style={{ width: 90, fontSize: 13, fontFamily: 'monospace' }} placeholder="Mã" />
                       <div style={{ display: 'flex', gap: 4 }}>
                         {BRAND_COLORS.map(c => (
-                          <button key={c} onClick={() => setEditingBrandColor(c)} style={{ width: 18, height: 18, background: c, borderRadius: 3, border: editingBrandColor === c ? '2px solid #1e293b' : '1.5px solid transparent', cursor: 'pointer', padding: 0 }} />
+                          <button key={c} onClick={() => setEditingBrandColor(c)} style={{ width: 18, height: 18, background: c, borderRadius: 3, border: editingBrandColor === c ? '2px solid #1e293b' : '1px solid var(--color-border)', opacity: editingBrandColor === c ? 1 : 0.7, cursor: 'pointer', padding: 0 }} />
                         ))}
                       </div>
-                      <button disabled={saving} onClick={() => handleSaveBrand(brand.id)} style={{ padding: '4px 10px', background: '#22c55e', border: 'none', borderRadius: 5, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}><Check size={12} />Lưu</button>
-                      <button onClick={() => setEditingBrandId(null)} style={{ padding: '4px 8px', background: '#f1f5f9', border: 'none', borderRadius: 5, color: '#64748b', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}><X size={12} /></button>
+                      <button disabled={saving} onClick={() => handleSaveBrand(brand.id)} style={{ padding: '4px 10px', background: 'var(--color-brand)', border: 'none', borderRadius: 5, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}><Check size={12} />Lưu</button>
+                      <button onClick={() => setEditingBrandId(null)} style={{ padding: '4px 8px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 5, color: 'var(--color-text)', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}><X size={12} /></button>
                     </div>
                   ) : (
                     <>
-                      <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-text)', flex: 1 }}>{brand.name}</span>
-                      <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginRight: 8 }}>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-text)' }}>{brand.name}</span>
+                      {brand.code && (
+                        <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 600, color: 'var(--color-text-muted)', background: '#f1f5f9', border: '1px solid var(--color-border)', borderRadius: 4, padding: '1px 5px', letterSpacing: '0.05em' }}>
+                          {brand.code}
+                        </span>
+                      )}
+                      <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginRight: 8, flex: 1 }}>
                         {activeModels.filter(m => !m.is_aggregate).length} dòng xe
-                        {!brand.is_active && <span style={{ marginLeft: 6, color: '#ef4444', fontWeight: 600 }}>[Ẩn]</span>}
+                        {!brand.is_active && <span style={{ marginLeft: 6, color: '#ef4444', fontWeight: 600 }}>[Đã Ẩn]</span>}
                       </span>
                     </>
                   )}
 
                   {!isEditingBrand && (
                     <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }} onClick={e => e.stopPropagation()}>
-                      <button onClick={() => { setEditingBrandId(brand.id); setEditingBrandName(brand.name); setEditingBrandColor(brand.color ?? BRAND_COLORS[0]); }} style={{ padding: '5px 8px', background: 'transparent', border: '1px solid var(--color-border)', borderRadius: 5, cursor: 'pointer', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}><Pencil size={12} />Sửa</button>
-                      <button onClick={() => handleToggleBrandActive(brand)} style={{ padding: '5px 8px', background: brand.is_active ? '#fef2f2' : '#f0fdf4', border: `1px solid ${brand.is_active ? '#fecaca' : '#bbf7d0'}`, borderRadius: 5, cursor: 'pointer', color: brand.is_active ? '#dc2626' : '#16a34a', fontSize: 11, fontWeight: 600 }}>
+                      <button onClick={() => { setEditingBrandId(brand.id); setEditingBrandName(brand.name); setEditingBrandCode(brand.code ?? autoGenCode(brand.name)); setEditingBrandColor(brand.color ?? BRAND_COLORS[0]); }} style={{ padding: '5px 8px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 5, cursor: 'pointer', color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}><Pencil size={12} />Sửa</button>
+                      <button onClick={() => handleToggleBrandActive(brand)} style={{ padding: '5px 8px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 5, cursor: 'pointer', color: brand.is_active ? 'var(--color-text)' : 'var(--color-text-muted)', fontSize: 11, fontWeight: 600 }}>
                         {brand.is_active ? 'Ẩn' : 'Hiện'}
                       </button>
                     </div>
@@ -533,25 +567,31 @@ export default function BrandSettingsPage() {
 
                           {isEditingModel ? (
                             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: 1 }} onClick={e => e.stopPropagation()}>
-                              <input autoFocus type="text" className="form-input" value={editingModelName} onChange={e => setEditingModelName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleSaveModel(model.id); if (e.key === 'Escape') setEditingModelId(null); }} style={{ width: 200, fontSize: 12 }} />
-                              <button disabled={saving} onClick={() => handleSaveModel(model.id)} style={{ padding: '3px 8px', background: '#22c55e', border: 'none', borderRadius: 4, color: '#fff', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}><Check size={11} />Lưu</button>
-                              <button onClick={() => setEditingModelId(null)} style={{ padding: '3px 7px', background: '#f1f5f9', border: 'none', borderRadius: 4, color: '#64748b', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center' }}><X size={11} /></button>
+                              <input autoFocus type="text" className="form-input" value={editingModelName} onChange={e => { setEditingModelName(e.target.value); if (!editingModelCode || editingModelCode === autoGenCode(model.name)) setEditingModelCode(autoGenCode(e.target.value)); }} onKeyDown={e => { if (e.key === 'Enter') handleSaveModel(model.id); if (e.key === 'Escape') setEditingModelId(null); }} style={{ width: 170, fontSize: 12 }} placeholder="Tên dòng xe" />
+                              <input type="text" className="form-input" value={editingModelCode} onChange={e => setEditingModelCode(e.target.value.toUpperCase().slice(0, 10))} onKeyDown={e => { if (e.key === 'Enter') handleSaveModel(model.id); if (e.key === 'Escape') setEditingModelId(null); }} style={{ width: 85, fontSize: 12, fontFamily: 'monospace' }} placeholder="Mã" />
+                              <button disabled={saving} onClick={() => handleSaveModel(model.id)} style={{ padding: '3px 8px', background: 'var(--color-brand)', border: 'none', borderRadius: 4, color: '#fff', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}><Check size={11} />Lưu</button>
+                              <button onClick={() => setEditingModelId(null)} style={{ padding: '3px 7px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 4, color: 'var(--color-text)', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center' }}><X size={11} /></button>
                             </div>
                           ) : (
-                            <span style={{ fontSize: 13, flex: 1, fontStyle: model.is_aggregate ? 'italic' : 'normal', color: model.is_aggregate ? '#94a3b8' : 'var(--color-text)' }}>
+                            <span style={{ fontSize: 13, fontStyle: model.is_aggregate ? 'italic' : 'normal', color: model.is_aggregate ? '#94a3b8' : 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
                               {model.name}
-                              {model.is_aggregate && <span style={{ marginLeft: 6, fontSize: 10, color: '#94a3b8' }}>(tổng hợp)</span>}
-                              {!model.is_active && <span style={{ marginLeft: 6, fontSize: 10, color: '#ef4444', fontWeight: 600 }}>[Ẩn]</span>}
+                              {model.code && (
+                                <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 600, color: 'var(--color-text-muted)', background: '#f1f5f9', border: '1px solid var(--color-border)', borderRadius: 4, padding: '1px 4px', letterSpacing: '0.05em' }}>
+                                  {model.code}
+                                </span>
+                              )}
+                              {model.is_aggregate && <span style={{ fontSize: 10, color: '#94a3b8' }}>(tổng hợp)</span>}
+                              {!model.is_active && <span style={{ fontSize: 10, color: '#ef4444', fontWeight: 600 }}>[Đã Ẩn]</span>}
                             </span>
                           )}
 
                           {!isEditingModel && (
                             <div style={{ display: 'flex', gap: 4 }}>
-                              <button onClick={() => { setEditingModelId(model.id); setEditingModelName(model.name); }} style={{ padding: '3px 7px', background: 'transparent', border: '1px solid var(--color-border)', borderRadius: 4, cursor: 'pointer', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 3, fontSize: 11 }} title="Sửa tên"><Pencil size={11} /></button>
-                              <button onClick={() => handleToggleModelActive(model)} style={{ padding: '3px 7px', background: model.is_active ? '#fef2f2' : '#f0fdf4', border: `1px solid ${model.is_active ? '#fecaca' : '#bbf7d0'}`, borderRadius: 4, cursor: 'pointer', color: model.is_active ? '#dc2626' : '#16a34a', fontSize: 11, fontWeight: 600 }}>
+                              <button onClick={() => { setEditingModelId(model.id); setEditingModelName(model.name); setEditingModelCode(model.code ?? autoGenCode(model.name)); }} style={{ padding: '3px 7px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 4, cursor: 'pointer', color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 3, fontSize: 11 }} title="Sửa tên"><Pencil size={11} /></button>
+                              <button onClick={() => handleToggleModelActive(model)} style={{ padding: '3px 7px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 4, cursor: 'pointer', color: model.is_active ? 'var(--color-text)' : 'var(--color-text-muted)', fontSize: 11, fontWeight: 600 }}>
                                 {model.is_active ? 'Ẩn' : 'Hiện'}
                               </button>
-                              <button onClick={() => handleDeleteModel(model)} style={{ padding: '3px 7px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 4, cursor: 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center' }} title="Xóa vĩnh viễn">
+                              <button onClick={() => handleDeleteModel(model)} style={{ padding: '3px 7px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 4, cursor: 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center' }} title="Xóa vĩnh viễn">
                                 <Trash2 size={11} />
                               </button>
                             </div>
@@ -562,16 +602,26 @@ export default function BrandSettingsPage() {
 
                     {/* Add model inline */}
                     {addingModelForBrand === brand.name ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px 8px 38px', background: '#f0fdf4', borderTop: '1px solid #bbf7d0' }}>
-                        <Plus size={12} style={{ color: '#22c55e' }} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px 8px 38px', background: '#fafafa', borderTop: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
+                        <Plus size={12} style={{ color: 'var(--color-brand)' }} />
                         <input
                           autoFocus
                           type="text"
                           className="form-input"
                           value={newModelName}
-                          onChange={e => setNewModelName(e.target.value)}
+                          onChange={e => { setNewModelName(e.target.value); setNewModelCode(autoGenCode(e.target.value)); }}
                           onKeyDown={e => { if (e.key === 'Enter') handleAddModel(brand.name); if (e.key === 'Escape') setAddingModelForBrand(null); }}
-                          style={{ width: 240, fontSize: 12 }}
+                          style={{ width: 200, fontSize: 12 }}
+                          placeholder="Tên dòng xe"
+                        />
+                        <input
+                          type="text"
+                          className="form-input"
+                          value={newModelCode}
+                          onChange={e => setNewModelCode(e.target.value.toUpperCase().slice(0, 10))}
+                          onKeyDown={e => { if (e.key === 'Enter') handleAddModel(brand.name); if (e.key === 'Escape') setAddingModelForBrand(null); }}
+                          style={{ width: 85, fontSize: 12, fontFamily: 'monospace' }}
+                          placeholder="Mã"
                         />
                         <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-muted)', cursor: 'pointer' }}>
                           <input type="checkbox" checked={newModelAggregate} onChange={e => setNewModelAggregate(e.target.checked)} />
@@ -589,12 +639,12 @@ export default function BrandSettingsPage() {
                             <option value="TONG_BUS">Tính vào Tổng Bus</option>
                           </select>
                         )}
-                        <button disabled={saving || !newModelName.trim()} onClick={() => handleAddModel(brand.name)} style={{ padding: '4px 10px', background: '#22c55e', border: 'none', borderRadius: 5, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}><Check size={12} />Thêm</button>
-                        <button onClick={() => { setAddingModelForBrand(null); setNewModelName(''); setNewModelAggregate(false); setNewModelAggregateGroup(null); }} style={{ padding: '4px 8px', background: '#f1f5f9', border: 'none', borderRadius: 5, color: '#64748b', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}><X size={12} /></button>
+                        <button disabled={saving || !newModelName.trim()} onClick={() => handleAddModel(brand.name)} style={{ padding: '4px 10px', background: 'var(--color-brand)', border: 'none', borderRadius: 5, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}><Check size={12} />Thêm</button>
+                        <button onClick={() => { setAddingModelForBrand(null); setNewModelName(''); setNewModelCode(''); setNewModelAggregate(false); setNewModelAggregateGroup(null); }} style={{ padding: '4px 8px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: 5, color: 'var(--color-text)', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}><X size={12} /></button>
                       </div>
                     ) : (
                       <button
-                        onClick={() => { setAddingModelForBrand(brand.name); setNewModelName(''); setNewModelAggregate(false); setNewModelAggregateGroup(null); }}
+                        onClick={() => { setAddingModelForBrand(brand.name); setNewModelName(''); setNewModelCode(''); setNewModelAggregate(false); setNewModelAggregateGroup(null); }}
                         style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px 8px 38px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-brand)', fontSize: 12, fontWeight: 500, textAlign: 'left' }}
                       >
                         <Plus size={13} />

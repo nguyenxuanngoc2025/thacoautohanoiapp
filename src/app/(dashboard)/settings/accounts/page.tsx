@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Shield, Plus, Search, Edit2, Loader2, X, Check } from 'lucide-react';
+import { Shield, Plus, Search, Edit2, Loader2, X, Check, ShieldCheck } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -9,24 +9,95 @@ import {
   type UserRole,
   ROLE_LABELS,
   ROLE_DESCRIPTIONS,
+  ROLE_SCOPE,
+  ROLE_PERMISSIONS,
+  ROLE_CAN,
+  ROLE_CANNOT,
+  ROLE_NEEDS,
   roleNeedsShowroom,
   roleNeedsBrands,
   roleIsAdmin,
+  roleIsCompanyWide,
 } from '@/types/database';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface UnitRow { id: string; code: string; name: string; }
 interface ShowroomRow { id: string; unit_id: string; code: string; name: string; is_active: boolean; }
+interface BrandNameRow { name: string; }
 
 const ROLE_COLOR: Record<UserRole, { bg: string; text: string; border: string }> = {
   super_admin:  { bg: '#fef3c7', text: '#92400e', border: '#fde68a' },
+  pt_mkt_cty:   { bg: '#fce7f3', text: '#9d174d', border: '#fbcfe8' },
   bld:          { bg: '#fee2e2', text: '#991b1b', border: '#fca5a5' },
   gd_showroom:  { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
   mkt_brand:    { bg: '#f0fdf4', text: '#166534', border: '#86efac' },
   mkt_showroom: { bg: '#f5f3ff', text: '#5b21b6', border: '#c4b5fd' },
   finance:      { bg: '#f8fafc', text: '#475569', border: '#cbd5e1' },
 };
+
+// ─── Role Reference View ──────────────────────────────────────────────────────
+
+function RoleReferenceView() {
+  const roles = Object.keys(ROLE_LABELS) as UserRole[];
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16, padding: '4px 0' }}>
+      {roles.map(role => {
+        const c = ROLE_COLOR[role];
+        const can = ROLE_CAN[role];
+        const cannot = ROLE_CANNOT[role];
+        const needs = ROLE_NEEDS[role];
+        return (
+          <div key={role} style={{ border: `1.5px solid ${c.border}`, borderRadius: 10, background: '#fff', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+            {/* Header */}
+            <div style={{ background: c.bg, padding: '12px 16px', borderBottom: `1px solid ${c.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>{ROLE_LABELS[role]}</div>
+                <div style={{ fontSize: 11, color: c.text, opacity: 0.8, marginTop: 2 }}>{ROLE_DESCRIPTIONS[role]}</div>
+              </div>
+              <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 10, background: '#fff', color: c.text, border: `1px solid ${c.border}`, whiteSpace: 'nowrap', marginLeft: 8 }}>
+                {ROLE_SCOPE[role].split(' — ')[0]}
+              </span>
+            </div>
+            {/* Body */}
+            <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', minWidth: 72, paddingTop: 1 }}>Cần gán</span>
+                <span style={{ fontSize: 11, color: '#374151' }}>{needs.label}</span>
+              </div>
+              {can.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', minWidth: 72, paddingTop: 2 }}>Được làm</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {can.map(item => (
+                      <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#374151' }}>
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#16a34a', flexShrink: 0 }} />
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {cannot.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', minWidth: 72, paddingTop: 2 }}>Không được</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {cannot.map(item => (
+                      <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#64748b' }}>
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#dc2626', flexShrink: 0 }} />
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 // ─── Modal overlay ────────────────────────────────────────────────────────────
 
@@ -49,29 +120,44 @@ interface EditModalProps {
   showrooms: ShowroomRow[];
   allBrandNames: string[];
   onClose: () => void;
-  onSave: (updates: Partial<ThacUser>) => Promise<void>;
+  onSave: (updates: Partial<ThacUser> & { password?: string }) => Promise<void>;
   saving: boolean;
 }
 
 function UserEditModal({ user, units, showrooms, allBrandNames, onClose, onSave, saving }: EditModalProps) {
+  const isNew = !user.id;
   const [form, setForm] = useState<Partial<ThacUser>>({
     full_name: user.full_name ?? '',
     email: user.email ?? '',
     role: user.role ?? 'mkt_showroom',
     unit_id: user.unit_id ?? null,
     showroom_id: user.showroom_id ?? null,
+    showroom_ids: user.showroom_ids ?? [],
     brands: user.brands ?? [],
     is_active: user.is_active ?? true,
   });
+  const [password, setPassword] = useState('thaco123');
+
+  const toggleShowroomCode = (code: string) => {
+    setForm(f => {
+      const current = f.showroom_ids ?? [];
+      return { ...f, showroom_ids: current.includes(code) ? current.filter(c => c !== code) : [...current, code] };
+    });
+  };
 
   const role = form.role!;
   const needsShowroom = roleNeedsShowroom(role);
   const needsBrands = roleNeedsBrands(role);
-  const isGlobal = roleIsAdmin(role) || role === 'finance';
+  const isGlobal = roleIsCompanyWide(role);  // super_admin, bld, finance
+  const isPtMkt  = role === 'pt_mkt_cty';    // cần gán unit nhưng xem toàn cty
 
+  // Chỉ hiện showroom sau khi đã chọn đơn vị — tránh hiện toàn bộ danh sách
   const filteredShowrooms = form.unit_id
     ? showrooms.filter(s => s.unit_id === form.unit_id && s.is_active)
-    : showrooms.filter(s => s.is_active);
+    : [];
+
+  // pt_mkt_cty: không cần showroom, nhưng cần unit; tương tự bld nhưng scoped
+  const needsUnit = !isGlobal; // tất cả trừ super_admin, bld, finance
 
   const toggleBrand = (b: string) => {
     setForm(f => {
@@ -85,126 +171,229 @@ function UserEditModal({ user, units, showrooms, allBrandNames, onClose, onSave,
       ...f, role: r,
       // Reset khi đổi role
       showroom_id: roleNeedsShowroom(r) ? f.showroom_id : null,
+      showroom_ids: roleNeedsShowroom(r) ? (f.showroom_ids ?? []) : [],
       brands: roleNeedsBrands(r) ? f.brands : [],
-      unit_id: (roleIsAdmin(r) || r === 'finance') ? null : f.unit_id,
+      unit_id: roleIsCompanyWide(r) ? null : f.unit_id,
     }));
   };
 
   return (
     <ModalOverlay onClose={onClose}>
-      <div style={{ background: '#fff', borderRadius: 8, padding: 28, width: 500, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {user.id ? 'Chỉnh sửa tài khoản' : 'Thêm tài khoản mới'}
-          </h2>
+      {/* Modal rộng, 2 cột */}
+      <div style={{ background: '#fff', borderRadius: 8, width: 820, maxWidth: '96vw', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 8px 40px rgba(0,0,0,0.2)' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderBottom: '1px solid #f1f5f9' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <ShieldCheck size={18} style={{ color: '#2563eb' }} />
+            <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
+              {user.id ? 'Chỉnh sửa tài khoản' : 'Thêm tài khoản mới'}
+            </h2>
+          </div>
           <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 4, color: '#94a3b8' }}>
             <X size={18} />
           </button>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Họ tên */}
-          <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-            Họ và tên <span style={{ color: '#dc2626' }}>*</span>
-            <input type="text" value={form.full_name ?? ''} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
-              style={{ display: 'block', width: '100%', padding: '7px 10px', marginTop: 4, border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13, boxSizing: 'border-box' }} />
-          </label>
+        {/* Layout 2 cột */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr', gap: 0, minHeight: 400 }}>
 
-          {/* Email — chỉ show khi thêm mới */}
-          {!user.id && (
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-              Email <span style={{ color: '#dc2626' }}>*</span>
-              <input type="email" value={form.email ?? ''} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                placeholder="ten@thaco.vn"
-                style={{ display: 'block', width: '100%', padding: '7px 10px', marginTop: 4, border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13, boxSizing: 'border-box' }} />
+          {/* ── CỘT TRÁI: Thông tin cơ bản ── */}
+          <div style={{ padding: '20px 24px', borderRight: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>
+              Thông tin tài khoản
+            </div>
+
+            {/* Họ tên */}
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'flex', flexDirection: 'column', gap: 5 }}>
+              Họ và tên <span style={{ color: '#dc2626', display: 'inline' }}>*</span>
+              <input type="text" value={form.full_name ?? ''} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
+                style={{ padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13, outline: 'none' }} />
             </label>
-          )}
 
-          {/* Role */}
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Vai trò <span style={{ color: '#dc2626' }}>*</span></div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {/* Email + Password — chỉ khi thêm mới */}
+            {isNew && (
+              <>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  Email <span style={{ color: '#dc2626', display: 'inline' }}>*</span>
+                  <input type="text" value={form.email ?? ''} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                    placeholder="email@thaco.com.vn"
+                    style={{ padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13, outline: 'none' }} />
+                </label>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  Mật khẩu ban đầu <span style={{ color: '#dc2626', display: 'inline' }}>*</span>
+                  <input type="text" value={password} onChange={e => setPassword(e.target.value)}
+                    placeholder="thaco123"
+                    style={{ padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13, outline: 'none', fontFamily: 'monospace' }} />
+                </label>
+              </>
+            )}
+
+            {/* Đơn vị — nếu cần */}
+            {needsUnit && (
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                Đơn vị (Công ty) {!needsBrands && <span style={{ color: '#dc2626', display: 'inline' }}>*</span>}
+                <select value={form.unit_id ?? ''} onChange={e => setForm(f => ({ ...f, unit_id: e.target.value || null, showroom_id: null }))}
+                  style={{ padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13, background: '#fff', outline: 'none' }}>
+                  <option value="">-- Chọn đơn vị --</option>
+                  {units.map(u => <option key={u.id} value={u.id}>{u.name} ({u.code})</option>)}
+                </select>
+                {isPtMkt && (
+                  <span style={{ fontSize: 10, color: '#9d174d', fontStyle: 'italic' }}>
+                    PT MKT Cty chỉ xem được dữ liệu công ty này
+                  </span>
+                )}
+              </label>
+            )}
+
+            {/* Showroom — multi-select (Phase 1 Bottom-Up) */}
+            {needsShowroom && (
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                  Showroom được giao <span style={{ color: '#dc2626' }}>*</span>
+                  <span style={{ fontSize: 10, fontWeight: 400, color: '#6b7280', marginLeft: 6 }}>
+                    (chọn nhiều — user thấy dữ liệu của các SR này)
+                  </span>
+                </div>
+                {!form.unit_id && (
+                  <span style={{ fontSize: 10, color: '#f59e0b' }}>Chọn đơn vị trước để lọc showroom</span>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto', border: '1px solid #d1d5db', borderRadius: 4, padding: '6px 8px' }}>
+                  {filteredShowrooms.length === 0 && (
+                    <span style={{ fontSize: 12, color: '#9ca3af', padding: '4px 0' }}>Không có showroom nào</span>
+                  )}
+                  {filteredShowrooms.map(s => (
+                    <label key={s.code} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '2px 0' }}>
+                      <input
+                        type="checkbox"
+                        checked={(form.showroom_ids ?? []).includes(s.code)}
+                        onChange={() => toggleShowroomCode(s.code)}
+                        style={{ width: 14, height: 14 }}
+                      />
+                      <span style={{ fontSize: 12 }}>{s.name}</span>
+                      <span style={{ fontSize: 10, color: '#9ca3af', fontFamily: 'monospace' }}>{s.code}</span>
+                    </label>
+                  ))}
+                </div>
+                {(form.showroom_ids ?? []).length === 0 && (
+                  <span style={{ fontSize: 10, color: '#ef4444', marginTop: 2 }}>Chưa chọn showroom nào</span>
+                )}
+              </div>
+            )}
+
+            {/* Brands */}
+            {needsBrands && (
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
+                  Thương hiệu được phụ trách
+                  <span style={{ fontSize: 11, fontWeight: 400, color: '#64748b', marginLeft: 6 }}>(bỏ trống = tất cả)</span>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {allBrandNames.map(b => {
+                    const sel = (form.brands ?? []).includes(b);
+                    return (
+                      <button key={b} type="button" onClick={() => toggleBrand(b)} style={{
+                        padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        border: `1.5px solid ${sel ? '#2563eb' : '#d1d5db'}`,
+                        background: sel ? '#eff6ff' : '#fff', color: sel ? '#1d4ed8' : '#64748b',
+                        display: 'flex', alignItems: 'center', gap: 4, transition: 'all 0.15s',
+                      }}>
+                        {sel && <Check size={11} />} {b}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Trạng thái */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, fontWeight: 500, color: '#374151', marginTop: 4 }}>
+              <input type="checkbox" checked={form.is_active ?? true} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} />
+              Tài khoản đang hoạt động
+            </label>
+          </div>
+
+          {/* ── CỘT PHẢI: Chọn Vai trò ── */}
+          <div style={{ padding: '20px 24px', background: '#fafafa', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>
+              Vai trò & Phân quyền <span style={{ color: '#dc2626' }}>*</span>
+            </div>
+
+            {/* Summary box khi đã chọn role */}
+            {form.role && (
+              <div style={{ padding: '8px 12px', borderRadius: 6, background: ROLE_COLOR[form.role].bg, border: `1px solid ${ROLE_COLOR[form.role].border}`, marginBottom: 4 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: ROLE_COLOR[form.role].text, marginBottom: 3 }}>Cần gán khi tạo tài khoản này:</div>
+                <div style={{ fontSize: 11, color: '#374151' }}>{ROLE_NEEDS[form.role].label}</div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto', maxHeight: 480 }}>
               {(Object.keys(ROLE_LABELS) as UserRole[]).map(r => {
                 const c = ROLE_COLOR[r];
                 const active = form.role === r;
+                const permissions = ROLE_PERMISSIONS[r] ?? [];
                 return (
                   <label key={r} style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', borderRadius: 6, cursor: 'pointer',
+                    display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: 'pointer',
                     border: `1.5px solid ${active ? c.border : '#e5e7eb'}`,
                     background: active ? c.bg : '#fff',
                     transition: 'all 0.15s',
                   }}>
-                    <input type="radio" name="role" value={r} checked={active} onChange={() => handleRoleChange(r)} style={{ marginTop: 2 }} />
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: active ? c.text : '#374151' }}>{ROLE_LABELS[r]}</div>
-                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{ROLE_DESCRIPTIONS[r]}</div>
+                    <input type="radio" name="role" value={r} checked={active} onChange={() => handleRoleChange(r)} style={{ marginTop: 3, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* Role name + đặc trưng */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: active ? c.text : '#374151' }}>
+                          {ROLE_LABELS[r]}
+                        </span>
+                        {r === 'super_admin' && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', letterSpacing: '0.05em' }}>
+                            SYSTEM WIDE
+                          </span>
+                        )}
+                        {r === 'pt_mkt_cty' && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: '#fce7f3', color: '#9d174d', border: '1px solid #fbcfe8', letterSpacing: '0.05em' }}>
+                            COMPANY ADMIN
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Mô tả ngắn */}
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                        {ROLE_DESCRIPTIONS[r]}
+                      </div>
+
+                      {/* Phạm vi */}
+                      <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3, display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+                        <span style={{ fontWeight: 600, color: '#d1d5db', flexShrink: 0 }}>Phạm vi:</span>
+                        <span>{ROLE_SCOPE[r]}</span>
+                      </div>
+
+                      {/* Quyền hạn — chỉ hiện khi selected */}
+                      {active && permissions.length > 0 && (
+                        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {permissions.map(p => (
+                            <span key={p} style={{
+                              fontSize: 10, padding: '2px 7px', borderRadius: 10,
+                              background: c.bg, color: c.text, border: `1px solid ${c.border}`,
+                            }}>
+                              {p}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </label>
                 );
               })}
             </div>
           </div>
-
-          {/* Đơn vị (công ty) — nếu không phải global */}
-          {!isGlobal && (
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-              Đơn vị (Công ty) {!needsBrands && <span style={{ color: '#dc2626' }}>*</span>}
-              <select value={form.unit_id ?? ''} onChange={e => setForm(f => ({ ...f, unit_id: e.target.value || null, showroom_id: null }))}
-                style={{ display: 'block', width: '100%', padding: '7px 10px', marginTop: 4, border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13, background: '#fff', boxSizing: 'border-box' }}>
-                <option value="">-- Chọn đơn vị --</option>
-                {units.map(u => <option key={u.id} value={u.id}>{u.name} ({u.code})</option>)}
-              </select>
-            </label>
-          )}
-
-          {/* Showroom — chỉ khi role cần */}
-          {needsShowroom && (
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-              Showroom <span style={{ color: '#dc2626' }}>*</span>
-              <select value={form.showroom_id ?? ''} onChange={e => setForm(f => ({ ...f, showroom_id: e.target.value || null }))}
-                style={{ display: 'block', width: '100%', padding: '7px 10px', marginTop: 4, border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13, background: '#fff', boxSizing: 'border-box' }}>
-                <option value="">-- Chọn showroom --</option>
-                {filteredShowrooms.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
-              </select>
-              {!form.unit_id && <span style={{ fontSize: 11, color: '#f59e0b', marginTop: 3, display: 'block' }}>Chọn đơn vị trước để lọc showroom</span>}
-            </label>
-          )}
-
-          {/* Brands — chỉ khi mkt_brand */}
-          {needsBrands && (
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
-                Thương hiệu được phụ trách
-                <span style={{ fontSize: 11, fontWeight: 400, color: '#64748b', marginLeft: 6 }}>(bỏ trống = tất cả)</span>
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {allBrandNames.map(b => {
-                  const sel = (form.brands ?? []).includes(b);
-                  return (
-                    <button key={b} type="button" onClick={() => toggleBrand(b)} style={{
-                      padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                      border: `1.5px solid ${sel ? '#2563eb' : '#d1d5db'}`,
-                      background: sel ? '#eff6ff' : '#fff', color: sel ? '#1d4ed8' : '#64748b',
-                      display: 'flex', alignItems: 'center', gap: 4, transition: 'all 0.15s',
-                    }}>
-                      {sel && <Check size={11} />} {b}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Trạng thái */}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, fontWeight: 500, color: '#374151' }}>
-            <input type="checkbox" checked={form.is_active ?? true} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} />
-            Tài khoản đang hoạt động
-          </label>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, marginTop: 24, justifyContent: 'flex-end' }}>
+        {/* Footer */}
+        <div style={{ display: 'flex', gap: 10, padding: '14px 24px', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', background: '#fff' }}>
           <button className="button-erp-secondary" onClick={onClose}>Hủy</button>
-          <button className="button-erp-primary" onClick={() => onSave(form)} disabled={saving}>
+          <button className="button-erp-primary" onClick={() => onSave(isNew ? { ...form, password } : form)} disabled={saving}>
             {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
           </button>
         </div>
@@ -216,8 +405,9 @@ function UserEditModal({ user, units, showrooms, allBrandNames, onClose, onSave,
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AccountsPage() {
-  const { isSuperAdmin, profile: myProfile } = useAuth();
-  const supabase = createClient();
+  const { effectiveIsSuperAdmin: isSuperAdmin, effectiveRole, profile: myProfile } = useAuth();
+  const canManageUsers = isSuperAdmin || effectiveRole === 'pt_mkt_cty';
+  const supabase = React.useMemo(() => createClient(), []);
 
   const [users, setUsers] = useState<ThacUser[]>([]);
   const [units, setUnits] = useState<UnitRow[]>([]);
@@ -234,6 +424,7 @@ export default function AccountsPage() {
   const [filterRole, setFilterRole] = useState('');
 
   const [editModal, setEditModal] = useState<{ open: boolean; user: Partial<ThacUser> & { id?: string } } | null>(null);
+  const [activeTab, setActiveTab] = useState<'list' | 'roles'>('list');
 
   // ─── Load ──────────────────────────────────────────────────────────────────
 
@@ -251,9 +442,9 @@ export default function AccountsPage() {
       setUsers((usersRes.data ?? []) as ThacUser[]);
       setUnits((unitsRes.data ?? []) as UnitRow[]);
       setShowrooms((showroomsRes.data ?? []) as ShowroomRow[]);
-      setAllBrandNames((brandsRes.data ?? []).map((b: any) => b.name));
-    } catch (e: any) {
-      setError(e.message ?? 'Lỗi tải dữ liệu');
+      setAllBrandNames(((brandsRes.data ?? []) as BrandNameRow[]).map(b => b.name));
+    } catch (e: unknown) {
+      setError((e as Error).message ?? 'Lỗi tải dữ liệu');
     } finally {
       setLoading(false);
     }
@@ -263,7 +454,7 @@ export default function AccountsPage() {
 
   // ─── Save ──────────────────────────────────────────────────────────────────
 
-  const handleSave = async (updates: Partial<ThacUser>) => {
+  const handleSave = async (updates: Partial<ThacUser> & { password?: string }) => {
     setSaving(true);
     setError(null);
     try {
@@ -278,15 +469,13 @@ export default function AccountsPage() {
         if (!res.ok) throw new Error(json.error ?? 'Lỗi tạo tài khoản');
       } else {
         // Cập nhật profile
-        const { error } = await supabase.from('thaco_users').update({
-          full_name: updates.full_name,
-          role: updates.role,
-          unit_id: updates.unit_id,
-          showroom_id: updates.showroom_id,
-          brands: updates.brands ?? [],
-          is_active: updates.is_active,
-        }).eq('id', editModal.user.id);
-        if (error) throw error;
+        const res = await fetch('/api/admin/update-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: editModal.user.id, ...updates }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? 'Loi cap nhat tai khoan');
       }
       setSuccess('Đã lưu thành công');
       setEditModal(null);
@@ -324,13 +513,39 @@ export default function AccountsPage() {
             Phân quyền theo cấu trúc: Công ty &rarr; Showroom &rarr; Thương hiệu
           </p>
         </div>
-        {isSuperAdmin && (
+        {canManageUsers && (
           <button className="button-erp-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
             onClick={() => setEditModal({ open: true, user: {} })}>
             <Plus size={15} /> Thêm tài khoản
           </button>
         )}
       </div>
+
+      {/* Tab Switcher */}
+      <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e2e8f0' }}>
+        {(['list', 'roles'] as const).map(tab => (
+          <button key={tab} onClick={() => setActiveTab(tab)} style={{
+            padding: '9px 20px', border: 'none', cursor: 'pointer', fontSize: 13,
+            fontWeight: activeTab === tab ? 700 : 400,
+            color: activeTab === tab ? '#2563eb' : '#64748b',
+            background: 'transparent',
+            borderBottom: `2px solid ${activeTab === tab ? '#2563eb' : 'transparent'}`,
+            marginBottom: -2, transition: 'all 0.15s',
+          }}>
+            {tab === 'list' ? 'Danh sách tài khoản' : 'Loại tài khoản & Phân quyền'}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'roles' ? (
+        <div style={{ padding: '8px 0' }}>
+          <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+            Mỗi loại tài khoản có bộ quyền cố định theo quy trình nghiệp vụ. Khi tạo tài khoản mới, chọn đúng loại và gán phạm vi theo hướng dẫn bên dưới.
+          </p>
+          <RoleReferenceView />
+        </div>
+      ) : (
+      <>
 
       {/* Toast */}
       {success && (
@@ -372,8 +587,8 @@ export default function AccountsPage() {
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       ) : (
-        <div className="panel" style={{ overflow: 'hidden' }}>
-          <table className="data-table" style={{ width: '100%' }}>
+        <div className="panel" style={{ overflowX: 'auto' }}>
+          <table className="data-table" style={{ width: '100%', minWidth: 900 }}>
             <thead>
               <tr>
                 <th style={{ width: '28%' }}>Họ tên & Email</th>
@@ -381,7 +596,7 @@ export default function AccountsPage() {
                 <th style={{ width: '12%' }}>Vai trò</th>
                 <th style={{ width: '24%' }}>Showroom / Thương hiệu</th>
                 <th style={{ width: '10%', textAlign: 'center' }}>Trạng thái</th>
-                {isSuperAdmin && <th style={{ width: '6%', textAlign: 'center' }}></th>}
+                {canManageUsers && <th style={{ width: '8%', textAlign: 'center' }}>Thao tác</th>}
               </tr>
             </thead>
             <tbody>
@@ -421,9 +636,27 @@ export default function AccountsPage() {
                       </span>
                     </td>
                     <td style={{ fontSize: 12, color: '#374151' }}>
-                      {user.showroom && (
-                        <span>{user.showroom.name} <span style={{ color: '#94a3b8' }}>({user.showroom.code})</span></span>
-                      )}
+                      {roleNeedsShowroom(user.role) && (() => {
+                        const codes = user.showroom_ids ?? [];
+                        if (codes.length > 0) {
+                          return (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                              {codes.map(code => {
+                                const sr = showrooms.find(s => s.code === code);
+                                return (
+                                  <span key={code} title={sr?.name ?? code} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 10, background: '#f0fdf4', color: '#166534', border: '1px solid #86efac', fontFamily: 'monospace', fontWeight: 600 }}>
+                                    {code}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          );
+                        }
+                        if (user.showroom) {
+                          return <span>{user.showroom.name} <span style={{ color: '#94a3b8' }}>({user.showroom.code})</span></span>;
+                        }
+                        return <span style={{ fontSize: 11, color: '#ef4444', fontStyle: 'italic' }}>Chưa gán SR</span>;
+                      })()}
                       {roleNeedsBrands(user.role) && (
                         user.brands && user.brands.length > 0
                           ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -445,12 +678,39 @@ export default function AccountsPage() {
                         {user.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    {isSuperAdmin && (
+                    {canManageUsers && (
                       <td style={{ textAlign: 'center' }}>
-                        <button className="button-erp-secondary" style={{ padding: '5px', minWidth: 'unset', width: 28, height: 28 }}
-                          onClick={() => setEditModal({ open: true, user })}>
-                          <Edit2 size={13} style={{ color: '#3b82f6' }} />
-                        </button>
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                          <button 
+                            className="button-erp-secondary" 
+                            title="Đổi mật khẩu"
+                            style={{ padding: '5px', minWidth: 'unset', width: 28, height: 28 }}
+                            onClick={async () => {
+                              const newPass = prompt(`Nhập mật khẩu mới cho ${user.full_name}:`);
+                              if (!newPass) return;
+                              if (newPass.length < 6) return alert('Mật khẩu quá ngắn');
+                              
+                              try {
+                                const res = await fetch('/api/admin/reset-password', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ userId: user.id, newPassword: newPass })
+                                });
+                                const json = await res.json();
+                                if (!res.ok) throw new Error(json.error);
+                                alert('Đã cấp lại mật khẩu thành công');
+                              } catch(e: any) {
+                                alert(e.message || 'Lỗi cấp lại mật khẩu');
+                              }
+                            }}
+                          >
+                            <ShieldCheck size={13} style={{ color: '#059669' }} />
+                          </button>
+                          <button className="button-erp-secondary" style={{ padding: '5px', minWidth: 'unset', width: 28, height: 28 }}
+                            onClick={() => setEditModal({ open: true, user })}>
+                            <Edit2 size={13} style={{ color: '#3b82f6' }} />
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -458,7 +718,7 @@ export default function AccountsPage() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={isSuperAdmin ? 6 : 5} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                  <td colSpan={canManageUsers ? 6 : 5} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
                     Không tìm thấy tài khoản nào
                   </td>
                 </tr>
@@ -479,6 +739,8 @@ export default function AccountsPage() {
           onSave={handleSave}
           saving={saving}
         />
+      )}
+      </>
       )}
     </div>
   );

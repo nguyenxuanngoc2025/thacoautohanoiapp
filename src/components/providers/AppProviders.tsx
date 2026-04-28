@@ -4,6 +4,7 @@ import React from 'react';
 import { BrandsProvider } from '@/contexts/BrandsContext';
 import { ShowroomsProvider } from '@/contexts/ShowroomsContext';
 import { UnitProvider } from '@/contexts/UnitContext';
+import { ChannelsProvider } from '@/contexts/ChannelsContext';
 
 export default function AppProviders({ children }: { children: React.ReactNode }) {
   return (
@@ -11,7 +12,9 @@ export default function AppProviders({ children }: { children: React.ReactNode }
     <UnitProvider>
       <BrandsProvider>
         <ShowroomsProvider>
-          {children}
+          <ChannelsProvider>
+            {children}
+          </ChannelsProvider>
         </ShowroomsProvider>
       </BrandsProvider>
     </UnitProvider>

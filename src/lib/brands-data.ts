@@ -12,6 +12,7 @@ import { MASTER_BRANDS } from '@/lib/master-data';
 export interface MasterBrand {
   id: number;
   name: string;
+  code?: string;
   sort_order: number;
   is_active: boolean;
   color: string | null;
@@ -23,6 +24,7 @@ export interface MasterModel {
   id: number;
   brand_name: string;
   name: string;
+  code?: string;
   sort_order: number;
   is_active: boolean;
   is_aggregate: boolean;
@@ -110,7 +112,7 @@ export async function fetchModelsForBrand(brandName: string): Promise<MasterMode
 // ─── Brand CRUD ──────────────────────────────────────────────────────────────
 
 export async function createBrand(brand: {
-  name: string; color?: string; sort_order: number;
+  name: string; code?: string; color?: string; sort_order: number;
 }): Promise<MasterBrand | null> {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -123,7 +125,7 @@ export async function createBrand(brand: {
 }
 
 export async function updateBrand(id: number, updates: Partial<{
-  name: string; color: string; sort_order: number; is_active: boolean;
+  name: string; code: string; color: string; sort_order: number; is_active: boolean;
 }>): Promise<boolean> {
   const supabase = createClient();
   const { error } = await supabase
@@ -157,7 +159,7 @@ export async function reorderBrands(orderedIds: number[]): Promise<boolean> {
 // ─── Model CRUD ──────────────────────────────────────────────────────────────
 
 export async function createModel(model: {
-  brand_name: string; name: string; sort_order: number; is_aggregate?: boolean; aggregate_group?: string | null;
+  brand_name: string; name: string; code?: string; sort_order: number; is_aggregate?: boolean; aggregate_group?: string | null;
 }): Promise<MasterModel | null> {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -170,7 +172,7 @@ export async function createModel(model: {
 }
 
 export async function updateModel(id: number, updates: Partial<{
-  name: string; sort_order: number; is_active: boolean; is_aggregate: boolean; aggregate_group: string | null;
+  name: string; code: string; sort_order: number; is_active: boolean; is_aggregate: boolean; aggregate_group: string | null;
 }>): Promise<boolean> {
   const supabase = createClient();
   const { error } = await supabase

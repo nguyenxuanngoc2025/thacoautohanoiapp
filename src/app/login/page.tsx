@@ -114,7 +114,7 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    if (!isLoading && authUser && process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH !== 'true') {
+    if (!isLoading && authUser) {
       router.replace('/dashboard');
     }
   }, [authUser, isLoading, router]);
@@ -365,6 +365,7 @@ export default function LoginPage() {
                 {submitting
                   ? <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
                       <span style={{ display:'inline-block', width:16, height:16, border:'2px solid rgba(255,255,255,0.3)', borderTopColor:'#fff', borderRadius:'50%', animation:'spin 0.75s linear infinite' }} />
+                      Đang đăng nhập...
                     </span>
                   : 'Đăng nhập hệ thống'
                 }
@@ -372,7 +373,7 @@ export default function LoginPage() {
 
               {/* Forgot password */}
               <div style={{ textAlign:'center' }}>
-                <button type="button" style={{
+                <button type="button" onClick={() => alert('Vui lòng liên hệ PT Marketing để được cấp lại mật khẩu.')} style={{
                   background:'none', border:'none', padding:'6px 8px',
                   fontSize:13, color:'#94a3b8', cursor:'pointer', fontWeight:500,
                   transition:'color 0.15s ease',

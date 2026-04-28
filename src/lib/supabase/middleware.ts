@@ -2,13 +2,6 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function updateSession(request: NextRequest) {
-  // ─── DEV BYPASS ───────────────────────────────────────────────────────────
-  // Khi DEV_BYPASS_AUTH=true hoặc có cookie dev_bypass_mock: bỏ qua auth, cho đi thẳng vào app
-  if (process.env.DEV_BYPASS_AUTH === 'true' || request.cookies.get('dev_bypass_mock')?.value === 'true') {
-    return NextResponse.next({ request });
-  }
-  // ──────────────────────────────────────────────────────────────────────────
-
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -48,6 +41,9 @@ export async function updateSession(request: NextRequest) {
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);
   }
+
+  // is_active check đã được xử lý ở client-side (AuthContext + profile fetch)
+  // Không query DB ở đây để tránh thêm latency trên mỗi request
 
   return supabaseResponse;
 }

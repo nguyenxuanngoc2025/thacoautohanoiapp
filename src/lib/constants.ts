@@ -6,61 +6,52 @@ export const NAV_ITEMS = [
     label: 'Dashboard', 
     href: '/dashboard', 
     icon: 'LayoutDashboard',
-    roles: ['super_admin', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom', 'finance'] as UserRole[]
+    roles: ['super_admin', 'pt_mkt_cty', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom', 'finance'] as UserRole[]
   },
-  { 
-    label: 'Lập kế hoạch', 
-    href: '/planning', 
+  {
+    label: 'Quản trị kế hoạch',
+    href: '/planning',
     icon: 'CalendarRange',
-    roles: ['super_admin', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom'] as UserRole[]
+    roles: ['super_admin', 'pt_mkt_cty', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom'] as UserRole[]
   },
-  { 
-    label: 'Quản trị sự kiện', 
-    href: '/events', 
+  {
+    label: 'Quản trị sự kiện',
+    href: '/events',
     icon: 'CalendarCheck',
-    roles: ['super_admin', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom'] as UserRole[]
+    roles: ['super_admin', 'pt_mkt_cty', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom'] as UserRole[]
+  },
+  {
+    label: 'Báo cáo',
+    href: '/reports',
+    icon: 'FileText',
+    roles: ['super_admin', 'pt_mkt_cty', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom', 'finance'] as UserRole[]
+  },
+  {
+    label: 'Thị trường',
+    href: '/market-intel',
+    icon: 'Newspaper',
+    roles: ['super_admin', 'pt_mkt_cty', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom', 'finance'] as UserRole[]
   },
   {
     label: 'Việc cần làm',
     href: '/tasks',
     icon: 'CheckSquare',
-    roles: ['super_admin', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom', 'finance'] as UserRole[]
-  },
-  {
-    label: 'Nhập thực hiện',
-    href: '/actual',
-    icon: 'ClipboardEdit',
-    roles: ['super_admin', 'mkt_brand', 'mkt_showroom'] as UserRole[]
-  },
-  { 
-    label: 'Kiểm soát ngân sách', 
-    href: '/budget', 
-    icon: 'Wallet',
-    roles: ['super_admin', 'bld', 'gd_showroom', 'mkt_brand', 'finance'] as UserRole[]
-  },
-  { 
-    label: 'So sánh & Phân tích', 
-    href: '/compare', 
-    icon: 'BarChart3',
-    roles: ['super_admin', 'bld', 'gd_showroom', 'mkt_brand', 'finance'] as UserRole[]
-  },
-  { 
-    label: 'Báo cáo', 
-    href: '/reports', 
-    icon: 'FileText',
-    roles: ['super_admin', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom', 'finance'] as UserRole[]
+    roles: ['super_admin', 'pt_mkt_cty', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom', 'finance'] as UserRole[]
   },
   { 
     label: 'Cài đặt', 
     href: '/settings', 
     icon: 'Settings',
-    roles: ['super_admin', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom', 'finance'] as UserRole[],
+    // Tất cả role đều vào được settings (để cài hồ sơ + giao diện)
+    // super_admin + pt_mkt_cty: thấy toàn bộ menu quản trị
+    // Còn lại: chỉ thấy Hồ sơ + Giao diện
+    roles: ['super_admin', 'pt_mkt_cty', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom', 'finance'] as UserRole[],
   },
   { 
     label: 'Hướng dẫn', 
     href: '/guide', 
     icon: 'BookOpen',
-    roles: ['super_admin', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom', 'finance'] as UserRole[]
+    roles: ['super_admin', 'pt_mkt_cty', 'bld', 'gd_showroom', 'mkt_brand', 'mkt_showroom', 'finance'] as UserRole[]
   },
 ];
 
