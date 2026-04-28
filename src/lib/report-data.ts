@@ -74,7 +74,7 @@ export function computeChannelKPIs(payload: PayloadMap, channel: string, showroo
   const khd  = sumByChannelMetric(payload, channel, 'KHĐ', showroom);
   return {
     ns, khqt, gdtd, khd,
-    cpl:  khqt > 0 ? +(ns / khqt).toFixed(3) : null,
+    cpl:  khqt > 0 ? +(ns / khqt).toFixed(2) : null,
     cr1:  khqt > 0 ? +(gdtd / khqt * 100).toFixed(1) : null,
     cr2:  gdtd > 0 ? +(khd / gdtd * 100).toFixed(1) : null,
   };

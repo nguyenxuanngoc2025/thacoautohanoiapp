@@ -86,7 +86,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             transition: 'flex 0.25s cubic-bezier(0.4,0,0.2,1)',
           }}
         >
-          <main style={{ flex: 1, overflowY: 'auto', background: 'var(--color-bg)', position: 'relative' }}>
+          <main style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: 'var(--color-bg)', position: 'relative' }}>
             {children}
           </main>
         </div>

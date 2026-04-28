@@ -2,18 +2,15 @@ import React from 'react';
 import { formatNumber } from '@/lib/utils';
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
-export function KPICard({ icon: Icon, label, value, unit, subValue, color, trend }: {
+export function KPICard({ icon: Icon, label, value, unit, subValue, color: _color, trend }: {
   icon: React.ElementType; label: string; value: string | number; unit?: string;
-  subValue?: string; color: string; trend?: 'up' | 'down' | 'flat';
+  subValue?: string; color?: string; trend?: 'up' | 'down' | 'flat';
 }) {
   return (
-    <div
-      className="kpi-card-event"
-      style={{ borderTopColor: color }}
-    >
+    <div className="kpi-card-event">
       <div className="kpi-card-event-header">
-        <div className="kpi-card-event-icon" style={{ background: `${color}18` }}>
-          <Icon size={18} style={{ color }} />
+        <div className="kpi-card-event-icon">
+          <Icon size={18} style={{ color: 'var(--color-text-secondary)' }} />
         </div>
         {trend && (
           <div
@@ -82,16 +79,33 @@ export function DonutChart({ data }: { data: { label: string; value: number; col
 }
 
 // ─── Monthly Sparkline ────────────────────────────────────────────────────────
+function catmullRom(pts: { x: number; y: number }[], tension = 0.3) {
+  if (pts.length < 2) return '';
+  const d = [`M ${pts[0].x} ${pts[0].y}`];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+    const cp1x = p1.x + (p2.x - p0.x) * tension;
+    const cp1y = p1.y + (p2.y - p0.y) * tension;
+    const cp2x = p2.x - (p3.x - p1.x) * tension;
+    const cp2y = p2.y - (p3.y - p1.y) * tension;
+    d.push(`C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x} ${p2.y}`);
+  }
+  return d.join(' ');
+}
+
 export function MonthlySparkline({ data, color = '#3B82F6' }: { data: number[]; color?: string }) {
   const max = Math.max(...data, 1); const h = 48; const w = 220;
   const pts = data.map((v, i) => ({ x: (i / (data.length - 1)) * w, y: h - (v / max) * (h - 8) - 4 }));
-  const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  const smooth = catmullRom(pts);
   const id = `sg${color.replace('#', '')}`;
   return (
     <svg width={w} height={h + 4} style={{ display: 'block' }}>
       <defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity="0.2" /><stop offset="100%" stopColor={color} stopOpacity="0" /></linearGradient></defs>
-      <path d={`${pathD} L ${w} ${h} L 0 ${h} Z`} fill={`url(#${id})`} />
-      <path d={pathD} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" />
+      <path d={`${smooth} L ${w} ${h} L 0 ${h} Z`} fill={`url(#${id})`} />
+      <path d={smooth} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} style={{ fill: 'var(--color-surface)' }} stroke={color} strokeWidth="1.5" />)}
     </svg>
   );

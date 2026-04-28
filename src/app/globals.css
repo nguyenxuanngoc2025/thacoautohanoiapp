@@ -1224,7 +1224,7 @@ html.dark .chart-panel {
 }
 
 /* ============================================================
-   KPI CARD — Thẻ KPI trang Events (accent via border-top)
+   KPI CARD — Thẻ KPI trang Events
    ============================================================ */
 .kpi-card-event {
   background: #fff;
@@ -1237,8 +1237,6 @@ html.dark .chart-panel {
   flex-direction: column;
   gap: 8px;
   transition: box-shadow 0.15s ease;
-  /* border-top-color override per card via inline style */
-  border-top-width: 3px;
 }
 
 .kpi-card-event:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
@@ -1255,10 +1253,10 @@ html.dark .kpi-card-event:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
   width: 36px;
   height: 36px;
   border-radius: var(--border-radius-lg);
+  background: var(--color-surface-hover);
   display: flex;
   align-items: center;
   justify-content: center;
-  /* background override per card via inline style */
 }
 
 .kpi-card-event-label {

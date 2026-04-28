@@ -372,7 +372,11 @@ export default function ReportsPage() {
       const prevM = filters.month === 1 ? 12 : filters.month - 1;
       const prevY = filters.month === 1 ? filters.year - 1 : filters.year;
       if (filters.viewMode === 'month')   return `T${prevM}/${prevY}`;
-      if (filters.viewMode === 'quarter') return `Q${Math.max(1, Math.ceil(filters.month / 3) - 1)}/${filters.year}`;
+      if (filters.viewMode === 'quarter') {
+        const prevM = filters.month === 1 ? 12 : filters.month - 1;
+        const prevY = filters.month <= 3 ? filters.year - 1 : filters.year;
+        return `Q${Math.ceil(prevM / 3)}/${prevY}`;
+      }
       return `${filters.year - 1}`;
     }
     // prev_year

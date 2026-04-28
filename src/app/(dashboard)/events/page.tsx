@@ -252,7 +252,7 @@ export default function EventsPage() {
       t[key] = (t[key] || 0) + e.budget;
     });
     return Object.entries(t).sort((a, b) => b[1] - a[1]).slice(0, 8)
-      .map(([l, v], i) => ({ label: l, value: v, color: ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#EF4444','#84CC16'][i%8] }));
+      .map(([l, v], i) => ({ label: l, value: v, color: ['#004B9B','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16'][i%8] }));
   }, [events, showrooms]);
 
   const byBrandData = useMemo(() => {
@@ -262,7 +262,7 @@ export default function EventsPage() {
       b[brand] = (b[brand] || 0) + e.budget; 
     });
     return Object.entries(b).sort((a, b) => b[1] - a[1]).slice(0, 8)
-      .map(([l, v], i) => ({ label: l, value: v, color: ['#EF4444','#3B82F6','#10B981','#F59E0B','#8B5CF6','#06B6D4','#84CC16','#64748b'][i%8] }));
+      .map(([l, v], i) => ({ label: l, value: v, color: ['#004B9B','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16'][i%8] }));
   }, [events]);
 
   const monthlyTrend  = useMemo(() => Array.from({ length: 12 }, (_, i) => (eventsByMonth[i+1] || []).length), [eventsByMonth]);
@@ -343,7 +343,7 @@ export default function EventsPage() {
         }
       />
 
-      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
         {/* Row 1: KPI Cards */}
         <div style={{ display: 'flex', gap: 12 }}>
@@ -391,10 +391,7 @@ export default function EventsPage() {
             <div className="chart-panel-title">
               <Activity size={15} style={{ color: '#8B5CF6' }} />Xu hướng {year}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 4 }}>Số lượng</div>
-            <MonthlySparkline data={monthlyTrend} color="#3B82F6" />
-            <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 4, marginTop: 4 }}>Ngân sách (tr)</div>
-            <MonthlySparkline data={monthlyBudget} color="#10B981" />
+            <MonthlySparkline data={monthlyBudget} color="#004B9B" />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, color: 'var(--color-text-muted)', marginTop: 2 }}>
               {['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12'].map(l => <span key={l}>{l}</span>)}
             </div>
@@ -466,7 +463,7 @@ export default function EventsPage() {
           </div>
 
           {/* Event Table */}
-          <div className="table-panel">
+          <div className="table-panel" style={{ minWidth: 0 }}>
             <div className="table-panel-header">
               <Calendar size={14} style={{ color: '#3B82F6' }} />
               <span className="table-panel-title">
@@ -495,12 +492,13 @@ export default function EventsPage() {
                     <th style={{ width: 55, textAlign: 'right' }}>Lái thử</th>
                     <th style={{ width: 55, textAlign: 'right' }}>GDTD</th>
                     <th style={{ width: 55, textAlign: 'right' }}>KHĐ</th>
+                    {tableMode === 'actual' && <th style={{ width: 70, textAlign: 'center' }}>Báo cáo</th>}
                     <th style={{ width: 100, textAlign: 'center' }}>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
                   {events.length === 0 ? (
-                    <tr><td colSpan={14} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-muted)' }}>
+                    <tr><td colSpan={tableMode === 'actual' ? 15 : 14} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-muted)' }}>
                       Chưa có sự kiện trong kỳ này —{' '}
                       <button onClick={() => {
                         const defaultSR = isRestrictedRole && allowedShowroomCodes.length > 0
@@ -529,7 +527,7 @@ export default function EventsPage() {
                         <td>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                             {evBrands.length > 0 ? evBrands.map(b => (
-                              <span key={b} style={{ fontSize: 10, fontWeight: 600, padding: '1px 5px', borderRadius: 3, background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>{b}</span>
+                              <span key={b} style={{ fontSize: 10, fontWeight: 600, padding: '1px 5px', borderRadius: 3, background: 'var(--color-surface-hover)', color: 'var(--color-text-secondary)' }}>{b}</span>
                             )) : <span style={{ color: '#94a3b8', fontSize: 11 }}>—</span>}
                           </div>
                         </td>
@@ -537,7 +535,7 @@ export default function EventsPage() {
                           {evModels.length > 0 ? (evModels.length <= 2 ? evModels.join(', ') : `${evModels.slice(0,2).join(', ')} +${evModels.length-2}`) : '—'}
                         </td>
                         <td>
-                          <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 3, background: (EVENT_TYPE_COLORS[ev.type] || '#94a3b8') + '15', color: EVENT_TYPE_COLORS[ev.type] || '#94a3b8' }}>
+                          <span style={{ fontSize: 10, fontWeight: 500, padding: '2px 6px', borderRadius: 3, background: 'var(--color-surface-hover)', color: 'var(--color-text-secondary)' }}>
                             {ev.type}
                           </span>
                         </td>
@@ -547,18 +545,29 @@ export default function EventsPage() {
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>
                           {nsVal != null ? formatNumber(nsVal) : <span style={{ color: '#94a3b8' }}>—</span>}
                         </td>
-                        <td style={{ textAlign: 'right', color: '#3b82f6' }}>
+                        <td style={{ textAlign: 'right' }}>
                           {khqtVal != null ? formatNumber(khqtVal) : <span style={{ color: '#94a3b8' }}>—</span>}
                         </td>
-                        <td style={{ textAlign: 'right', color: '#06b6d4' }}>
+                        <td style={{ textAlign: 'right' }}>
                           {ltVal != null ? ltVal : <span style={{ color: '#94a3b8' }}>—</span>}
                         </td>
-                        <td style={{ textAlign: 'right', color: '#f59e0b' }}>
+                        <td style={{ textAlign: 'right' }}>
                           {gdtdVal != null ? formatNumber(gdtdVal) : <span style={{ color: '#94a3b8' }}>—</span>}
                         </td>
-                        <td style={{ textAlign: 'right', color: '#10b981', fontWeight: 600 }}>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>
                           {khdVal != null ? khdVal : <span style={{ color: '#94a3b8' }}>—</span>}
                         </td>
+                        {tableMode === 'actual' && (
+                          <td style={{ textAlign: 'center' }}>
+                            {ev.reportLink ? (
+                              <a href={ev.reportLink} target="_blank" rel="noopener noreferrer" className="action-btn action-btn-success" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <Eye size={11} /> Xem
+                              </a>
+                            ) : (
+                              <span style={{ color: '#94a3b8', fontSize: 11 }}>—</span>
+                            )}
+                          </td>
+                        )}
                         <td style={{ textAlign: 'center' }}>
                           {canEditEvents && (
                             <div style={{ display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'nowrap' }}>
@@ -575,15 +584,9 @@ export default function EventsPage() {
                                   </button>
                                 </>
                               ) : (
-                                ev.reportLink ? (
-                                  <a href={ev.reportLink} target="_blank" rel="noopener noreferrer" className="action-btn action-btn-success" style={{ textDecoration: 'none' }}>
-                                    <Eye size={11} /> Báo cáo
-                                  </a>
-                                ) : (
-                                  <button title="Nhập kết quả thực hiện" className="action-btn action-btn-success" onClick={() => setModal({ mode: 'close_report', data: ev })}>
-                                    <FileCheck2 size={11} /> Nhập KQ
-                                  </button>
-                                )
+                                <button title="Nhập kết quả thực hiện" className="action-btn action-btn-success" onClick={() => setModal({ mode: 'close_report', data: ev })}>
+                                  <FileCheck2 size={11} /> Nhập KQ
+                                </button>
                               )}
                             </div>
                           )}

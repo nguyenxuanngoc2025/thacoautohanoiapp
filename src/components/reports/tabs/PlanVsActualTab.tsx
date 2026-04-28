@@ -65,9 +65,9 @@ const CELL: React.CSSProperties = {
   padding: '6px 8px',
   fontSize: 'var(--fs-table)',
   borderBottom: '1px solid var(--color-border)',
-  borderRight: '1px solid var(--color-border-light)',
+  borderRight: '1px solid var(--color-border)',
   whiteSpace: 'nowrap',
-  textAlign: 'right',
+  textAlign: 'center',
 };
 const LABEL_CELL: React.CSSProperties = {
   ...CELL,
@@ -75,12 +75,12 @@ const LABEL_CELL: React.CSSProperties = {
   position: 'sticky',
   left: 0,
   zIndex: 1,
-  borderRight: '2px solid var(--color-border)',
+  borderRight: '1px solid var(--color-border-dark)',
 };
 const TOTAL_ROW_BG  = 'var(--color-table-header)';
 const BRAND_ROW_BG  = 'var(--color-surface-hover)';
 const MODEL_ROW_BG  = 'var(--color-surface)';
-const GRP_BORDER    = '2px solid var(--color-border-dark)';
+const GRP_BORDER    = '1px solid var(--color-border-dark)';
 const TH_BASE: React.CSSProperties = {
   ...CELL,
   fontWeight: 700,
@@ -195,10 +195,10 @@ export function PlanVsActualTab({
     extraLabelContent?: React.ReactNode,
     rowVariant?: 'brand' | 'model',
   ): React.ReactNode {
-    const bg = isTotal ? TOTAL_ROW_BG : rowVariant === 'brand' ? BRAND_ROW_BG : rowVariant === 'model' ? MODEL_ROW_BG : undefined;
+    const bg = isTotal ? TOTAL_ROW_BG : rowVariant === 'brand' ? BRAND_ROW_BG : rowVariant === 'model' ? MODEL_ROW_BG : 'var(--color-cell-bg)';
     const isBrand = rowVariant === 'brand';
     const isModel = rowVariant === 'model';
-    const borderTop = isTotal ? '2px solid var(--color-primary)' : isBrand ? '1px solid #dbeafe' : undefined;
+    const borderTop = isTotal ? '2px solid var(--color-border-dark)' : isBrand ? '1px solid var(--color-border)' : undefined;
     return (
       <tr key={label} style={{ background: bg, borderTop }}>
         <td style={{
@@ -222,13 +222,17 @@ export function PlanVsActualTab({
             ? Math.round((actual - cAct) / Math.abs(cAct) * 100) : null;
           return (
             <React.Fragment key={m}>
-              <td style={CELL}>{fmtVal(plan, isNS)}</td>
-              <td style={{ ...CELL, fontWeight: actual > 0 ? 600 : 400 }}>{fmtVal(actual, isNS)}</td>
+              <td style={{ ...CELL, fontWeight: isTotal ? 700 : 400 }}>{fmtVal(plan, isNS)}</td>
+              <td style={{ ...CELL, fontWeight: isTotal ? 700 : actual > 0 ? 600 : 400 }}>{fmtVal(actual, isNS)}</td>
               {!hasCompare ? (
-                <td style={{ ...CELL, ...pctStyle(pct), borderRight: GRP_BORDER }}>{pct !== null ? `${pct}%` : '—'}</td>
+                <td style={{ ...CELL, ...(actual > 0 && pct !== null ? pctStyle(pct) : { color: 'var(--color-text-muted)' }), fontWeight: isTotal && actual > 0 ? 700 : undefined, borderRight: GRP_BORDER }}>
+                  {actual > 0 && pct !== null ? `${pct}%` : '—'}
+                </td>
               ) : (
                 <>
-                  <td style={{ ...CELL, ...pctStyle(pct) }}>{pct !== null ? `${pct}%` : '—'}</td>
+                  <td style={{ ...CELL, ...(actual > 0 && pct !== null ? pctStyle(pct) : { color: 'var(--color-text-muted)' }) }}>
+                    {actual > 0 && pct !== null ? `${pct}%` : '—'}
+                  </td>
                   <td style={{ ...CELL, color: 'var(--color-text-muted)' }}>{fmtVal(cAct, isNS)}</td>
                   <td style={{ ...CELL, borderRight: GRP_BORDER }}>
                     {deltaPct !== null ? (
@@ -257,10 +261,10 @@ export function PlanVsActualTab({
     extraLabelContent?: React.ReactNode,
     rowVariant?: 'brand' | 'model',
   ): React.ReactNode {
-    const bg = isTotal ? TOTAL_ROW_BG : rowVariant === 'brand' ? BRAND_ROW_BG : rowVariant === 'model' ? MODEL_ROW_BG : undefined;
+    const bg = isTotal ? TOTAL_ROW_BG : rowVariant === 'brand' ? BRAND_ROW_BG : rowVariant === 'model' ? MODEL_ROW_BG : 'var(--color-cell-bg)';
     const isBrand = rowVariant === 'brand';
     const isModel = rowVariant === 'model';
-    const borderTop = isTotal ? '2px solid var(--color-primary)' : isBrand ? '1px solid #dbeafe' : undefined;
+    const borderTop = isTotal ? '2px solid var(--color-border-dark)' : isBrand ? '1px solid var(--color-border)' : undefined;
     const ns   = getter(actData, 'Ngân sách');
     const khqt = getter(actData, 'KHQT');
     const gdtd = getter(actData, 'GDTD');

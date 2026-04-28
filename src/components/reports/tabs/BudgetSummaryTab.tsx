@@ -49,7 +49,7 @@ const CELL: React.CSSProperties = {
   padding: '6px 8px',
   fontSize: 'var(--fs-table)',
   borderBottom: '1px solid var(--color-border)',
-  borderRight: '1px solid var(--color-border-light)',
+  borderRight: '1px solid var(--color-border)',
   textAlign: 'center',
   whiteSpace: 'nowrap',
   verticalAlign: 'top',
@@ -60,7 +60,7 @@ const LABEL_CELL: React.CSSProperties = {
   position: 'sticky',
   left: 0,
   zIndex: 1,
-  borderRight: '2px solid var(--color-border)',
+  borderRight: '1px solid var(--color-border-dark)',
 };
 const TH_STYLE: React.CSSProperties = {
   ...CELL,
@@ -73,23 +73,25 @@ const TH_STYLE: React.CSSProperties = {
 
 // ─── DataCell ─────────────────────────────────────────────────────────────────
 
-function DataCell({ thVal, khVal, isCPL, isNS }: {
-  thVal: number; khVal: number; isCPL: boolean; isNS: boolean;
+function DataCell({ thVal, khVal, isCPL, isNS, isTotal }: {
+  thVal: number; khVal: number; isCPL: boolean; isNS: boolean; isTotal?: boolean;
 }) {
+  const fw = isTotal ? 700 : thVal > 0 ? 600 : 400;
   if (isCPL) {
     return (
       <td style={CELL}>
-        <div style={{ fontWeight: thVal > 0 ? 600 : 400, color: thVal > 0 ? 'var(--color-text)' : 'var(--color-border-dark)', fontSize: 'var(--fs-table)' }}>
+        <div style={{ fontWeight: fw, color: thVal > 0 ? 'var(--color-text)' : 'var(--color-border-dark)', fontSize: 'var(--fs-table)' }}>
           {thVal > 0 ? formatNumber(+(thVal).toFixed(2)) : '—'}
         </div>
       </td>
     );
   }
   const pct = calcPct(thVal, khVal);
-  const hasSubRow = khVal > 0 || pct !== null;
+  const showPct = thVal > 0 && pct !== null;
+  const hasSubRow = khVal > 0 || showPct;
   return (
     <td style={CELL}>
-      <div style={{ fontWeight: thVal > 0 ? 600 : 400, color: thVal > 0 ? 'var(--color-text)' : 'var(--color-border-dark)', fontSize: 'var(--fs-table)' }}>
+      <div style={{ fontWeight: fw, color: thVal > 0 ? 'var(--color-text)' : 'var(--color-border-dark)', fontSize: 'var(--fs-table)' }}>
         {fmtNum(thVal, isNS)}
       </div>
       {hasSubRow && (
@@ -97,11 +99,11 @@ function DataCell({ thVal, khVal, isCPL, isNS }: {
           {khVal > 0 && (
             <span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)' }}>{fmtNum(khVal, isNS)}</span>
           )}
-          {khVal > 0 && pct !== null && (
+          {khVal > 0 && showPct && (
             <span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-border-dark)' }}>·</span>
           )}
-          {pct !== null && (
-            <span style={{ fontSize: 'var(--fs-label)', color: pctColor(pct), fontWeight: pct < 80 ? 700 : 600 }}>{pct}%</span>
+          {showPct && (
+            <span style={{ fontSize: 'var(--fs-label)', color: pctColor(pct!), fontWeight: pct! < 80 ? 700 : 600 }}>{pct}%</span>
           )}
         </div>
       )}
@@ -195,8 +197,8 @@ export function BudgetSummaryTab({
   ) {
     const isBrand = rowVariant === 'brand';
     const isModel = rowVariant === 'model';
-    const bg = isTotal ? 'var(--color-table-header)' : isBrand ? 'var(--color-surface-hover)' : isModel ? 'var(--color-surface)' : undefined;
-    const borderTop = isTotal ? '2px solid var(--color-primary)' : isBrand ? '1px solid #dbeafe' : undefined;
+    const bg = isTotal ? 'var(--color-table-header)' : isBrand ? 'var(--color-surface-hover)' : isModel ? 'var(--color-surface)' : 'var(--color-cell-bg)';
+    const borderTop = isTotal ? '2px solid var(--color-border-dark)' : isBrand ? '1px solid var(--color-border)' : undefined;
     const thTotal = getYearTH(getter);
     const khTotal = getYearKH(getter);
     const pctTotal = isCPL ? null : calcPct(thTotal, khTotal);
@@ -220,6 +222,7 @@ export function BudgetSummaryTab({
             khVal={getKhVal(m, getter)}
             isCPL={isCPL}
             isNS={isNS}
+            isTotal={isTotal}
           />
         ))}
         {/* Year total */}
@@ -228,7 +231,7 @@ export function BudgetSummaryTab({
             <>
               <div style={{ fontSize: 'var(--fs-table)' }}>{fmtNum(thTotal, isNS)}</div>
               {khTotal > 0 && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)' }}>{fmtNum(khTotal, isNS)}</div>}
-              {pctTotal !== null && (
+              {thTotal > 0 && pctTotal !== null && (
                 <div style={{ fontSize: 'var(--fs-label)', color: pctColor(pctTotal), fontWeight: 600 }}>{pctTotal}%</div>
               )}
             </>
