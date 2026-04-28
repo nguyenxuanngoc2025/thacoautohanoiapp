@@ -270,15 +270,25 @@ export default function PlanningPage() {
     return id;
   }, [selectedShowroom, showrooms]);
 
-  // Showrooms hiển thị trong dropdown — mkt_brand chỉ thấy SR có brand được giao
+  // Showrooms hiển thị trong dropdown — lọc theo role
+  // mkt_showroom / gd_showroom: chỉ thấy SR được giao trong profile.showroom_ids
+  // mkt_brand: chỉ thấy SR có brand được giao
   const visibleShowroomNames = useMemo(() => {
+    if (
+      (effectiveRole === 'mkt_showroom' || effectiveRole === 'gd_showroom') &&
+      accessibleShowroomCodes.length > 0
+    ) {
+      return showrooms
+        .filter(s => accessibleShowroomCodes.includes(s.code?.toUpperCase() ?? ''))
+        .map(s => s.name);
+    }
     if (effectiveRole === 'mkt_brand' && profile?.brands && profile.brands.length > 0) {
       return showrooms
         .filter(s => s.brands.some(b => profile.brands!.includes(b)))
         .map(s => s.name);
     }
     return SHOWROOMS;
-  }, [effectiveRole, profile, showrooms, SHOWROOMS]);
+  }, [effectiveRole, accessibleShowroomCodes, profile, showrooms, SHOWROOMS]);
 
   // Brands hiển thị — lọc theo brands của showroom đang chọn (nếu có)
   // mkt_brand: chỉ thấy brand được giao trong profile.brands
@@ -309,9 +319,12 @@ export default function PlanningPage() {
 
   
   const availableModels = useMemo(() => {
-    if (selectedBrand === 'all') return Array.from(new Set(brands.flatMap(b => b.models)));
+    if (selectedBrand === 'all') {
+      // Chỉ show models từ brands thuộc showroom đang chọn (nếu có)
+      return Array.from(new Set(visibleBrands.flatMap(b => b.models)));
+    }
     return brands.find(b => b.name === selectedBrand)?.models || [];
-  }, [selectedBrand, brands]);
+  }, [selectedBrand, brands, visibleBrands]);
 
   // ─── Source of Truth: per-showroom data from DB ────────────────────────
   const [showroomDataByMonth, setShowroomDataByMonth] = useState<Record<number, Record<string, CellData>>>({});
@@ -1843,7 +1856,10 @@ export default function PlanningPage() {
         <FilterDropdown
           label=""
           value={selectedShowroom}
-          options={[{value: 'all', label: 'Tất cả Showroom'}, ...visibleShowroomNames.map(sr => ({value: sr, label: sr}))]}
+          options={[
+            ...(effectiveRole === 'mkt_showroom' || effectiveRole === 'gd_showroom' ? [] : [{value: 'all', label: 'Tất cả Showroom'}]),
+            ...visibleShowroomNames.map(sr => ({value: sr, label: sr}))
+          ]}
           onChange={setSelectedShowroom}
           width={130}
           placeholder="Tất cả Showroom"

@@ -193,14 +193,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     effectiveRole === 'mkt_brand'  // mkt_brand xem mọi SR có bán brand của mình
   );
 
-  // showroom_ids của profile (codes). Nếu thiếu, fallback showroom.code (legacy single)
+  // showroom_ids của profile (codes). Normalize về UPPERCASE để so sánh nhất quán.
   const assignedShowroomCodes: string[] = React.useMemo(() => {
     if (!profile) return [];
     if (Array.isArray(profile.showroom_ids) && profile.showroom_ids.length > 0) {
-      return profile.showroom_ids;
+      return profile.showroom_ids.map((c: string) => c?.toUpperCase()).filter(Boolean);
     }
     // fallback legacy: showroom_id → join đã trả về showroom.code
-    if (profile.showroom?.code) return [profile.showroom.code];
+    if (profile.showroom?.code) return [profile.showroom.code.toUpperCase()];
     return [];
   }, [profile]);
 
