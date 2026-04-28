@@ -1453,7 +1453,9 @@ export default function PlanningPage() {
 
   const brandSubtotals = useMemo(() => {
     const subtotals: Record<string, any> = {};
-    const filteredBrandsForTotal = brands.filter(b => selectedBrand === 'all' || b.name === selectedBrand);
+    // Phase: chỉ tính subtotal cho brands user được phép xem (visibleBrands)
+    // → mkt_brand chỉ thấy subtotal của brand được giao
+    const filteredBrandsForTotal = visibleBrands.filter(b => selectedBrand === 'all' || b.name === selectedBrand);
 
     for (const brand of filteredBrandsForTotal) {
       let budget = 0, khqt = 0, gdtd = 0, khd = 0;
@@ -1509,7 +1511,7 @@ export default function PlanningPage() {
       subtotals[brand.name] = { budget, khqt, gdtd, khd, histBudget, histKhqt, histGdtd, histKhd, channelTotals, histChannelTotals };
     }
     return subtotals;
-  }, [cellData, compareMode, getRawHistoricalValue, selectedBrand, selectedModels, getRawCellValue]);
+  }, [cellData, compareMode, getRawHistoricalValue, selectedBrand, selectedModels, getRawCellValue, visibleBrands, CHANNELS]);
 
   // Compute grand total — derived from brandSubtotals in O(brands) instead of O(B×M×C×K)
   const grandTotal = useMemo(() => {
@@ -1523,7 +1525,9 @@ export default function PlanningPage() {
       histChannelTotals[ch.name] = { 'Ngân sách': 0, 'KHQT': 0, 'GDTD': 0, 'KHĐ': 0 };
     }
 
-    const filteredBrandsForTotal = brands.filter(b => selectedBrand === 'all' || b.name === selectedBrand);
+    // Phase: grand total chỉ sum brands user được phép xem (visibleBrands)
+    // → mkt_brand: tổng cộng = chỉ brand được giao, không cộng brand khác
+    const filteredBrandsForTotal = visibleBrands.filter(b => selectedBrand === 'all' || b.name === selectedBrand);
     for (const brand of filteredBrandsForTotal) {
       const sub = brandSubtotals[brand.name];
       if (!sub) continue;
@@ -1545,7 +1549,7 @@ export default function PlanningPage() {
     khd = Math.round(khd); histKhd = Math.round(histKhd);
 
     return { budget, khqt, gdtd, khd, histBudget, histKhqt, histGdtd, histKhd, channelTotals, histChannelTotals };
-  }, [brandSubtotals, brands, selectedBrand, CHANNELS]);
+  }, [brandSubtotals, visibleBrands, selectedBrand, CHANNELS]);
 
   const summary = useMemo(() => {
     return {
@@ -2017,8 +2021,23 @@ export default function PlanningPage() {
                   dataRows.push(totalRow);
                 }
                 const exportSRs = isAggregateView
-                  ? showrooms.filter(s => !s.id.startsWith('fallback'))
+                  ? showrooms.filter(s => !s.id.startsWith('fallback') && visibleShowroomNames.includes(s.name))
                   : showrooms.filter(s => s.name === selectedShowroom);
+                // Export brand prefixes — respect selectedBrand + selectedModels filter
+                const exportBrandPrefixes = (() => {
+                  if (selectedBrand !== 'all') {
+                    return selectedModels.length > 0
+                      ? selectedModels.map(m => `${selectedBrand}-${m}-`)
+                      : [`${selectedBrand}-`];
+                  }
+                  if (selectedModels.length > 0) {
+                    const prefixes = visibleBrands.flatMap(b =>
+                      b.models.filter(m => selectedModels.includes(m)).map(m => `${b.name}-${m}-`)
+                    );
+                    return prefixes.length > 0 ? prefixes : visibleBrands.map(b => `${b.name}-`);
+                  }
+                  return visibleBrands.map(b => `${b.name}-`);
+                })();
                 if (exportSRs.length > 0) {
                   dataRows.push([]);
                   dataRows.push(['CHI TIẾT THEO SHOWROOM', ...channelHeaders.flatMap(() => metricList.map(() => ''))]);
@@ -2026,7 +2045,11 @@ export default function PlanningPage() {
                     const srData = (pageMode === 'plan' ? showroomDataByMonth : showroomActualDataByMonth)[month]?.[srObj.id] || {};
                     const getChSum = (chName: string, metric: string) => {
                       let s = 0; const suffix = `-${chName}-${metric}`;
-                      for (const [k, v] of Object.entries(srData)) { if (k.endsWith(suffix)) s += (v as number) || 0; }
+                      for (const [k, v] of Object.entries(srData)) {
+                        if (!k.endsWith(suffix)) continue;
+                        if (!exportBrandPrefixes.some(p => k.startsWith(p))) continue;
+                        s += (v as number) || 0;
+                      }
                       return s;
                     };
                     const srRow: (string | number)[] = [srObj.name, ''];
@@ -2747,10 +2770,30 @@ export default function PlanningPage() {
 
             {/* ─── BẢNG THEO SHOWROOM — cùng <table> để cột thẳng hàng ─── */}
             {(() => {
+              // Phase: chỉ show SR user được phép xem (visibleShowroomNames)
+              // → mkt_brand chỉ thấy SR có brand mình phụ trách
+              // → mkt_showroom/gd_showroom chỉ thấy SR mình quản lý
               const displaySRs = isAggregateView
-                ? showrooms.filter(s => !s.id.startsWith('fallback'))
+                ? showrooms.filter(s => !s.id.startsWith('fallback') && visibleShowroomNames.includes(s.name))
                 : showrooms.filter(s => s.name === selectedShowroom);
               if (displaySRs.length === 0) return null;
+              // Brand prefixes user được phép cộng — dùng để filter keys trong srData
+              // → mkt_brand: chỉ cộng số của brand được giao, bỏ qua key của brand khác
+              // → selectedBrand + selectedModels: filter chính xác theo bộ lọc đang chọn
+              const allowedBrandPrefixes = (() => {
+                if (selectedBrand !== 'all') {
+                  return selectedModels.length > 0
+                    ? selectedModels.map(m => `${selectedBrand}-${m}-`)
+                    : [`${selectedBrand}-`];
+                }
+                if (selectedModels.length > 0) {
+                  const prefixes = visibleBrands.flatMap(b =>
+                    b.models.filter(m => selectedModels.includes(m)).map(m => `${b.name}-${m}-`)
+                  );
+                  return prefixes.length > 0 ? prefixes : visibleBrands.map(b => `${b.name}-`);
+                }
+                return visibleBrands.map(b => `${b.name}-`);
+              })();
 
               return (
                 <tbody>
@@ -2796,7 +2839,10 @@ export default function PlanningPage() {
                       let s = 0;
                       const suffix = `-${chName}-${metric}`;
                       for (const [k, v] of Object.entries(histSrData)) {
-                        if (k.endsWith(suffix)) s += (v as number) || 0;
+                        if (!k.endsWith(suffix)) continue;
+                        // Brand-scope guard: chỉ cộng key thuộc visibleBrands
+                        if (!allowedBrandPrefixes.some(p => k.startsWith(p))) continue;
+                        s += (v as number) || 0;
                       }
                       return s;
                     };
@@ -2806,11 +2852,14 @@ export default function PlanningPage() {
                         : getHistChMetricSum(ch.name, metric);
 
                     // Tổng theo channel+metric từ legacy keys (brand-model-channel-metric)
+                    // Brand-scope guard: chỉ cộng key thuộc visibleBrands
                     const getChMetricSum = (chName: string, metric: string) => {
                       let sum = 0;
                       const suffix = `-${chName}-${metric}`;
                       for (const [k, v] of Object.entries(srData)) {
-                        if (k.endsWith(suffix)) sum += (v as number) || 0;
+                        if (!k.endsWith(suffix)) continue;
+                        if (!allowedBrandPrefixes.some(p => k.startsWith(p))) continue;
+                        sum += (v as number) || 0;
                       }
                       return sum;
                     };
@@ -2843,7 +2892,8 @@ export default function PlanningPage() {
                     }
 
                     // Áp dụng filter ẩn dòng trống — nhất quán với bảng brand
-                    if (hideZeroRows && visibleChannels.every(ch => visibleMetrics.every(m => getChanSum(ch, m) === 0))) return null;
+                    // Khi đã chọn brand cụ thể: luôn ẩn SR không có data của brand đó
+                    if ((hideZeroRows || selectedBrand !== 'all') && visibleChannels.every(ch => visibleMetrics.every(m => getChanSum(ch, m) === 0))) return null;
 
                     return (
                       <tr key={srObj.id} style={{ background: bg, height: compareMode !== 'none' ? 44 : 26 }}>
