@@ -98,19 +98,19 @@ export default function LoginPage() {
   const router = useRouter();
   const { signIn, authUser, isLoading } = useAuth();
 
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError]       = useState<string | null>(null);
+  const [username, setUsername]  = useState('');
+  const [password, setPassword]  = useState('');
+  const [error, setError]        = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [mounted, setMounted]   = useState(false);
-  const [focused, setFocused]   = useState<'email' | 'password' | null>(null);
-  const [rememberMe, setRememberMe]   = useState(false);
+  const [mounted, setMounted]    = useState(false);
+  const [focused, setFocused]    = useState<'email' | 'password' | null>(null);
+  const [rememberMe, setRememberMe] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    // Load saved email
+    // Load saved username
     const saved = localStorage.getItem('thaco_remembered_email');
-    if (saved) { setEmail(saved); setRememberMe(true); }
+    if (saved) { setUsername(saved); setRememberMe(true); }
   }, []);
 
   useEffect(() => {
@@ -121,21 +121,22 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      setError('Vui lòng nhập đầy đủ email và mật khẩu');
+    if (!username || !password) {
+      setError('Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu');
       return;
     }
     setError(null);
     setSubmitting(true);
-    
+    const fullEmail = username.trim() + '@thaco.com.vn';
+
     try {
       if (rememberMe) {
-        localStorage.setItem('thaco_remembered_email', email.trim());
+        localStorage.setItem('thaco_remembered_email', username.trim());
       } else {
         localStorage.removeItem('thaco_remembered_email');
       }
 
-      const { error: err } = await signIn(email.trim(), password);
+      const { error: err } = await signIn(fullEmail, password);
       
       if (err) {
         setError(err === 'Invalid login credentials' ? 'Tài khoản hoặc mật khẩu không chính xác.' : err);
@@ -272,17 +273,18 @@ export default function LoginPage() {
             {/* Form */}
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-              {/* Email — floating label */}
+              {/* Username — floating label + @thaco.com.vn suffix */}
               <FloatInput
                 id="login-email"
-                type="email"
-                label="Địa chỉ Email"
-                value={email}
-                onChange={setEmail}
+                type="text"
+                label="Tên đăng nhập"
+                value={username}
+                onChange={setUsername}
                 focused={focused === 'email'}
                 onFocus={() => setFocused('email')}
                 onBlur={() => setFocused(null)}
-                autoComplete="email"
+                autoComplete="username"
+                suffix="@thaco.com.vn"
               />
 
               {/* Password — floating label */}
@@ -405,15 +407,24 @@ export default function LoginPage() {
 
 /* ── Reusable floating-label input (no state changes trigger parent re-render) ── */
 function FloatInput({
-  id, type, label, value, onChange, focused, onFocus, onBlur, autoComplete,
+  id, type, label, value, onChange, focused, onFocus, onBlur, autoComplete, suffix,
 }: {
   id: string; type: string; label: string; value: string;
   onChange: (v: string) => void; focused: boolean;
-  onFocus: () => void; onBlur: () => void; autoComplete?: string;
+  onFocus: () => void; onBlur: () => void; autoComplete?: string; suffix?: string;
 }) {
   const lifted = focused || value.length > 0;
   return (
-    <div style={{ position:'relative' }}>
+    <div style={{
+      position: 'relative',
+      display: 'flex', alignItems: 'stretch',
+      borderRadius: 12,
+      border: `1.5px solid ${focused ? '#004B9B' : 'rgba(0,0,0,0.1)'}`,
+      background: '#f8fafc',
+      boxShadow: focused ? '0 0 0 4px rgba(0,75,155,0.08)' : 'none',
+      transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+      overflow: 'hidden',
+    }}>
       <input
         id={id}
         type={type}
@@ -424,21 +435,32 @@ function FloatInput({
         onFocus={onFocus}
         onBlur={onBlur}
         style={{
-          width: '100%',
+          flex: 1,
+          minWidth: 0,
           padding: '21px 16px 9px',
-          borderRadius: 12,
-          border: `1.5px solid ${focused ? '#004B9B' : 'rgba(0,0,0,0.1)'}`,
+          border: 'none',
           fontSize: 15,
           fontWeight: 500,
           outline: 'none',
-          boxSizing: 'border-box',
-          background: '#f8fafc',
+          background: 'transparent',
           color: '#0f172a',
           letterSpacing: (type === 'password' && value) ? '0.15em' : 'normal',
-          boxShadow: focused ? '0 0 0 4px rgba(0,75,155,0.08)' : 'none',
-          transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
         }}
       />
+      {suffix && (
+        <span style={{
+          padding: '22px 14px 9px 12px',
+          borderLeft: '1px solid rgba(0,0,0,0.07)',
+          fontSize: 13,
+          fontWeight: 400,
+          color: '#94a3b8',
+          whiteSpace: 'nowrap',
+          userSelect: 'none',
+          background: 'rgba(0,0,0,0.015)',
+        }}>
+          {suffix}
+        </span>
+      )}
       <label
         htmlFor={id}
         style={{
