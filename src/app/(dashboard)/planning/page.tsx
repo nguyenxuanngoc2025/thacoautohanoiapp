@@ -2646,7 +2646,10 @@ export default function PlanningPage() {
 
                               // Readonly/computed/TổngDigital trong split mode → KH td + TH td (không editable)
                               if (effectiveSplitMode) {
-                                const planVal = planCellData[cellKey] ?? 0;
+                                // Tổng Digital: sum sub-channels vì key "Tổng Digital" không tồn tại trong DB
+                                const planVal = cellKey.includes('-Tổng Digital-')
+                                  ? digitalChannelNames.reduce((s, subCh) => s + (planCellData[cellKey.replace('-Tổng Digital-', `-${subCh}-`)] || 0), 0)
+                                  : (planCellData[cellKey] ?? 0);
                                 return (
                                   <React.Fragment key={cellKey}>
                                     <td style={{ padding: '2px 4px', textAlign: 'center', background: 'var(--color-surface)', color: 'var(--color-text-muted)', borderRight: '1px dashed var(--color-border-dark)', borderLeft: '1px solid var(--color-border)', fontSize: 'var(--fs-table)', height: compareMode !== 'none' ? 44 : 26 }}>
