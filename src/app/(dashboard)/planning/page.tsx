@@ -1180,9 +1180,9 @@ export default function PlanningPage() {
         const metricIdx = FUNNEL.indexOf(metric);
         
         if (metricIdx !== -1) {
-          
-          if (num >= 0) {
-             // AUTO-FILL 2 chiều (Upstream & Downstream) 
+
+          if (num >= 0 && pageMode !== 'actual') {
+             // AUTO-FILL 2 chiều (Upstream & Downstream) — chỉ áp dụng ở chế độ KẾ HOẠCH
              // Khi sửa 1 ô, các ô còn lại tự nhảy theo công thức tiêu chuẩn
              const cName = parts[parts.length - 1]; // "Facebook", "Google"
              // Sprint 3: Dùng historical CPL nếu có, fallback hardcoded
@@ -1787,32 +1787,14 @@ export default function PlanningPage() {
 
   // Render actual mode cell: actual value + ghost plan + delta
   const renderActualCell = useCallback((cellKey: string, val: number, isEditing: boolean) => {
-    const ghost = planCellData[cellKey] || 0;
-    const delta = getActualDelta(cellKey, val);
-    const isBudget = cellKey.endsWith('-Ngân sách');
-    // budget: tăng = xấu (đỏ); KPI: tăng = tốt (xanh)
-    const deltaColor = delta === null ? 'transparent'
-      : delta === 0 ? 'var(--color-text-muted)'
-      : (isBudget ? (delta > 0 ? '#dc2626' : '#059669') : (delta > 0 ? '#059669' : '#dc2626'));
-
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'center', lineHeight: 1.2, gap: 1, opacity: isEditing ? 0 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: isEditing ? 0 : 1 }}>
         <span style={{ color: val > 0 ? 'var(--color-text)' : 'transparent', fontWeight: val > 0 ? 600 : 400 }}>
           {val > 0 ? formatNumber(val) : ''}
         </span>
-        {ghost > 0 && (
-          <span style={{ fontSize: 9, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}>
-            {formatNumber(ghost)}
-            {delta !== null && (
-              <span style={{ color: deltaColor, fontWeight: 700 }}>
-                {delta > 0 ? `▲${delta}%` : delta < 0 ? `▼${Math.abs(delta)}%` : '—'}
-              </span>
-            )}
-          </span>
-        )}
       </div>
     );
-  }, [planCellData, getActualDelta]);
+  }, []);
 
 // FilterDropdown — using top-level definition (L215) to avoid shadow/duplicate
 
