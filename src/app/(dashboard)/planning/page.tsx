@@ -2601,27 +2601,16 @@ export default function PlanningPage() {
                                     {/* TH — Actual value: inline editable */}
                                     <td style={{ padding: 0, borderTop: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)', borderLeft: 'none', borderRight: '1px solid var(--color-border-dark)', height: 26, background: actualVal > 0 ? 'var(--color-warning-bg)' : 'var(--color-cell-bg)' }}>
                                       <input
-                                        key={`actual-${cellKey}-${actualVal}`}
+                                        key={`actual-${cellKey}`}
                                         type="text"
                                         inputMode="decimal"
-                                        defaultValue={actualVal > 0 ? String(actualVal) : ''}
-                                        onChange={(e) => {
-                                          const raw = e.target.value;
+                                        defaultValue={actualVal > 0 ? formatNumber(actualVal) : ''}
+                                        onBlur={(e) => {
+                                          const raw = e.target.value.trim();
                                           if (raw === '') {
                                             setCellData(prev => { const n = {...prev}; delete n[cellKey]; return n; });
                                             return;
                                           }
-                                          // Cho phép gõ dở (1. hoặc 1,) mà không update state
-                                          if (raw.endsWith('.') || raw.endsWith(',')) return;
-                                          const num = parseFloat(raw.replace(',', '.'));
-                                          if (!isNaN(num)) {
-                                            if (isIntField && !Number.isInteger(num)) return;
-                                            setCellData(prev => ({ ...prev, [cellKey]: num }));
-                                          }
-                                        }}
-                                        onBlur={(e) => {
-                                          const raw = e.target.value;
-                                          if (!raw || raw === '') return;
                                           const num = parseFloat(raw.replace(',', '.'));
                                           if (!isNaN(num) && num >= 0) {
                                             if (!isIntField || Number.isInteger(num)) {
