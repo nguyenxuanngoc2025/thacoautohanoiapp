@@ -3182,7 +3182,10 @@ export default function PlanningPage() {
 
                     // Áp dụng filter ẩn dòng trống — nhất quán với bảng brand
                     // Khi đã chọn brand cụ thể: luôn ẩn SR không có data của brand đó
-                    if ((hideZeroRows || selectedBrand !== 'all') && visibleChannels.every(ch => visibleMetrics.every(m => getChanSum(ch, m) === 0))) return null;
+                    // effectiveSplitMode: kiểm tra cả plan data để không ẩn SR có KH nhưng chưa có TH
+                    const hasActualDataSR = visibleChannels.some(ch => visibleMetrics.some(m => getChanSum(ch, m) > 0));
+                    const hasPlanDataSR = effectiveSplitMode && visibleChannels.some(ch => visibleMetrics.some(m => getPlanChanSum(ch, m) > 0));
+                    if ((hideZeroRows || selectedBrand !== 'all') && !hasActualDataSR && !hasPlanDataSR) return null;
 
                     return (
                       <tr key={srObj.id} style={{ background: bg, height: compareMode !== 'none' ? 44 : 26 }}>
