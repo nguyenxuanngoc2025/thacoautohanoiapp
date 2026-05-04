@@ -54,8 +54,8 @@ const UPCOMING_REMINDER_DAYS = 14; // Nhắc sự kiện trong vòng N ngày t�
 // ─── Main Page ──────────────────────────────────────────────────────────────────
 export default function EventsPage() {
   const [mounted, setMounted] = useState(false);
-  const [year, setYear] = useState(2026);
-  const [month, setMonth] = useState(4);
+  const [year, setYear] = useState(() => new Date().getFullYear());
+  const [month, setMonth] = useState(() => new Date().getMonth() + 1);
   const [viewMode, setViewMode] = useState<'month' | 'quarter' | 'year'>('month');
   const [modal, setModal] = useState<ModalState>({ mode: 'closed' });
   const [resultModalEvent, setResultModalEvent] = useState<EventItem | null>(null);

@@ -46,8 +46,8 @@ function StatusIcon({ pct }: { pct: number }) {
 }
 
 export default function BudgetPage() {
-  const [year, setYear] = useState(2026);
-  const [month, setMonth] = useState(4);
+  const [year, setYear] = useState(() => new Date().getFullYear());
+  const [month, setMonth] = useState(() => new Date().getMonth() + 1);
   const [viewMode, setViewMode] = useState<'month' | 'quarter' | 'year'>('month');
   const [expanded, setExpanded] = useState<string[]>([]);
 

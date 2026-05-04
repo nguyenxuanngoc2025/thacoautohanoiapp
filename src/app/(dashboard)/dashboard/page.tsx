@@ -84,9 +84,9 @@ export default function DashboardReuiPage() {
   const { profile, effectiveRole } = useAuth();
   
   const [mounted, setMounted] = useState(false);
-  const [year, setYear] = useState(2026);
+  const [year, setYear] = useState(() => new Date().getFullYear());
   const [viewMode, setViewMode] = useState<'month'|'quarter'|'year'>('month');
-  const [month, setMonth] = useState(4);
+  const [month, setMonth] = useState(() => new Date().getMonth() + 1);
   const [sorting, setSorting] = useState<SortingState>([]);
 
   // ── Filters State ─────────────────────────────────────────────────────────
