@@ -1595,7 +1595,10 @@ export default function PlanningPage() {
           if (isAgg) continue;
           for (const metric of METRICS) {
             const cellKey = `${brand.name}-${model}-${ch.name}-${metric}`;
-            const val = planCellData[cellKey] || 0;
+            // Tổng Digital không có key trực tiếp trong DB — cần sum qua sub-channels
+            const val = ch.name === 'Tổng Digital'
+              ? digitalChannelNames.reduce((s, subCh) => s + (planCellData[`${brand.name}-${model}-${subCh}-${metric}`] || 0), 0)
+              : (planCellData[cellKey] || 0);
             channelTotals[ch.name][metric] += val;
             if (ch.name !== 'Tổng Digital') {
               if (metric === 'Ngân sách') budget += val;
@@ -1614,7 +1617,7 @@ export default function PlanningPage() {
       subtotals[brand.name] = { budget: Math.round(budget * 10) / 10, khqt: Math.round(khqt), gdtd: Math.round(gdtd), khd: Math.round(khd), channelTotals };
     }
     return subtotals;
-  }, [effectiveSplitMode, planCellData, selectedBrand, selectedModels, visibleBrands, CHANNELS]);
+  }, [effectiveSplitMode, planCellData, selectedBrand, selectedModels, visibleBrands, CHANNELS, digitalChannelNames]);
 
   const planGrandTotal = useMemo(() => {
     if (!effectiveSplitMode) return { budget: 0, khqt: 0, gdtd: 0, khd: 0, channelTotals: {} as Record<string, Record<string, number>> };
@@ -2570,6 +2573,16 @@ export default function PlanningPage() {
                                   planTotalKhd += planVal;
                                   if (histVal !== null) histTotalKhd += histVal;
                                 }
+                              } else {
+                                // Tổng Digital: cần sum plan qua sub-channels (key Tổng Digital không tồn tại trong DB)
+                                const planDigital = digitalChannelNames.reduce((s, subCh) =>
+                                  s + (planCellData[`${brand.name}-${model}-${subCh}-${metric}`] || 0), 0);
+                                const actDigital = digitalChannelNames.reduce((s, subCh) =>
+                                  s + ((actualDataByMonth[month] || {})[`${brand.name}-${model}-${subCh}-${metric}`] || 0), 0);
+                                if (metric === 'Ngân sách') { totalBudget += val; actTotalBudget += actDigital; planTotalBudget += planDigital; }
+                                if (metric === 'KHQT') { totalKhqt += val; actTotalKhqt += actDigital; planTotalKhqt += planDigital; }
+                                if (metric === 'GDTD') { totalGdtd += val; actTotalGdtd += actDigital; planTotalGdtd += planDigital; }
+                                if (metric === 'KHĐ') { totalKhd += val; actTotalKhd += actDigital; planTotalKhd += planDigital; }
                               }
 
                               // ── ACTUAL SPLIT MODE: Tháng chưa chốt → 2 cột KH | TH ──
