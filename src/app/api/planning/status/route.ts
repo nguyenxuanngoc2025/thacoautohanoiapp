@@ -28,6 +28,8 @@ export async function GET(request: Request) {
       .eq('year', parseInt(year))
       .eq('month', parseInt(month))
       .eq('entry_type', entry_type)
+      .eq('status', 'sent')
+      .limit(1)
       .maybeSingle(),
     unit_id
       ? supabase

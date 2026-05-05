@@ -1201,27 +1201,17 @@ export default function PlanningPage() {
                 next[`${baseKey}-GDTD`] = gdtd;
                 next[`${baseKey}-KHĐ`]  = khd;
              } else if (metric === 'KHQT') {
-                const ns = Math.round((num * cpl) * 10) / 10;
+                // Chỉ tính xuôi — không đụng Ngân sách
                 const gdtd = Math.round(num * cr1);
                 const khd  = Math.round(gdtd * cr2);
-                next[`${baseKey}-Ngân sách`] = ns;
                 next[`${baseKey}-GDTD`] = gdtd;
                 next[`${baseKey}-KHĐ`]  = khd;
              } else if (metric === 'GDTD') {
-                const khqt = Math.round(num / cr1);
-                const ns = Math.round((khqt * cpl) * 10) / 10;
-                const khd  = Math.round(num * cr2);
-                next[`${baseKey}-Ngân sách`] = ns;
-                next[`${baseKey}-KHQT`] = khqt;
-                next[`${baseKey}-KHĐ`]  = khd;
-             } else if (metric === 'KHĐ') {
-                const gdtd = Math.round(num / cr2);
-                const khqt = Math.round(gdtd / cr1);
-                const ns = Math.round((khqt * cpl) * 10) / 10;
-                next[`${baseKey}-Ngân sách`] = ns;
-                next[`${baseKey}-KHQT`] = khqt;
-                next[`${baseKey}-GDTD`] = gdtd;
+                // Chỉ tính xuôi — không đụng Ngân sách, KHQT
+                const khd = Math.round(num * cr2);
+                next[`${baseKey}-KHĐ`] = khd;
              }
+             // KHĐ: không tính gì thêm
           }
            // NẾU !areOthersEmpty -> Người dùng chỉ CỐ TÌNH sửa ô này, không tự nhảy các ô khác => Dữ liệu đã gán next[cellKey] = num ở trên
         }
@@ -1467,6 +1457,7 @@ export default function PlanningPage() {
     borderRight: '1px solid var(--color-border-dark)',
     fontWeight: 700,
     color: 'var(--color-brand)',
+    textAlign: 'left',
   };
 
   const stickyBodyCol2: React.CSSProperties = {
@@ -1477,6 +1468,7 @@ export default function PlanningPage() {
     width: COL2_WIDTH,
     minWidth: COL2_WIDTH,
     borderRight: '1px solid var(--color-border-dark)',
+    textAlign: 'left',
   };
 
   const brandSubtotals = useMemo(() => {
@@ -3016,7 +3008,7 @@ export default function PlanningPage() {
                   <tr>
                     <td
                       colSpan={2}
-                      style={{ padding: '5px 8px 3px', borderTop: '2px solid var(--color-border-dark)', background: 'var(--color-surface)', position: 'sticky', left: 0, zIndex: 5, fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap', minWidth: COL1_WIDTH + COL2_WIDTH }}
+                      style={{ padding: '5px 8px 3px', borderTop: '2px solid var(--color-border-dark)', background: 'var(--color-surface)', position: 'sticky', left: 0, zIndex: 5, fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap', minWidth: COL1_WIDTH + COL2_WIDTH, textAlign: 'left' }}
                     >
                       {isAggregateView ? 'Chi tiết theo Showroom' : `Tổng hợp — ${selectedShowroom}`}
                     </td>
@@ -3024,7 +3016,7 @@ export default function PlanningPage() {
                   </tr>
                   {/* Sub-header row */}
                   <tr style={{ height: 24 }}>
-                    <td colSpan={2} style={{ padding: '2px 8px', background: 'var(--color-table-header)', position: 'sticky', left: 0, zIndex: 5, fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border-dark)', minWidth: COL1_WIDTH + COL2_WIDTH }}>
+                    <td colSpan={2} style={{ padding: '2px 8px', background: 'var(--color-table-header)', position: 'sticky', left: 0, zIndex: 5, fontWeight: 600, fontSize: 'var(--fs-label)', color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border-dark)', minWidth: COL1_WIDTH + COL2_WIDTH, textAlign: 'left' }}>
                       Đơn vị
                     </td>
                     {visibleChannels.map(ch => visibleMetrics.map(m => {
@@ -3166,7 +3158,7 @@ export default function PlanningPage() {
                         {/* Showroom name — span cả 2 sticky cols để thẳng hàng */}
                         <td
                           colSpan={2}
-                          style={{ padding: '2px 8px', fontWeight: 600, color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border-dark)', borderRight: '1px solid var(--color-border-dark)', position: 'sticky', left: 0, background: 'var(--color-table-header)', zIndex: 5, minWidth: COL1_WIDTH + COL2_WIDTH }}
+                          style={{ padding: '2px 8px', fontWeight: 600, color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border-dark)', borderRight: '1px solid var(--color-border-dark)', position: 'sticky', left: 0, background: 'var(--color-table-header)', zIndex: 5, minWidth: COL1_WIDTH + COL2_WIDTH, textAlign: 'left' }}
                         >
                           {srObj.name}
                         </td>
@@ -3421,10 +3413,43 @@ export default function PlanningPage() {
             <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text)', lineHeight: 1.6 }}>
               Ngân sách sự kiện được quản lý tập trung tại trang <strong>Quản trị sự kiện</strong>. Dữ liệu sẽ tự động đồng bộ vào bảng kế hoạch.
             </p>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+              Nếu số liệu chưa khớp, nhấn <strong>Đồng bộ lại</strong> để cập nhật ngay.
+            </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button onClick={() => { if (eventWarningRef.current) eventWarningRef.current.style.display = 'none'; }} style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--color-text-secondary)' }}>
                 Đóng
               </button>
+              {selectedShowroomCode && (
+                <button
+                  id="resync-events-btn"
+                  onClick={async () => {
+                    const btn = document.getElementById('resync-events-btn') as HTMLButtonElement | null;
+                    if (btn) { btn.textContent = 'Đang đồng bộ...'; btn.disabled = true; }
+                    try {
+                      const res = await fetch('/api/events/sync-budget', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ showroom_code: selectedShowroomCode, month, year }),
+                      });
+                      const data = await res.json();
+                      if (data.success) {
+                        globalMutate((key: unknown) => Array.isArray(key) && key[0] === 'budget_entries', undefined, { revalidate: true });
+                        if (eventWarningRef.current) eventWarningRef.current.style.display = 'none';
+                      } else {
+                        alert('Lỗi đồng bộ: ' + (data.error || 'Unknown'));
+                      }
+                    } catch (e: any) {
+                      alert('Lỗi: ' + e.message);
+                    } finally {
+                      if (btn) { btn.textContent = 'Đồng bộ lại'; btn.disabled = false; }
+                    }
+                  }}
+                  style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid var(--color-warning)', background: 'var(--color-warning-bg)', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#92400e' }}
+                >
+                  Đồng bộ lại
+                </button>
+              )}
               <a href={`/events?month=${month}`} style={{ padding: '6px 14px', borderRadius: 6, background: 'var(--color-primary)', color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 <CalendarDays size={13} />
                 Đến trang Sự kiện →

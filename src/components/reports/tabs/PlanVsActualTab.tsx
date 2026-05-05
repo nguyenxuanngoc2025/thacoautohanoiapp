@@ -119,8 +119,9 @@ export function PlanVsActualTab({
   brands: BrandWithModels[];
   showroomMergedData?: Record<string, { plan: Record<string, number>; actual: Record<string, number> }>;
 }) {
-  const [reportMode, setReportMode]     = useState<ReportMode>('result');
+  const [reportMode, setReportMode]         = useState<ReportMode>('result');
   const [expandedBrands, setExpandedBrands] = useState<Set<string>>(new Set());
+  const [hideEmpty, setHideEmpty]           = useState(false);
 
   const months   = useMemo(() => getMonthsForPeriod(viewMode, month), [viewMode, month]);
   const planData = useMemo(() => mergePayloads(plansByMonth,     months),    [plansByMonth, months]);
@@ -344,16 +345,28 @@ export function PlanVsActualTab({
   const channelRows = useMemo(() => {
     const rows: React.ReactNode[] = [];
     (REPORT_CHANNELS as readonly string[]).forEach(ch => {
+      if (hideEmpty) {
+        const hasAny = (REPORT_METRICS as readonly string[]).some(
+          m => sumByChannelMetric(planData, ch, m) > 0 || sumByChannelMetric(actData, ch, m) > 0
+        );
+        if (!hasAny) return;
+      }
       rows.push(renderRow(ch, false, (d, m) => sumByChannelMetric(d, ch, m)));
     });
     rows.push(renderRow('Tổng cộng', true, totalAllChannels));
     return rows;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planData, actData, cmpPlan, cmpAct, hasCompare, reportMode]);
+  }, [planData, actData, cmpPlan, cmpAct, hasCompare, reportMode, hideEmpty]);
 
   const brandRows = useMemo(() => {
     const rows: React.ReactNode[] = [];
     brands.forEach(brand => {
+      if (hideEmpty) {
+        const hasAny = (REPORT_METRICS as readonly string[]).some(
+          m => sumByBrandMetric(planData, brand.name, m) > 0 || sumByBrandMetric(actData, brand.name, m) > 0
+        );
+        if (!hasAny) return;
+      }
       const isExpanded = expandedBrands.has(brand.name);
       const expandIcon = brand.models.length > 0 ? (
         <span
@@ -382,23 +395,26 @@ export function PlanVsActualTab({
     rows.push(renderRow('Tổng cộng', true, totalAllChannels));
     return rows;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planData, actData, cmpPlan, cmpAct, hasCompare, reportMode, brands, expandedBrands]);
+  }, [planData, actData, cmpPlan, cmpAct, hasCompare, reportMode, brands, expandedBrands, hideEmpty]);
 
   const showroomRows = useMemo(() => {
     const rows: React.ReactNode[] = [];
     showroomItems.forEach(sr => {
       const srData = showroomMergedData?.[sr.name];
+      const hasPlan   = srData ? (REPORT_METRICS as readonly string[]).some(m => totalAllChannels(srData.plan,   m) > 0) : false;
+      const hasActual = srData ? (REPORT_METRICS as readonly string[]).some(m => totalAllChannels(srData.actual, m) > 0) : false;
+      if (hideEmpty && !hasPlan && !hasActual) return;
       rows.push(renderRow(sr.name, false, (d, m) => {
         if (!srData) return 0;
         if (d === planData) return totalAllChannels(srData.plan, m);
         if (d === actData)  return totalAllChannels(srData.actual, m);
-        return 0; // compare period — no per-showroom prev data
+        return 0;
       }));
     });
     rows.push(renderRow('Tổng cộng', true, totalAllChannels));
     return rows;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planData, actData, cmpPlan, cmpAct, hasCompare, reportMode, showroomItems, showroomMergedData]);
+  }, [planData, actData, cmpPlan, cmpAct, hasCompare, reportMode, showroomItems, showroomMergedData, hideEmpty]);
 
   // ── Export ───────────────────────────────────────────────────────────────────
 
@@ -451,6 +467,17 @@ export function PlanVsActualTab({
           {modeBtn('result', 'KẾT QUẢ')}
           {modeBtn('efficiency', 'HIỆU QUẢ')}
         </div>
+        <button
+          onClick={() => setHideEmpty(v => !v)}
+          style={{
+            padding: '4px 12px', border: '1px solid var(--color-border)', borderRadius: 6,
+            cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: hideEmpty ? 700 : 400,
+            background: hideEmpty ? 'var(--color-primary-light)' : 'var(--color-cell-bg)',
+            color: hideEmpty ? 'var(--color-primary)' : 'var(--color-text-muted)',
+          }}
+        >
+          {hideEmpty ? 'Hiện tất cả' : 'Ẩn dòng trống'}
+        </button>
         <div style={{ flex: 1 }} />
         <ExportButton onExport={handleExport} />
       </div>

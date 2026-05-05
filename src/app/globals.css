@@ -658,9 +658,14 @@ body {
   font-variant-numeric: tabular-nums;
   overflow: hidden;
   background-color: #ffffff; /* Default solid background for sticky columns */
+  text-align: center;
 }
 
 .data-table td:first-child { border-left: 1px solid var(--color-border-light); }
+
+/* Cho phép Tailwind text-left/text-right override text-align mặc định */
+.data-table th.text-left,  .data-table td.text-left  { text-align: left; }
+.data-table th.text-right, .data-table td.text-right { text-align: right; }
 
 /* Zebra striping */
 .data-table tbody tr:nth-child(even) td { background-color: #f8fafc; }
@@ -711,12 +716,12 @@ body {
 .cell-wrapper {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   height: 100%;
   padding: 0 6px;
   min-height: 28px;
   cursor: text;
-  text-align: right;
+  text-align: center;
   font-size: var(--fs-table);
   transition: background 0.08s ease;
 }
@@ -733,7 +738,7 @@ html.dark .cell-editing { background: var(--color-surface-elevated); }
 
 .cell-input {
   width: 100%;
-  text-align: right;
+  text-align: center;
   border: none;
   outline: none;
   background: transparent;

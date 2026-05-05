@@ -136,14 +136,23 @@ export async function POST(request: Request) {
 
     // ── Aggregate event KPIs per (brand_name, model_name) ──────────────────────
     type AggKey = string; // "brand||model"
-    const agg: Map<AggKey, { plan_ns: number; plan_khqt: number; plan_gdtd: number; plan_khd: number }> = new Map();
+    const agg: Map<AggKey, {
+      plan_ns: number; plan_khqt: number; plan_gdtd: number; plan_khd: number;
+      actual_ns: number; actual_khqt: number; actual_gdtd: number; actual_khd: number;
+    }> = new Map();
 
     for (const eventRow of eventsInMonth) {
       const evBrands: string[] = Array.isArray(eventRow.brands) ? eventRow.brands : [];
-      const budget = Number(eventRow.budget) || 0;
-      const leads  = Number(eventRow.leads)  || 0;
-      const gdtd   = Number(eventRow.gdtd)   || 0;
-      const deals  = Number(eventRow.deals)  || 0;
+      const budget = Number(eventRow.budget)        || 0;
+      const leads  = Number(eventRow.leads)         || 0;
+      const gdtd   = Number(eventRow.gdtd)          || 0;
+      const deals  = Number(eventRow.deals)         || 0;
+
+      // Actual data từ completed events
+      const actualNs   = Number(eventRow.budget_spent)  || 0;
+      const actualKhqt = Number(eventRow.leads_actual)  || 0;
+      const actualGdtd = Number(eventRow.gdtd_actual)   || 0;
+      const actualKhd  = Number(eventRow.deals_actual)  || 0;
 
       const targets = resolveTargets(evBrands, dbBrands);
       if (targets.length === 0) continue;
@@ -152,28 +161,33 @@ export async function POST(request: Request) {
 
       for (const { brand, model } of targets) {
         const key: AggKey = `${brand}||${model}`;
-        const existing = agg.get(key) ?? { plan_ns: 0, plan_khqt: 0, plan_gdtd: 0, plan_khd: 0 };
+        const existing = agg.get(key) ?? {
+          plan_ns: 0, plan_khqt: 0, plan_gdtd: 0, plan_khd: 0,
+          actual_ns: 0, actual_khqt: 0, actual_gdtd: 0, actual_khd: 0,
+        };
         agg.set(key, {
-          plan_ns:   existing.plan_ns   + budget * fraction,
-          plan_khqt: existing.plan_khqt + leads  * fraction,
-          plan_gdtd: existing.plan_gdtd + gdtd   * fraction,
-          plan_khd:  existing.plan_khd  + deals  * fraction,
+          plan_ns:     existing.plan_ns     + budget    * fraction,
+          plan_khqt:   existing.plan_khqt   + leads     * fraction,
+          plan_gdtd:   existing.plan_gdtd   + gdtd      * fraction,
+          plan_khd:    existing.plan_khd    + deals     * fraction,
+          actual_ns:   existing.actual_ns   + actualNs   * fraction,
+          actual_khqt: existing.actual_khqt + actualKhqt * fraction,
+          actual_gdtd: existing.actual_gdtd + actualGdtd * fraction,
+          actual_khd:  existing.actual_khd  + actualKhd  * fraction,
         });
       }
     }
 
-    // ── Delete old event-sourced entries for this scope, then upsert new ones ──
-    // First, delete existing "event"-sourced rows for this showroom+month+year
-    // so that removed events are properly cleaned up.
-    // Xóa cả 'su_kien' (đúng) và 'event' (code cũ do bug trước) để cleanup dữ liệu lỗi
+    // ── Delete ALL su_kien entries for this scope, then upsert fresh data ──
+    // Không filter theo plan_source để tránh sót entries cũ với plan_source='manual'
+    // hoặc model_name khác format, gây double-counting trong v_budget_master.
     const { error: deleteErr } = await supabase
       .from('thaco_budget_entries')
       .delete()
       .eq('showroom_id', showroom_id)
       .eq('year', year)
       .eq('month', month)
-      .in('channel_code', ['su_kien', 'event'])
-      .eq('plan_source', 'event');
+      .in('channel_code', ['su_kien', 'event']);
 
     if (deleteErr) throw deleteErr;
 
@@ -189,13 +203,19 @@ export async function POST(request: Request) {
           brand_name,
           model_name,
           channel_code: 'su_kien',
-          plan_ns:   Math.round(kpis.plan_ns   * 100) / 100,
-          plan_khqt: Math.round(kpis.plan_khqt),
-          plan_gdtd: Math.round(kpis.plan_gdtd),
-          plan_khd:  Math.round(kpis.plan_khd),
-          plan_source:  'event',
-          plan_status:  'draft',
-          updated_at:   new Date().toISOString(),
+          plan_ns:     Math.round(kpis.plan_ns   * 100) / 100,
+          plan_khqt:   Math.round(kpis.plan_khqt),
+          plan_gdtd:   Math.round(kpis.plan_gdtd),
+          plan_khd:    Math.round(kpis.plan_khd),
+          // Sync actual từ completed events
+          actual_ns:   Math.round(kpis.actual_ns   * 100) / 100,
+          actual_khqt: Math.round(kpis.actual_khqt),
+          actual_gdtd: Math.round(kpis.actual_gdtd),
+          actual_khd:  Math.round(kpis.actual_khd),
+          actual_source: 'event',
+          plan_source:   'event',
+          plan_status:   'draft',
+          updated_at:    new Date().toISOString(),
         };
       });
 
