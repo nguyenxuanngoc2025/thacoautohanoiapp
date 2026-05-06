@@ -8,6 +8,8 @@ import { useBrands } from '@/contexts/BrandsContext';
 import { useShowrooms } from '@/contexts/ShowroomsContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnit } from '@/contexts/UnitContext';
+import { createClient } from '@/lib/supabase/client';
+import type { FreshnessData } from '@/components/reports/tabs/PlanVsActualTab';
 import { useChannels } from '@/contexts/ChannelsContext';
 import PageHeader from '@/components/layout/PageHeader';
 import { FilterDropdown } from '@/components/erp/FilterDropdown';
@@ -157,6 +159,7 @@ export default function ReportsPage() {
 
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<ReportTabId>('plan-vs-actual');
+  const [freshnessData, setFreshnessData] = useState<FreshnessData | null>(null);
 
   // ── Role-based Scope ──────────────────────────────────────────────────────
   const isRestrictedRole = ['mkt_showroom', 'gd_showroom'].includes(effectiveRole as string);
@@ -336,18 +339,62 @@ export default function ReportsPage() {
     [filters.viewMode, filters.month],
   );
 
+  // showroomItems đầy đủ (có id) nhưng filter theo role giống tableShowroomItems
+  const freshnessShowrooms = useMemo(() => {
+    const allowedNames = new Set(tableShowroomItems.map(s => s.name));
+    return showroomItems.filter(s => allowedNames.has(s.name));
+  }, [showroomItems, tableShowroomItems]);
+
+  // ── Freshness: fetch MAX(updated_at) per showroom + brand cho kỳ báo cáo ──
+  useEffect(() => {
+    if (!mounted || !unitIdForViews) return;
+    const srIds = freshnessShowrooms.map(s => s.id).filter(Boolean);
+    if (srIds.length === 0) return;
+    createClient()
+      .from('thaco_budget_entries')
+      .select('showroom_id, brand_name, updated_at')
+      .eq('year', filters.year)
+      .in('month', reportMonths)
+      .in('showroom_id', srIds)
+      .then(({ data }) => {
+        if (!data) return;
+        const srMap: Record<string, string> = {};
+        const brandMap: Record<string, string> = {};
+        for (const row of data) {
+          if (!srMap[row.showroom_id] || row.updated_at > srMap[row.showroom_id]) {
+            srMap[row.showroom_id] = row.updated_at;
+          }
+          if (!brandMap[row.brand_name] || row.updated_at > brandMap[row.brand_name]) {
+            brandMap[row.brand_name] = row.updated_at;
+          }
+        }
+        setFreshnessData({
+          byShowroom: freshnessShowrooms.map(sr => ({
+            name: sr.name,
+            last_updated: srMap[sr.id] ?? null,
+          })),
+          byBrand: tableBrands
+            .map(b => ({ name: b.name, last_updated: brandMap[b.name] ?? null }))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        });
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, unitIdForViews, filters.year, reportMonths.join(','), freshnessShowrooms, tableBrands]);
+
   const showroomPayloadsByMonth = useMemo<Record<string, { plan: MonthlyPayloads; actual: MonthlyPayloads }>>(() => {
-    if (!viewMasterRows) return {};
+    // Dùng filteredMasterRows khi có filter (brand/channel) để per-showroom rows nhất quán với Tổng cộng
+    const sourceRows = filteredMasterRows ?? viewMasterRows;
+    if (!sourceRows) return {};
     const result: Record<string, { plan: MonthlyPayloads; actual: MonthlyPayloads }> = {};
     for (const sr of showroomItems) {
-      const srRows = viewMasterRows.filter(r => r.showroom_id === sr.id);
+      const srRows = sourceRows.filter(r => r.showroom_id === sr.id);
       result[sr.name] = {
         plan:   buildChannelPayloadsFromMaster(srRows, 'plan',   codeToName),
         actual: buildChannelPayloadsFromMaster(srRows, 'actual', codeToName),
       };
     }
     return result;
-  }, [viewMasterRows, showroomItems, codeToName]);
+  }, [filteredMasterRows, viewMasterRows, showroomItems, codeToName]);
 
   // Pre-merge per-showroom data for current period (passed to PlanVsActualTab)
   const showroomMergedData = useMemo<Record<string, { plan: Record<string, number>; actual: Record<string, number> }>>(() => {
@@ -540,6 +587,7 @@ export default function ReportsPage() {
                 showroomItems={tableShowroomItems}
                 brands={tableBrands}
                 showroomMergedData={showroomMergedData}
+                freshnessData={freshnessData}
               />
             )}
           </>

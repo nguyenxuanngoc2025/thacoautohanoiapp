@@ -96,6 +96,168 @@ type ViewMode = 'month' | 'quarter' | 'year';
 type ReportMode = 'result' | 'efficiency';
 interface ShowroomItem { name: string; weight: number; }
 
+export interface FreshnessItem {
+  name: string;
+  last_updated: string | null;
+}
+
+export interface FreshnessData {
+  byShowroom: FreshnessItem[];
+  byBrand: FreshnessItem[];
+}
+
+// ─── FreshnessBar ─────────────────────────────────────────────────────────────
+
+function FreshnessBar({ data, month, viewMode }: {
+  data: FreshnessData;
+  month: number;
+  viewMode: ViewMode;
+}) {
+  const [expanded, setExpanded]   = useState(false);
+  const [activeTab, setActiveTab] = useState<'showroom' | 'brand'>('showroom');
+
+  const items = activeTab === 'showroom' ? data.byShowroom : data.byBrand;
+  if (data.byShowroom.length === 0 && data.byBrand.length === 0) return null;
+
+  const now = new Date();
+
+  // Dùng byShowroom để tính summary (luôn có đủ SR)
+  const srItems  = data.byShowroom;
+  const withData = srItems.filter(i => i.last_updated !== null);
+  const updatedToday = withData.filter(i => {
+    if (!i.last_updated) return false;
+    const d = new Date(i.last_updated);
+    return d.getFullYear() === now.getFullYear() &&
+           d.getMonth()    === now.getMonth()    &&
+           d.getDate()     === now.getDate();
+  }).length;
+  const noData   = srItems.filter(i => i.last_updated === null).length;
+  const allItems = [...data.byShowroom, ...data.byBrand];
+  const latestTs = allItems.reduce<string | null>(
+    (max, i) => (i.last_updated && (!max || i.last_updated > max) ? i.last_updated : max), null
+  );
+
+  const periodLabel = viewMode === 'month' ? `T${month}` : viewMode === 'quarter' ? `Q${Math.ceil(month / 3)}` : 'Cả năm';
+
+  function fmtTime(ts: string) {
+    const d = new Date(ts);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }
+
+  function fmtDateTime(ts: string) {
+    const d = new Date(ts);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm} ${dd}/${mo}`;
+  }
+
+  // So sánh ngày lịch theo local timezone (không dùng raw ms — tránh lỗi UTC offset)
+  function localDayStart(d: Date) {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  }
+
+  function freshnessInfo(ts: string | null): { label: string; color: string; dot: string } {
+    if (!ts) return { label: 'Chưa có dữ liệu', color: '#94a3b8', dot: '#94a3b8' };
+    const tsDate   = new Date(ts);
+    const diffDays = Math.round((localDayStart(now) - localDayStart(tsDate)) / (1000 * 3600 * 24));
+    if (diffDays === 0) return { label: `Hôm nay ${fmtTime(ts)}`,      color: '#16a34a', dot: '#16a34a' };
+    if (diffDays === 1) return { label: `Hôm qua ${fmtTime(ts)}`,      color: '#d97706', dot: '#d97706' };
+    if (diffDays <= 7)  return { label: `${diffDays} ngày trước`,       color: '#d97706', dot: '#d97706' };
+    return               { label: fmtDateTime(ts),                      color: '#dc2626', dot: '#dc2626' };
+  }
+
+  return (
+    <div style={{ marginBottom: 14, border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden', fontSize: 'var(--fs-body)' }}>
+      {/* Summary bar */}
+      <div
+        onClick={() => setExpanded(v => !v)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '7px 14px',
+          background: 'var(--color-surface-hover)', cursor: 'pointer', flexWrap: 'wrap',
+        }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)' }}>
+          Cập nhật {periodLabel}
+        </span>
+        <span style={{ width: 1, height: 14, background: 'var(--color-border)', flexShrink: 0 }} />
+        {latestTs ? (
+          <span style={{ fontSize: 11 }}>
+            Mới nhất: <strong style={{ color: '#16a34a' }}>{fmtDateTime(latestTs)}</strong>
+          </span>
+        ) : (
+          <span style={{ fontSize: 11, color: '#94a3b8' }}>Chưa có dữ liệu</span>
+        )}
+        <span style={{ width: 1, height: 14, background: 'var(--color-border)', flexShrink: 0 }} />
+        <span style={{ fontSize: 11 }}>
+          <strong style={{ color: updatedToday > 0 ? '#16a34a' : '#d97706' }}>{updatedToday}/{srItems.length}</strong>
+          <span style={{ color: 'var(--color-text-muted)' }}> showroom đã cập nhật hôm nay</span>
+        </span>
+        {noData > 0 && (
+          <>
+            <span style={{ width: 1, height: 14, background: 'var(--color-border)', flexShrink: 0 }} />
+            <span style={{ fontSize: 11, color: '#dc2626' }}>{noData} showroom chưa có dữ liệu</span>
+          </>
+        )}
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-muted)', flexShrink: 0 }}>
+          {expanded ? '▲ Thu gọn' : '▼ Chi tiết'}
+        </span>
+      </div>
+
+      {/* Detail panel */}
+      {expanded && (
+        <div style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
+          {/* Tab switcher */}
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', padding: '0 14px' }}>
+            {(['showroom', 'brand'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={e => { e.stopPropagation(); setActiveTab(tab); }}
+                style={{
+                  padding: '6px 14px', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: activeTab === tab ? 700 : 400,
+                  background: 'transparent',
+                  color: activeTab === tab ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                  borderBottom: activeTab === tab ? '2px solid var(--color-primary)' : '2px solid transparent',
+                  marginBottom: -1,
+                }}
+              >
+                {tab === 'showroom' ? 'Theo showroom' : 'Theo thương hiệu'}
+              </button>
+            ))}
+          </div>
+          {/* Grid */}
+          <div style={{
+            padding: '10px 14px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+            gap: 6,
+          }}>
+            {items.map(item => {
+              const { label, color, dot } = freshnessInfo(item.last_updated);
+              return (
+                <div key={item.name} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px',
+                  background: 'var(--color-cell-bg)', borderRadius: 6,
+                  border: '1px solid var(--color-border)',
+                }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.name}
+                  </span>
+                  <span style={{ fontSize: 11, color, whiteSpace: 'nowrap' }}>{label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function PlanVsActualTab({
@@ -106,6 +268,7 @@ export function PlanVsActualTab({
   showroomItems,
   brands,
   showroomMergedData,
+  freshnessData,
 }: {
   plansByMonth: MonthlyPayloads;
   actualsByMonth: MonthlyPayloads;
@@ -118,6 +281,7 @@ export function PlanVsActualTab({
   showroomItems: ShowroomItem[];
   brands: BrandWithModels[];
   showroomMergedData?: Record<string, { plan: Record<string, number>; actual: Record<string, number> }>;
+  freshnessData?: FreshnessData | null;
 }) {
   const [reportMode, setReportMode]         = useState<ReportMode>('result');
   const [expandedBrands, setExpandedBrands] = useState<Set<string>>(new Set());
@@ -481,6 +645,11 @@ export function PlanVsActualTab({
         <div style={{ flex: 1 }} />
         <ExportButton onExport={handleExport} />
       </div>
+
+      {/* Freshness bar */}
+      {freshnessData && (
+        <FreshnessBar data={freshnessData} month={month} viewMode={viewMode} />
+      )}
 
       {/* Section 1: Kênh */}
       <SectionTitle title="Theo kênh Marketing" />
