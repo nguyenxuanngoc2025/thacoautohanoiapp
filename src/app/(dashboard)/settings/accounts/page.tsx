@@ -30,6 +30,7 @@ const ROLE_COLOR: Record<UserRole, { bg: string; text: string; border: string }>
   super_admin:  { bg: '#fef3c7', text: '#92400e', border: '#fde68a' },
   pt_mkt_cty:   { bg: '#fce7f3', text: '#9d174d', border: '#fbcfe8' },
   bld:          { bg: '#fee2e2', text: '#991b1b', border: '#fca5a5' },
+  gd_brand:     { bg: '#fff7ed', text: '#9a3412', border: '#fed7aa' },
   gd_showroom:  { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
   mkt_brand:    { bg: '#f0fdf4', text: '#166534', border: '#86efac' },
   mkt_showroom: { bg: '#f5f3ff', text: '#5b21b6', border: '#c4b5fd' },
@@ -122,9 +123,10 @@ interface EditModalProps {
   onClose: () => void;
   onSave: (updates: Partial<ThacUser> & { password?: string }) => Promise<void>;
   saving: boolean;
+  saveError?: string | null;
 }
 
-function UserEditModal({ user, units, showrooms, allBrandNames, onClose, onSave, saving }: EditModalProps) {
+function UserEditModal({ user, units, showrooms, allBrandNames, onClose, onSave, saving, saveError }: EditModalProps) {
   const isNew = !user.id;
   const [form, setForm] = useState<Partial<ThacUser>>({
     full_name: user.full_name ?? '',
@@ -391,11 +393,18 @@ function UserEditModal({ user, units, showrooms, allBrandNames, onClose, onSave,
         </div>
 
         {/* Footer */}
-        <div style={{ display: 'flex', gap: 10, padding: '14px 24px', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', background: '#fff' }}>
-          <button className="button-erp-secondary" onClick={onClose}>Hủy</button>
-          <button className="button-erp-primary" onClick={() => onSave(isNew ? { ...form, password } : form)} disabled={saving}>
-            {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
-          </button>
+        <div style={{ borderTop: '1px solid #f1f5f9', background: '#fff' }}>
+          {saveError && (
+            <div style={{ padding: '10px 24px', background: '#fef2f2', borderBottom: '1px solid #fca5a5', fontSize: 12.5, color: '#dc2626' }}>
+              {saveError}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10, padding: '14px 24px', justifyContent: 'flex-end' }}>
+            <button className="button-erp-secondary" onClick={onClose}>Hủy</button>
+            <button className="button-erp-primary" onClick={() => onSave(isNew ? { ...form, password } : form)} disabled={saving}>
+              {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
+            </button>
+          </div>
         </div>
       </div>
     </ModalOverlay>
@@ -432,8 +441,14 @@ export default function AccountsPage() {
     setLoading(true);
     setError(null);
     try {
+      // pt_mkt_cty chỉ thấy user trong cùng công ty
+      let usersQuery = supabase.from('thaco_users').select(`*, unit:thaco_units(*), showroom:thaco_showrooms(*)`).order('full_name');
+      if (effectiveRole === 'pt_mkt_cty' && myProfile?.unit_id) {
+        usersQuery = usersQuery.eq('unit_id', myProfile.unit_id);
+      }
+
       const [usersRes, unitsRes, showroomsRes, brandsRes] = await Promise.all([
-        supabase.from('thaco_users').select(`*, unit:thaco_units(*), showroom:thaco_showrooms(*)`).order('full_name'),
+        usersQuery,
         supabase.from('thaco_units').select('id, code, name').order('code'),
         supabase.from('thaco_showrooms').select('id, unit_id, code, name, is_active').order('code'),
         supabase.from('thaco_master_brands').select('name').eq('is_active', true).order('sort_order'),
@@ -448,7 +463,7 @@ export default function AccountsPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, effectiveRole, myProfile?.unit_id]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -735,9 +750,10 @@ export default function AccountsPage() {
           units={units}
           showrooms={showrooms}
           allBrandNames={allBrandNames}
-          onClose={() => setEditModal(null)}
+          onClose={() => { setEditModal(null); setError(null); }}
           onSave={handleSave}
           saving={saving}
+          saveError={error}
         />
       )}
       </>

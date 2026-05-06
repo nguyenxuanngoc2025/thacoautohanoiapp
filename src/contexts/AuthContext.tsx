@@ -190,7 +190,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     effectiveRole === 'bld' ||
     effectiveRole === 'pt_mkt_cty' ||
     effectiveRole === 'finance' ||
-    effectiveRole === 'mkt_brand'  // mkt_brand xem mọi SR có bán brand của mình
+    effectiveRole === 'mkt_brand' ||  // mkt_brand xem mọi SR có bán brand của mình
+    effectiveRole === 'gd_brand'      // gd_brand xem mọi SR có bán brand của mình
   );
 
   // showroom_ids của profile (codes). Normalize về UPPERCASE để so sánh nhất quán.
@@ -210,8 +211,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const canEditShowroom = useCallback((code: string) => {
     if (!effectiveRole) return false;
-    // BLD (ban lãnh đạo) chỉ xem, không edit
-    if (effectiveRole === 'bld' || effectiveRole === 'finance') return false;
+    // BLD, GĐ Thương hiệu, Finance: chỉ xem, không edit
+    if (effectiveRole === 'bld' || effectiveRole === 'gd_brand' || effectiveRole === 'finance') return false;
     // super_admin, pt_mkt_cty: edit tất cả
     if (effectiveRole === 'super_admin' || effectiveRole === 'pt_mkt_cty') return true;
     // mkt_brand: edit được mọi SR (nhưng chỉ cột brand của mình — enforce ở UI layer)

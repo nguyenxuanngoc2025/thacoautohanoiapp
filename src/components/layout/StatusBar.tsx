@@ -27,6 +27,7 @@ const ROLE_BADGE_COLOR: Record<UserRole, { bg: string; text: string; border: str
   super_admin:  { bg: '#fef3c7', text: '#92400e', border: '#fde68a' },
   pt_mkt_cty:   { bg: '#fce7f3', text: '#9d174d', border: '#fbcfe8' },
   bld:          { bg: '#fee2e2', text: '#991b1b', border: '#fca5a5' },
+  gd_brand:     { bg: '#fff7ed', text: '#9a3412', border: '#fed7aa' },
   gd_showroom:  { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
   mkt_brand:    { bg: '#f0fdf4', text: '#166534', border: '#86efac' },
   mkt_showroom: { bg: '#f5f3ff', text: '#5b21b6', border: '#c4b5fd' },

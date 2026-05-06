@@ -1,6 +1,6 @@
 // Database types for THACO MKT Budget
 
-export type UserRole = 'super_admin' | 'pt_mkt_cty' | 'bld' | 'gd_showroom' | 'mkt_brand' | 'mkt_showroom' | 'finance';
+export type UserRole = 'super_admin' | 'pt_mkt_cty' | 'bld' | 'gd_brand' | 'gd_showroom' | 'mkt_brand' | 'mkt_showroom' | 'finance';
 export type EntryType = 'plan' | 'actual';
 export type ApprovalStatus = 'draft' | 'pending_gd' | 'pending_bld' | 'approved' | 'rejected';
 export type ChannelCategory = 'DIGITAL' | 'SỰ KIỆN' | 'CSKH' | 'NHẬN DIỆN';
@@ -187,6 +187,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   super_admin:  'Super Admin',
   pt_mkt_cty:   'PT Marketing Cty',
   bld:          'Ban Lãnh Đạo',
+  gd_brand:     'GĐ Thương hiệu',
   gd_showroom:  'GĐ Showroom',
   mkt_brand:    'MKT Thương hiệu',
   mkt_showroom: 'MKT Showroom',
@@ -197,7 +198,8 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   super_admin:  'Quản trị toàn bộ hệ thống, quản lý tất cả công ty, tạo/xóa tài khoản',
   pt_mkt_cty:   'Quyền quản lý tương đương Admin nhưng chỉ trong phạm vi công ty được gán',
-  bld:          'Xem toàn bộ dữ liệu công ty, phê duyệt kế hoạch ngân sách',
+  bld:          'Xem toàn bộ dữ liệu trong công ty được gán, phê duyệt kế hoạch ngân sách',
+  gd_brand:     'Xem và giám sát dữ liệu theo thương hiệu được giao, phê duyệt cấp thương hiệu',
   gd_showroom:  'Xem và quản lý dữ liệu showroom của mình, phê duyệt cấp showroom',
   mkt_brand:    'Lập kế hoạch ngân sách và báo cáo theo thương hiệu được giao',
   mkt_showroom: 'Nhập liệu kế hoạch và báo cáo thực hiện tại showroom của mình',
@@ -208,7 +210,8 @@ export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
 export const ROLE_SCOPE: Record<UserRole, string> = {
   super_admin:  'Toàn hệ thống — tất cả công ty',
   pt_mkt_cty:   'Công ty được gán — toàn bộ showroom & thương hiệu',
-  bld:          'Toàn hệ thống — chỉ xem, không sửa',
+  bld:          'Công ty được gán — chỉ xem, phê duyệt',
+  gd_brand:     'Thương hiệu được gán (trong công ty) — chỉ xem, phê duyệt',
   gd_showroom:  'Nội bộ showroom của mình',
   mkt_brand:    'Thương hiệu được phân công (trong công ty)',
   mkt_showroom: 'Nội bộ showroom của mình',
@@ -219,7 +222,8 @@ export const ROLE_SCOPE: Record<UserRole, string> = {
 export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   super_admin:  ['Tạo/sửa/xóa tài khoản', 'Xem tất cả công ty', 'Cấu hình hệ thống', 'Phê duyệt mọi cấp'],
   pt_mkt_cty:   ['Xem toàn bộ công ty đc gán', 'Quản lý ngân sách cty', 'Phê duyệt kế hoạch', 'Xuất báo cáo'],
-  bld:          ['Xem toàn bộ dữ liệu', 'Phê duyệt kế hoạch', 'Xuất báo cáo tổng hợp'],
+  bld:          ['Xem toàn bộ dữ liệu công ty', 'Phê duyệt kế hoạch', 'Xuất báo cáo tổng hợp'],
+  gd_brand:     ['Xem dữ liệu theo thương hiệu', 'Phê duyệt kế hoạch thương hiệu', 'Xuất báo cáo thương hiệu'],
   gd_showroom:  ['Xem dữ liệu showroom', 'Phê duyệt cấp showroom', 'Xuất báo cáo showroom'],
   mkt_brand:    ['Lập kế hoạch thương hiệu', 'Nhập liệu thực tế', 'Xem báo cáo thương hiệu'],
   mkt_showroom: ['Nhập kế hoạch tháng', 'Nhập liệu thực tế', 'Xem báo cáo showroom'],
@@ -230,7 +234,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
 export const ROLE_CAN: Record<UserRole, string[]> = {
   super_admin:  ['Xem toàn bộ hệ thống', 'Tạo/sửa/xóa mọi tài khoản', 'Cấu hình hệ thống', 'Duyệt mọi cấp', 'Nhập liệu tất cả showroom', 'Chuyển đổi giữa các công ty'],
   pt_mkt_cty:   ['Xem toàn bộ công ty được gán', 'Tạo/sửa tài khoản trong đơn vị', 'Duyệt kế hoạch ngân sách', 'Nhập liệu tất cả showroom trong đơn vị', 'Xuất báo cáo'],
-  bld:          ['Xem toàn bộ dữ liệu (chỉ đọc)', 'Duyệt kế hoạch', 'Xuất báo cáo tổng hợp'],
+  bld:          ['Xem toàn bộ dữ liệu công ty được gán (chỉ đọc)', 'Duyệt kế hoạch', 'Xuất báo cáo tổng hợp'],
+  gd_brand:     ['Xem dữ liệu thương hiệu được giao trên tất cả showroom (chỉ đọc)', 'Duyệt kế hoạch thương hiệu', 'Xuất báo cáo theo thương hiệu'],
   gd_showroom:  ['Xem dữ liệu showroom của mình', 'Duyệt kế hoạch cấp showroom', 'Xem báo cáo showroom', 'Tạo/sửa sự kiện tại showroom'],
   mkt_brand:    ['Nhập kế hoạch ngân sách theo thương hiệu được giao', 'Nhập liệu thực tế', 'Tạo/sửa sự kiện', 'Xem báo cáo thương hiệu'],
   mkt_showroom: ['Nhập kế hoạch ngân sách tháng', 'Nhập liệu thực tế', 'Tạo/sửa sự kiện tại showroom', 'Xem báo cáo showroom'],
@@ -241,7 +246,8 @@ export const ROLE_CAN: Record<UserRole, string[]> = {
 export const ROLE_CANNOT: Record<UserRole, string[]> = {
   super_admin:  [],
   pt_mkt_cty:   ['Tạo tài khoản super_admin', 'Truy cập dữ liệu ngoài đơn vị được gán'],
-  bld:          ['Nhập liệu', 'Sửa kế hoạch', 'Tạo/sửa sự kiện', 'Quản lý tài khoản'],
+  bld:          ['Nhập liệu', 'Sửa kế hoạch', 'Tạo/sửa sự kiện', 'Quản lý tài khoản', 'Truy cập dữ liệu ngoài đơn vị được gán'],
+  gd_brand:     ['Nhập liệu', 'Sửa kế hoạch', 'Tạo/sửa sự kiện', 'Quản lý tài khoản', 'Xem thương hiệu không được giao'],
   gd_showroom:  ['Nhập liệu kế hoạch trực tiếp (chỉ duyệt)', 'Truy cập dữ liệu showroom khác', 'Quản lý tài khoản'],
   mkt_brand:    ['Nhập liệu thương hiệu không được giao', 'Duyệt kế hoạch', 'Quản lý tài khoản'],
   mkt_showroom: ['Truy cập dữ liệu showroom khác', 'Duyệt kế hoạch', 'Quản lý tài khoản'],
@@ -252,7 +258,8 @@ export const ROLE_CANNOT: Record<UserRole, string[]> = {
 export const ROLE_NEEDS: Record<UserRole, { unit: boolean; showroom: boolean; brands: boolean; label: string }> = {
   super_admin:  { unit: false, showroom: false, brands: false, label: 'Không cần gán — truy cập toàn hệ thống' },
   pt_mkt_cty:   { unit: true,  showroom: false, brands: false, label: 'Gán đơn vị (Công ty)' },
-  bld:          { unit: false, showroom: false, brands: false, label: 'Không cần gán — xem toàn hệ thống (chỉ đọc)' },
+  bld:          { unit: true,  showroom: false, brands: false, label: 'Gán đơn vị (Công ty) — chỉ đọc, phê duyệt' },
+  gd_brand:     { unit: true,  showroom: false, brands: true,  label: 'Gán đơn vị + Thương hiệu phụ trách' },
   gd_showroom:  { unit: true,  showroom: true,  brands: false, label: 'Gán đơn vị + Showroom phụ trách' },
   mkt_brand:    { unit: true,  showroom: false, brands: true,  label: 'Gán đơn vị + Thương hiệu phụ trách' },
   mkt_showroom: { unit: true,  showroom: true,  brands: false, label: 'Gán đơn vị + Showroom phụ trách' },
@@ -266,7 +273,7 @@ export function roleNeedsShowroom(role: UserRole): boolean {
 
 /** Kiểm tra role có cần gán Brand không */
 export function roleNeedsBrands(role: UserRole): boolean {
-  return role === 'mkt_brand';
+  return role === 'mkt_brand' || role === 'gd_brand';
 }
 
 /** Kiểm tra role có quyền xem tất cả không */
@@ -276,7 +283,7 @@ export function roleIsAdmin(role: UserRole): boolean {
 
 /** Kiểm tra role có phạm vi toàn công ty (không cần gán unit) */
 export function roleIsCompanyWide(role: UserRole): boolean {
-  return role === 'super_admin' || role === 'bld' || role === 'finance';
+  return role === 'super_admin' || role === 'finance';
 }
 
 /** PT Marketing Cty — quyền admin trong công ty */
