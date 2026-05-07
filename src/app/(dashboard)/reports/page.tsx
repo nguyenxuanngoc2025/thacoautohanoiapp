@@ -211,17 +211,18 @@ export default function ReportsPage() {
     () => new Set(channels.filter(c => !c.isAggregate).map(c => c.code)),
     [channels],
   );
+  // Cặp (brand|model) hợp lệ — chỉ non-aggregate models
   const ctxBrandModelPairs = useMemo(() => {
     const s = new Set<string>();
     for (const b of brands) {
       for (const m of (b.modelData ?? [])) {
-        s.add(`${b.name}|${m.name}`);
+        if (!m.is_aggregate) s.add(`${b.name}|${m.name}`);
       }
     }
     return s;
   }, [brands]);
 
-  // Context-clean master rows — loại orphan showroom/brand/channel/model
+  // Context-clean master rows — loại orphan showroom/brand/channel/model + aggregate models
   const contextCleanMasterRows = useMemo<ViewBudgetMaster[] | null>(() => {
     if (!viewMasterRows) return null;
     return viewMasterRows.filter(r => {
@@ -435,7 +436,7 @@ export default function ReportsPage() {
       };
     }
     return result;
-  }, [filteredMasterRows, viewMasterRows, showroomItems, codeToName]);
+  }, [filteredMasterRows, contextCleanMasterRows, showroomItems, codeToName]);
 
   // Pre-merge per-showroom data for current period (passed to PlanVsActualTab)
   const showroomMergedData = useMemo<Record<string, { plan: Record<string, number>; actual: Record<string, number> }>>(() => {

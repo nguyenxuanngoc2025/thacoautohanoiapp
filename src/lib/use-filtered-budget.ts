@@ -335,11 +335,12 @@ export function useFilteredBudget({
   // Tập hợp các cặp (brand_name|model_name) hợp lệ theo context
   // Dùng để loại orphan model entries (model đã bị xóa/đổi tên)
   // Planning chỉ iterate brand.models hiện tại — dashboard phải dùng cùng scope.
+  // Chỉ include non-aggregate models — aggregate models đã bị loại riêng ở bước trên
   const ctxBrandModelPairs = useMemo(() => {
     const s = new Set<string>();
     for (const b of brands) {
       for (const m of (b.modelData ?? [])) {
-        s.add(`${b.name}|${m.name}`);
+        if (!m.is_aggregate) s.add(`${b.name}|${m.name}`);
       }
     }
     return s;
