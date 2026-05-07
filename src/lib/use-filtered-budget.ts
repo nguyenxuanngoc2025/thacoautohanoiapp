@@ -121,44 +121,69 @@ function resolveChannelCodes(
   return code ? [code] : [filterChannel]; // fallback: dùng tên như code
 }
 
-// ── Helper: aggregate master rows theo showroom ───────────────────────────────
+// ── Helper: aggregate master rows theo showroom (data-driven) ─────────────────
+// Dùng data làm nguồn, lookup tên từ context. Không bỏ sót entry nào.
 function aggregateByShowroom(
   rows: ViewBudgetMaster[],
   showroomList: { id: string; name: string }[],
   monthsInView: number[]
 ): ShowroomBreakdownRow[] {
-  return showroomList.map(sr => {
-    let plan = 0, actual = 0, khqt = 0, gdtd = 0, khd = 0;
-    for (const r of rows) {
-      if (r.showroom_id !== sr.id || !monthsInView.includes(r.month)) continue;
-      plan   += r.plan_ns      ?? 0;
-      actual += r.actual_ns    ?? 0;
-      khqt   += r.actual_khqt  ?? 0;
-      gdtd   += r.actual_gdtd  ?? 0;
-      khd    += r.actual_khd   ?? 0;
-    }
-    return { name: sr.name, plan, actual, khqt, gdtd, khd };
-  });
+  const idToName = new Map(showroomList.map(s => [s.id, s.name]));
+  const byId = new Map<string, ShowroomBreakdownRow>();
+  for (const r of rows) {
+    if (!monthsInView.includes(r.month)) continue;
+    const name = idToName.get(r.showroom_id) ?? r.showroom_id;
+    const entry = byId.get(r.showroom_id) ?? { name, plan: 0, actual: 0, khqt: 0, gdtd: 0, khd: 0 };
+    entry.plan   += r.plan_ns      ?? 0;
+    entry.actual += r.actual_ns    ?? 0;
+    entry.khqt   += r.actual_khqt  ?? 0;
+    entry.gdtd   += r.actual_gdtd  ?? 0;
+    entry.khd    += r.actual_khd   ?? 0;
+    byId.set(r.showroom_id, entry);
+  }
+  // Giữ thứ tự theo showroomList (context order), sau đó append orphan entries
+  const result: ShowroomBreakdownRow[] = [];
+  for (const sr of showroomList) {
+    const e = byId.get(sr.id);
+    if (e) result.push(e);
+    byId.delete(sr.id);
+  }
+  // Orphan showrooms (có data nhưng không trong context)
+  for (const e of byId.values()) result.push(e);
+  return result;
 }
 
-// ── Helper: aggregate master rows theo brand ──────────────────────────────────
+// ── Helper: aggregate master rows theo brand (data-driven) ────────────────────
+// Dùng data làm nguồn → tổng brand = tổng showroom = tổng KPI cards.
 function aggregateByBrand(
   rows: ViewBudgetMaster[],
   brandList: { name: string }[],
   monthsInView: number[]
 ): BrandBreakdownRow[] {
-  return brandList.map(br => {
-    let plan = 0, actual = 0, khqt = 0, gdtd = 0, khd = 0;
-    for (const r of rows) {
-      if (r.brand_name !== br.name || !monthsInView.includes(r.month)) continue;
-      plan   += r.plan_ns      ?? 0;
-      actual += r.actual_ns    ?? 0;
-      khqt   += r.actual_khqt  ?? 0;
-      gdtd   += r.actual_gdtd  ?? 0;
-      khd    += r.actual_khd   ?? 0;
-    }
-    return { name: br.name, plan, actual, khqt, gdtd, khd };
-  });
+  const knownBrands = new Set(brandList.map(b => b.name));
+  const byName = new Map<string, BrandBreakdownRow>();
+  for (const r of rows) {
+    if (!monthsInView.includes(r.month)) continue;
+    const name = r.brand_name || '(Không xác định)';
+    const entry = byName.get(name) ?? { name, plan: 0, actual: 0, khqt: 0, gdtd: 0, khd: 0 };
+    entry.plan   += r.plan_ns      ?? 0;
+    entry.actual += r.actual_ns    ?? 0;
+    entry.khqt   += r.actual_khqt  ?? 0;
+    entry.gdtd   += r.actual_gdtd  ?? 0;
+    entry.khd    += r.actual_khd   ?? 0;
+    byName.set(name, entry);
+  }
+  // Giữ thứ tự theo brandList, sau đó append orphan brands
+  const result: BrandBreakdownRow[] = [];
+  for (const br of brandList) {
+    const e = byName.get(br.name);
+    if (e) result.push(e);
+    byName.delete(br.name);
+  }
+  for (const e of byName.values()) {
+    if (!knownBrands.has(e.name)) result.push(e); // orphan brands
+  }
+  return result;
 }
 
 // ── Helper: aggregate master rows theo channel ────────────────────────────────
@@ -207,13 +232,17 @@ function aggregateByMonth(
   });
 }
 
-// ── Helper: totals ────────────────────────────────────────────────────────────
-function computeTotals(breakdown: ShowroomBreakdownRow[]): BudgetTotals {
-  const tp  = breakdown.reduce((s, r) => s + r.plan, 0);
-  const ta  = breakdown.reduce((s, r) => s + r.actual, 0);
-  const tkq = breakdown.reduce((s, r) => s + r.khqt, 0);
-  const tgd = breakdown.reduce((s, r) => s + r.gdtd, 0);
-  const tkd = breakdown.reduce((s, r) => s + r.khd, 0);
+// ── Helper: totals — tính thẳng từ raw rows (nguồn duy nhất, không qua breakdown) ──
+function computeTotals(rows: ViewBudgetMaster[], monthsInView: number[]): BudgetTotals {
+  let tp = 0, ta = 0, tkq = 0, tgd = 0, tkd = 0;
+  for (const r of rows) {
+    if (!monthsInView.includes(r.month)) continue;
+    tp  += r.plan_ns      ?? 0;
+    ta  += r.actual_ns    ?? 0;
+    tkq += r.actual_khqt  ?? 0;
+    tgd += r.actual_gdtd  ?? 0;
+    tkd += r.actual_khd   ?? 0;
+  }
   return {
     totalPlan: tp, totalActual: ta, totalKhqt: tkq, totalGdtd: tgd, totalKhd: tkd,
     cpl: tkq > 0 ? ta / tkq : 0,
@@ -284,16 +313,65 @@ export function useFilteredBudget({
     [filterChannel, channelsData]
   );
 
-  // ── filteredRows: áp dụng tất cả filters lên v_budget_master ──────────────
+  // ── Context sets — dùng để loại orphan entries trước khi aggregate ──────
+  // Orphan entries = data cũ cho showroom/brand/channel/model đã bị xóa/đổi tên.
+  // Dashboard phải dùng cùng scope với planning để số khớp nhau.
+  const ctxShowroomIds = useMemo(() => new Set(showrooms.map(s => s.id)), [showrooms]);
+  const ctxBrandNames  = useMemo(() => new Set(brands.map(b => b.name)), [brands]);
+  const ctxChannelCodes = useMemo(
+    () => new Set(channelsData.filter(c => !c.isAggregate).map(c => c.code)),
+    [channelsData]
+  );
+  const aggregateModelNames = useMemo(() => {
+    const s = new Set<string>();
+    for (const b of brands) {
+      for (const m of (b.modelData ?? [])) {
+        if (m.is_aggregate) s.add(m.name);
+      }
+    }
+    return s;
+  }, [brands]);
+
+  // Tập hợp các cặp (brand_name|model_name) hợp lệ theo context
+  // Dùng để loại orphan model entries (model đã bị xóa/đổi tên)
+  // Planning chỉ iterate brand.models hiện tại — dashboard phải dùng cùng scope.
+  const ctxBrandModelPairs = useMemo(() => {
+    const s = new Set<string>();
+    for (const b of brands) {
+      for (const m of (b.modelData ?? [])) {
+        s.add(`${b.name}|${m.name}`);
+      }
+    }
+    return s;
+  }, [brands]);
+
+  // ── filteredRows: áp dụng context clean + user filters lên v_budget_master ─
+  // Bước 1 (context clean): loại orphan showroom/brand/channel/aggregate model.
+  // Bước 2 (user filter): áp dụng filterShowroom/Brand/Channel của user.
+  // → Đảm bảo dashboard và planning dùng cùng data scope.
   const filteredRows = useMemo<ViewBudgetMaster[] | null>(() => {
-    if (!hasAnyFilter || !viewMaster) return null;
-    return viewMaster.filter(r => {
-      if (filterShowroomIds && !filterShowroomIds.includes(r.showroom_id)) return false;
-      if (filterBrand.length > 0 && !filterBrand.includes(r.brand_name)) return false;
-      if (allowedChannelCodes && !allowedChannelCodes.includes(r.channel_code)) return false;
+    if (!viewMaster) return null;
+    let base = viewMaster.filter(r => {
+      if (!ctxShowroomIds.has(r.showroom_id)) return false;   // orphan showroom
+      if (!ctxBrandNames.has(r.brand_name)) return false;      // orphan brand
+      if (!ctxChannelCodes.has(r.channel_code)) return false;  // orphan channel
+      if (aggregateModelNames.has(r.model_name)) return false; // aggregate model (double-count)
+      // Orphan model: brand_name hợp lệ nhưng model_name không còn trong context
+      // Planning chỉ iterate brand.models hiện tại → phải dùng cùng scope
+      if (ctxBrandModelPairs.size > 0 && !ctxBrandModelPairs.has(`${r.brand_name}|${r.model_name}`)) return false;
       return true;
     });
-  }, [viewMaster, hasAnyFilter, filterShowroomIds, filterBrand, allowedChannelCodes]);
+    if (hasAnyFilter) {
+      base = base.filter(r => {
+        if (filterShowroomIds && !filterShowroomIds.includes(r.showroom_id)) return false;
+        if (filterBrand.length > 0 && !filterBrand.includes(r.brand_name)) return false;
+        if (allowedChannelCodes && !allowedChannelCodes.includes(r.channel_code)) return false;
+        return true;
+      });
+    }
+    return base;
+  }, [viewMaster, ctxShowroomIds, ctxBrandNames, ctxChannelCodes, aggregateModelNames, ctxBrandModelPairs,
+      hasAnyFilter, filterShowroomIds, filterBrand, allowedChannelCodes]);
 
   // ── codeToName map cho channel ─────────────────────────────────────────────
   const codeToName = useMemo(
@@ -301,96 +379,43 @@ export function useFilteredBudget({
     [channelsData]
   );
 
-  // ── showroomBreakdown ──────────────────────────────────────────────────────
+  // ── showroomBreakdown — luôn từ filteredRows (data-driven) ──────────────────
   const showroomBreakdown = useMemo<ShowroomBreakdownRow[]>(() => {
+    if (!filteredRows) return [];
     const srList = filterShowroom.length === 0
       ? showrooms
       : showrooms.filter(s => filterShowroom.includes(s.name));
+    return aggregateByShowroom(filteredRows, srList, monthsInView);
+  }, [filteredRows, showrooms, filterShowroom, monthsInView]);
 
-    if (filteredRows) return aggregateByShowroom(filteredRows, srList, monthsInView);
-
-    // Fallback: v_budget_by_showroom (không có filter)
-    return srList.map(sr => {
-      let plan = 0, actual = 0, khqt = 0, gdtd = 0, khd = 0;
-      for (const r of (viewByShowroom ?? [])) {
-        if (r.showroom_id !== sr.id || !monthsInView.includes(r.month)) continue;
-        plan   += r.plan_ns      ?? 0;
-        actual += r.actual_ns    ?? 0;
-        khqt   += r.actual_khqt  ?? 0;
-        gdtd   += r.actual_gdtd  ?? 0;
-        khd    += r.actual_khd   ?? 0;
-      }
-      return { name: sr.name, plan, actual, khqt, gdtd, khd };
-    });
-  }, [filteredRows, viewByShowroom, showrooms, filterShowroom, monthsInView]);
-
-  // ── brandBreakdown ─────────────────────────────────────────────────────────
+  // ── brandBreakdown — luôn từ filteredRows (data-driven) ──────────────────
   const brandBreakdown = useMemo<BrandBreakdownRow[]>(() => {
-    let brList = filterBrand.length === 0
-      ? brands
-      : brands.filter(b => filterBrand.includes(b.name));
-
-    if (filteredRows) {
-      // Khi filter theo showroom, chỉ hiển thị brands được config cho showroom đó
-      if (filterShowroom.length > 0) {
-        const showroomBrands = new Set(
-          showrooms
-            .filter(s => filterShowroom.includes(s.name))
-            .flatMap(s => s.brands ?? [])
-        );
-        if (showroomBrands.size > 0) {
-          brList = brList.filter(b => showroomBrands.has(b.name));
-        }
-      }
-      return aggregateByBrand(filteredRows, brList, monthsInView);
-    }
-
-    // Fallback: v_budget_by_brand
-    return brList.map(br => {
-      let plan = 0, actual = 0, khqt = 0, gdtd = 0, khd = 0;
-      for (const r of (viewByBrand ?? [])) {
-        if (r.brand_name !== br.name || !monthsInView.includes(r.month)) continue;
-        plan   += r.plan_ns      ?? 0;
-        actual += r.actual_ns    ?? 0;
-        khqt   += r.actual_khqt  ?? 0;
-        gdtd   += r.actual_gdtd  ?? 0;
-        khd    += r.actual_khd   ?? 0;
-      }
-      return { name: br.name, plan, actual, khqt, gdtd, khd };
-    });
-  }, [filteredRows, viewByBrand, brands, filterBrand, filterShowroom, monthsInView]);
+    if (!filteredRows) return [];
+    const brList = filterBrand.length === 0 ? brands : brands.filter(b => filterBrand.includes(b.name));
+    return aggregateByBrand(filteredRows, brList, monthsInView);
+  }, [filteredRows, brands, filterBrand, monthsInView]);
 
   // ── channelBreakdown ───────────────────────────────────────────────────────
   const channelBreakdown = useMemo<ChannelBreakdownRow[]>(() => {
-    const sourceRows = filteredRows ?? viewMaster ?? [];
-    if (sourceRows.length === 0) {
-      return (viewByChannel
-        ? Array.from(new Set(viewByChannel.filter(r => monthsInView.includes(r.month)).map(r => r.channel_code)))
-            .map((code, i) => {
-              const rows = viewByChannel.filter(r => r.channel_code === code && monthsInView.includes(r.month));
-              const actual = rows.reduce((s, r) => s + (r.actual_ns ?? 0), 0);
-              const plan   = rows.reduce((s, r) => s + (r.plan_ns   ?? 0), 0);
-              return { name: codeToName.get(code) ?? code, code, amount: actual > 0 ? actual : plan, pct: 0, color: DONUT_COLORS[i % DONUT_COLORS.length] };
-            })
-        : []);
-    }
-    return aggregateByChannel(sourceRows as ViewBudgetMaster[], codeToName, monthsInView);
-  }, [filteredRows, viewMaster, viewByChannel, codeToName, monthsInView]);
+    return aggregateByChannel(filteredRows ?? [], codeToName, monthsInView);
+  }, [filteredRows, codeToName, monthsInView]);
 
   // ── barChartData (12 months) ───────────────────────────────────────────────
   const barChartData = useMemo<BarChartRow[]>(() => {
-    const sourceRows = filteredRows ?? viewMaster ?? [];
-    return aggregateByMonth(sourceRows as ViewBudgetMaster[], activeMonth);
-  }, [filteredRows, viewMaster, activeMonth]);
+    return aggregateByMonth(filteredRows ?? [], activeMonth);
+  }, [filteredRows, activeMonth]);
 
-  // ── totals ─────────────────────────────────────────────────────────────────
-  const totals = useMemo(() => computeTotals(showroomBreakdown), [showroomBreakdown]);
+  // ── totals — tính thẳng từ filteredRows, đảm bảo khớp mọi bảng ──────────
+  const totals = useMemo(
+    () => computeTotals(filteredRows ?? [], monthsInView),
+    [filteredRows, monthsInView]
+  );
 
   // ── planKpis ───────────────────────────────────────────────────────────────
-  const planKpis = useMemo<PlanKpis>(() => {
-    const sourceRows = filteredRows ?? (viewMaster ?? []);
-    return computePlanKpis(sourceRows, monthsInView);
-  }, [filteredRows, viewMaster, monthsInView]);
+  const planKpis = useMemo<PlanKpis>(
+    () => computePlanKpis(filteredRows ?? [], monthsInView),
+    [filteredRows, monthsInView]
+  );
 
   // ── sparkData — 5-month trailing trend ────────────────────────────────────
   const sparkData = useMemo<SparkData>(() => {

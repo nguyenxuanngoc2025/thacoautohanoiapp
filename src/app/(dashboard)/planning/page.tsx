@@ -39,6 +39,39 @@ interface CellData {
   [key: string]: number;
 }
 
+// ─── Smart number parser ───────────────────────────────────────────────────────
+// Xử lý đúng cả định dạng VN/EU (1.234,56) lẫn US (1,234.56) và thuần số
+// Logic: nếu có cả . và , → cái xuất hiện sau cùng là dấu thập phân
+//        nếu chỉ có 1 loại → 3 chữ số sau = phân cách nghìn, còn lại = thập phân
+function parseLocaleNumber(raw: string): number {
+  const s = raw.trim().replace(/\s/g, '');
+  if (!s) return NaN;
+  const hasDot   = s.includes('.');
+  const hasComma = s.includes(',');
+  if (hasDot && hasComma) {
+    // Cái nào xuất hiện sau cùng là dấu thập phân
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+      return parseFloat(s.replace(/\./g, '').replace(',', '.'));
+    }
+    return parseFloat(s.replace(/,/g, ''));
+  }
+  if (hasComma) {
+    const parts = s.split(',');
+    const lastPart = parts[parts.length - 1];
+    // Nhiều dấu phẩy hoặc 3 chữ số sau dấu phẩy → phân cách nghìn
+    if (parts.length > 2 || lastPart.length === 3) return parseFloat(s.replace(/,/g, ''));
+    return parseFloat(s.replace(',', '.'));
+  }
+  if (hasDot) {
+    const parts = s.split('.');
+    const lastPart = parts[parts.length - 1];
+    // Nhiều dấu chấm hoặc 3 chữ số sau dấu chấm → phân cách nghìn
+    if (parts.length > 2 || lastPart.length === 3) return parseFloat(s.replace(/\./g, ''));
+    return parseFloat(s);
+  }
+  return parseFloat(s);
+}
+
 // ─── Key Translation Bridge ───────────────────────────────────────────────────
 // Grid uses legacy format: "brand-model-channelName-metricVN"
 // DB uses new format:      "brand|||model|||channelCode|||metricCode"
@@ -933,7 +966,7 @@ export default function PlanningPage() {
 
     // Debounce 1500ms — chờ idle sau lần commit cuối mới save (giống Google Sheets)
     const snapshot = currentPayload; // capture tại thời điểm effect chạy
-    const timeout = setTimeout(() => {
+    const doSave = () => {
       setSaveStatus('saving');
       isSelfSaving.current = true;
       const entries = legacyCellDataToEntries(
@@ -954,8 +987,15 @@ export default function PlanningPage() {
           setSaveStatus('error');
         })
         .finally(() => { setTimeout(() => { isSelfSaving.current = false; }, 500); });
-    }, 1500);
-    return () => clearTimeout(timeout);
+    };
+    let fired = false;
+    const timeout = setTimeout(() => { fired = true; doSave(); }, 1500);
+    return () => {
+      clearTimeout(timeout);
+      // Flush: nếu timeout chưa fire và có data chưa lưu → save ngay
+      // Tránh mất data khi user đổi tháng/showroom/mode trước khi debounce kết thúc
+      if (!fired && payloadStr !== savedRef.current) doSave();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataByMonth, actualDataByMonth, month, mounted, pageMode, activeUnitId, selectedShowroom, selectedShowroomId, year, retrySaveTrigger]);
 
@@ -1160,8 +1200,7 @@ export default function PlanningPage() {
     const isBudget = cellKey.endsWith('-Ngân sách');
     
     if (value.trim() !== '') {
-      const cleanValue = value.replace(/,/g, '.');
-      num = parseFloat(cleanValue) || 0;
+      num = parseLocaleNumber(value) || 0;
       
       if (!isBudget) num = Math.max(0, parseInt(value, 10)) || 0;
       else num = Math.max(0, num);
@@ -1338,10 +1377,10 @@ export default function PlanningPage() {
                                         const sr = Math.min(r % srcRowCount, clipRows.length - 1);
                                         const srcRowData = clipRows[sr].split('\t');
                                         const sc = Math.min(c % srcColCount, srcRowData.length - 1);
-                                        const rawVal = srcRowData[sc]?.trim().replace(/,/g, '');
-                                        
-                                        if (rawVal !== undefined && rawVal !== '') {
-                                            const v = parseFloat(rawVal);
+                                        const rawVal = srcRowData[sc]?.trim() ?? '';
+
+                                        if (rawVal !== '') {
+                                            const v = parseLocaleNumber(rawVal);
                                             if (!isNaN(v)) {
                                                 let num = v;
                                                 if (cellKey.endsWith('-KHQT') || cellKey.endsWith('-GDTD') || cellKey.endsWith('-KHĐ')) {
@@ -1365,7 +1404,6 @@ export default function PlanningPage() {
                  if (us.length > 0) {
                      const prevState = us[us.length - 1];
                      setCellData(prevState);
-                     setAlertInfo({ type: 'success', title: 'Hoàn tác', message: 'Dữ liệu đã được quay về trạng thái trước.' });
                      return us.slice(0, -1);
                  }
                  return us;
@@ -1392,13 +1430,27 @@ export default function PlanningPage() {
          }
          e.preventDefault();
          if (!editingCell) {
-             const first = Array.from(selectedCells)[0];     
+             const first = Array.from(selectedCells)[0];
              if (first && !first.includes('-Tổng')) {
                 setUndoStack(us => [...us.slice(-19), dataByMonth[month] || {}]);
                 setEditingCell(first);
                 setEditValue(e.key);
              }
          }
+      }
+      else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        const anchor = Array.from(selectedCells)[selectedCells.size - 1];
+        if (!anchor) return;
+        const pos = cellPosMap.get(anchor);
+        if (!pos) return;
+        let { row, col } = pos;
+        if (e.key === 'ArrowUp') row = Math.max(0, row - 1);
+        else if (e.key === 'ArrowDown') row = Math.min(VISIBLE_GRID_KEYS.length - 1, row + 1);
+        else if (e.key === 'ArrowLeft') col = Math.max(0, col - 1);
+        else if (e.key === 'ArrowRight') col = Math.min((VISIBLE_GRID_KEYS[row]?.length ?? 1) - 1, col + 1);
+        const nextKey = VISIBLE_GRID_KEYS[row]?.[col];
+        if (nextKey) setSelectedCells(new Set([nextKey]));
       }
     };
     const handleMouseUp = () => setIsSelecting(false);
@@ -2553,10 +2605,13 @@ export default function PlanningPage() {
                                   s + (planCellData[`${brand.name}-${model}-${subCh}-${metric}`] || 0), 0);
                                 const actDigital = digitalChannelNames.reduce((s, subCh) =>
                                   s + ((actualDataByMonth[month] || {})[`${brand.name}-${model}-${subCh}-${metric}`] || 0), 0);
-                                if (metric === 'Ngân sách') { totalBudget += val; actTotalBudget += actDigital; planTotalBudget += planDigital; }
-                                if (metric === 'KHQT') { totalKhqt += val; actTotalKhqt += actDigital; planTotalKhqt += planDigital; }
-                                if (metric === 'GDTD') { totalGdtd += val; actTotalGdtd += actDigital; planTotalGdtd += planDigital; }
-                                if (metric === 'KHĐ') { totalKhd += val; actTotalKhd += actDigital; planTotalKhd += planDigital; }
+                                // Chỉ cộng vào row total khi digitalCollapsed — khi expanded, sub-channels đã cộng rồi → tránh x2
+                                if (digitalCollapsed) {
+                                  if (metric === 'Ngân sách') { totalBudget += val; actTotalBudget += actDigital; planTotalBudget += planDigital; }
+                                  if (metric === 'KHQT') { totalKhqt += val; actTotalKhqt += actDigital; planTotalKhqt += planDigital; }
+                                  if (metric === 'GDTD') { totalGdtd += val; actTotalGdtd += actDigital; planTotalGdtd += planDigital; }
+                                  if (metric === 'KHĐ') { totalKhd += val; actTotalKhd += actDigital; planTotalKhd += planDigital; }
+                                }
                               }
 
                               // ── ACTUAL SPLIT MODE: Tháng chưa chốt → 2 cột KH | TH ──
@@ -2567,7 +2622,7 @@ export default function PlanningPage() {
                                 return (
                                   <React.Fragment key={cellKey}>
                                     {/* KH — Plan value: read-only reference */}
-                                    <td style={{ padding: 0, borderTop: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)', borderLeft: '1px solid var(--color-border-dark)', borderRight: '1px dashed var(--color-border-dark)', height: 26, background: 'var(--color-surface)' }}>
+                                    <td style={{ padding: 0, borderTop: '1px solid var(--color-border-dark)', borderBottom: '1px solid var(--color-border-dark)', borderLeft: metric === visibleMetrics[0] ? '2px solid var(--color-border-dark)' : '1px solid var(--color-border-dark)', borderRight: '1px dashed var(--color-border-dark)', height: 26, background: 'var(--color-surface)' }}>
                                       <div style={{ padding: '2px 6px', textAlign: 'center', fontSize: 'var(--fs-table)', color: 'var(--color-text-muted)', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         {planVal > 0 ? formatNumber(planVal) : ''}
                                       </div>
@@ -2585,7 +2640,7 @@ export default function PlanningPage() {
                                             setCellData(prev => { const n = {...prev}; delete n[cellKey]; return n; });
                                             return;
                                           }
-                                          const num = parseFloat(raw.replace(',', '.'));
+                                          const num = parseLocaleNumber(raw);
                                           if (!isNaN(num) && num >= 0) {
                                             if (!isIntField || Number.isInteger(num)) {
                                               setCellData(prev => ({ ...prev, [cellKey]: num }));
@@ -2615,7 +2670,7 @@ export default function PlanningPage() {
                                   : (planCellData[cellKey] ?? 0);
                                 return (
                                   <React.Fragment key={cellKey}>
-                                    <td style={{ padding: '2px 4px', textAlign: 'center', background: 'var(--color-surface)', color: 'var(--color-text-muted)', borderRight: '1px dashed var(--color-border-dark)', borderLeft: '1px solid var(--color-border)', fontSize: 'var(--fs-table)', height: compareMode !== 'none' ? 44 : 26 }}>
+                                    <td style={{ padding: '2px 4px', textAlign: 'center', background: 'var(--color-surface)', color: 'var(--color-text-muted)', borderRight: '1px dashed var(--color-border-dark)', borderLeft: metric === visibleMetrics[0] ? '2px solid var(--color-border-dark)' : '1px solid var(--color-border)', fontSize: 'var(--fs-table)', height: compareMode !== 'none' ? 44 : 26 }}>
                                       {planVal > 0 ? formatNumber(planVal) : ''}
                                     </td>
                                     <td style={{ padding: '2px 4px', border: '1px solid var(--color-border)', height: compareMode !== 'none' ? 44 : 26, textAlign: 'center', fontSize: 'var(--fs-table)', fontWeight: isComputedRow ? 600 : 'normal', color: isComputedRow ? 'var(--color-brand)' : (val > 0 ? 'var(--color-text)' : 'transparent'), background: (ch.readonly || isComputedRow) ? 'var(--color-row-alt)' : 'var(--color-cell-bg)' }}>
@@ -2626,7 +2681,7 @@ export default function PlanningPage() {
                               }
 
                               return (
-                                <td key={cellKey} style={{ padding: 0, border: '1px solid var(--color-border)', height: compareMode !== 'none' ? 44 : 26, background: 'var(--color-cell-bg)' }}>
+                                <td key={cellKey} style={{ padding: 0, border: '1px solid var(--color-border)', borderLeft: metric === visibleMetrics[0] ? '2px solid var(--color-border-dark)' : '1px solid var(--color-border)', height: compareMode !== 'none' ? 44 : 26, background: 'var(--color-cell-bg)' }}>
                                   <div
                                     className={cn(
                                       "cell-wrapper",
@@ -2727,6 +2782,13 @@ export default function PlanningPage() {
                                                 if (v.trim() !== '') handleCellChange(cellKey, v);
                                                 setEditingCell(null);
                                               });
+                                              // Di chuyển xuống ô dòng dưới (same column)
+                                              const pos = cellPosMap.get(cellKey);
+                                              if (pos) {
+                                                const nextRow = Math.min(VISIBLE_GRID_KEYS.length - 1, pos.row + 1);
+                                                const nextKey = VISIBLE_GRID_KEYS[nextRow]?.[pos.col];
+                                                if (nextKey) setSelectedCells(new Set([nextKey]));
+                                              }
                                             }
                                             if (e.key === 'Escape') {
                                               setEditingCell(null);
@@ -3058,11 +3120,13 @@ export default function PlanningPage() {
                     const planSrData = effectiveSplitMode ? (showroomDataByMonth[month]?.[srObj.id] || {}) : {};
                     const getPlanChMetricSum = (chName: string, metric: string) => {
                       let sum = 0;
-                      const suffix = `-${chName}-${metric}`;
-                      for (const [k, v] of Object.entries(planSrData)) {
-                        if (!k.endsWith(suffix)) continue;
-                        if (!allowedBrandPrefixes.some(p => k.startsWith(p))) continue;
-                        sum += (v as number) || 0;
+                      for (const b of visibleBrands) {
+                        if (selectedBrand !== 'all' && b.name !== selectedBrand) continue;
+                        const mList = b.models.filter(m => selectedModels.length === 0 || selectedModels.includes(m));
+                        for (const model of mList) {
+                          if (b.modelData?.find((x: any) => x.name === model)?.is_aggregate) continue;
+                          sum += (planSrData[`${b.name}-${model}-${chName}-${metric}`] as number) || 0;
+                        }
                       }
                       return sum;
                     };
@@ -3092,12 +3156,13 @@ export default function PlanningPage() {
 
                     const getHistChMetricSum = (chName: string, metric: string) => {
                       let s = 0;
-                      const suffix = `-${chName}-${metric}`;
-                      for (const [k, v] of Object.entries(histSrData)) {
-                        if (!k.endsWith(suffix)) continue;
-                        // Brand-scope guard: chỉ cộng key thuộc visibleBrands
-                        if (!allowedBrandPrefixes.some(p => k.startsWith(p))) continue;
-                        s += (v as number) || 0;
+                      for (const b of visibleBrands) {
+                        if (selectedBrand !== 'all' && b.name !== selectedBrand) continue;
+                        const mList = b.models.filter((m: string) => selectedModels.length === 0 || selectedModels.includes(m));
+                        for (const model of mList) {
+                          if (b.modelData?.find((x: any) => x.name === model)?.is_aggregate) continue;
+                          s += (histSrData[`${b.name}-${model}-${chName}-${metric}`] as number) || 0;
+                        }
                       }
                       return s;
                     };
@@ -3106,15 +3171,16 @@ export default function PlanningPage() {
                         ? digitalChannelNames.reduce((s, dcName) => s + getHistChMetricSum(dcName, metric), 0)
                         : getHistChMetricSum(ch.name, metric);
 
-                    // Tổng theo channel+metric từ legacy keys (brand-model-channel-metric)
-                    // Brand-scope guard: chỉ cộng key thuộc visibleBrands
+                    // Tổng theo channel+metric — iterate models như brandSubtotals để tránh orphan DB keys
                     const getChMetricSum = (chName: string, metric: string) => {
                       let sum = 0;
-                      const suffix = `-${chName}-${metric}`;
-                      for (const [k, v] of Object.entries(srData)) {
-                        if (!k.endsWith(suffix)) continue;
-                        if (!allowedBrandPrefixes.some(p => k.startsWith(p))) continue;
-                        sum += (v as number) || 0;
+                      for (const b of visibleBrands) {
+                        if (selectedBrand !== 'all' && b.name !== selectedBrand) continue;
+                        const mList = b.models.filter((m: string) => selectedModels.length === 0 || selectedModels.includes(m));
+                        for (const model of mList) {
+                          if (b.modelData?.find((x: any) => x.name === model)?.is_aggregate) continue;
+                          sum += (srData[`${b.name}-${model}-${chName}-${metric}`] as number) || 0;
+                        }
                       }
                       return sum;
                     };
@@ -3166,12 +3232,12 @@ export default function PlanningPage() {
                         {visibleChannels.map(ch => visibleMetrics.map(m => {
                           const v = getChanSum(ch, m);
                           const h = compareMode !== 'none' ? getHistChanSum(ch, m) : null;
-                          const cellBg = ch.readonly ? (si % 2 === 0 ? 'var(--color-row-alt)' : 'var(--color-table-header)') : undefined;
+                          const cellBg = 'var(--color-row-alt)'; // TỔNG HỢP luôn read-only → nền xám đồng nhất
                           if (effectiveSplitMode) {
                             const planV = getPlanChanSum(ch, m);
                             return (
                               <React.Fragment key={`sr-${srObj.id}-${ch.name}-${m}`}>
-                                <td style={{ padding: '2px 6px', textAlign: 'center', verticalAlign: 'middle', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text-muted)', borderRight: '1px dashed var(--color-border-dark)', fontSize: 'var(--fs-table)' }}>
+                                <td style={{ padding: '2px 6px', textAlign: 'center', verticalAlign: 'middle', borderBottom: '1px solid var(--color-border)', background: cellBg ?? 'var(--color-surface)', color: 'var(--color-text-muted)', borderRight: '1px dashed var(--color-border-dark)', fontSize: 'var(--fs-table)' }}>
                                   {planV > 0 ? formatNumber(planV) : ''}
                                 </td>
                                 <td style={{ padding: '2px 6px', textAlign: 'center', verticalAlign: 'middle', borderBottom: '1px solid var(--color-border)', background: cellBg, fontSize: 'var(--fs-table)', color: v > 0 ? 'var(--color-text)' : 'transparent' }}>

@@ -43,6 +43,7 @@ function computeKPIs(ns: number, khqt: number, gdtd: number, khd: number) {
     cpl:  khqt > 0 ? +(ns / khqt).toFixed(2)         : null,
     cr1:  khqt > 0 ? +(gdtd / khqt * 100).toFixed(1)  : null,
     cr2:  gdtd > 0 ? +(khd  / gdtd * 100).toFixed(1)  : null,
+    cphd: khd  > 0 ? +(ns   / khd ).toFixed(2)        : null,
   };
 }
 
@@ -164,10 +165,10 @@ function FreshnessBar({ data, month, viewMode }: {
     if (!ts) return { label: 'Chưa có dữ liệu', color: '#94a3b8', dot: '#94a3b8' };
     const tsDate   = new Date(ts);
     const diffDays = Math.round((localDayStart(now) - localDayStart(tsDate)) / (1000 * 3600 * 24));
-    if (diffDays === 0) return { label: `Hôm nay ${fmtTime(ts)}`,      color: '#16a34a', dot: '#16a34a' };
-    if (diffDays === 1) return { label: `Hôm qua ${fmtTime(ts)}`,      color: '#d97706', dot: '#d97706' };
-    if (diffDays <= 7)  return { label: `${diffDays} ngày trước`,       color: '#d97706', dot: '#d97706' };
-    return               { label: fmtDateTime(ts),                      color: '#dc2626', dot: '#dc2626' };
+    if (diffDays === 0) return { label: fmtDateTime(ts), color: '#16a34a', dot: '#16a34a' };
+    if (diffDays === 1) return { label: fmtDateTime(ts), color: '#d97706', dot: '#d97706' };
+    if (diffDays <= 7)  return { label: fmtDateTime(ts), color: '#d97706', dot: '#d97706' };
+    return               { label: fmtDateTime(ts),       color: '#dc2626', dot: '#dc2626' };
   }
 
   return (
@@ -310,16 +311,24 @@ export function PlanVsActualTab({
         <thead>
           <tr style={{ background: 'var(--color-table-header)' }}>
             <th style={{ ...TH_BASE, textAlign: 'left', minWidth: 160, position: 'sticky', left: 0, zIndex: 2 }}>{labelHeader}</th>
-            <th style={{ ...TH_BASE, minWidth: 80 }}>NS (tr)</th>
-            <th style={{ ...TH_BASE, minWidth: 70 }}>KHQT</th>
+            <th style={{ ...TH_BASE, minWidth: 80 }}>NS<br /><span style={{ fontSize: 'var(--fs-label)', fontWeight: 400, color: 'var(--color-text-muted)' }}>triệu đ</span></th>
+            <th style={{ ...TH_BASE, minWidth: 70 }}>KHQT<br /><span style={{ fontSize: 'var(--fs-label)', fontWeight: 400, color: 'var(--color-text-muted)' }}>khách hàng</span></th>
             <th style={{ ...TH_BASE, minWidth: 110 }}>
-              Chi phí / KHQT
-              {hasCompare && <><br /><span style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-muted)', fontWeight: 400 }}>vs {compareLabel}</span></>}
+              Chi phí / KHQT<br />
+              <span style={{ fontSize: 'var(--fs-label)', fontWeight: 400, color: 'var(--color-text-muted)' }}>
+                {hasCompare ? `tr/KH · vs ${compareLabel}` : 'tr/KH'}
+              </span>
             </th>
-            <th style={{ ...TH_BASE, minWidth: 70 }}>GDTD</th>
-            <th style={{ ...TH_BASE, minWidth: 120 }}>Tỷ lệ GDTD / KHQT</th>
-            <th style={{ ...TH_BASE, minWidth: 70 }}>KHĐ</th>
-            <th style={{ ...TH_BASE, minWidth: 120 }}>Tỷ lệ KHĐ / GDTD</th>
+            <th style={{ ...TH_BASE, minWidth: 70 }}>GDTD<br /><span style={{ fontSize: 'var(--fs-label)', fontWeight: 400, color: 'var(--color-text-muted)' }}>khách hàng</span></th>
+            <th style={{ ...TH_BASE, minWidth: 120 }}>Tỷ lệ GDTD / KHQT<br /><span style={{ fontSize: 'var(--fs-label)', fontWeight: 400, color: 'var(--color-text-muted)' }}>%</span></th>
+            <th style={{ ...TH_BASE, minWidth: 70 }}>KHĐ<br /><span style={{ fontSize: 'var(--fs-label)', fontWeight: 400, color: 'var(--color-text-muted)' }}>hợp đồng</span></th>
+            <th style={{ ...TH_BASE, minWidth: 110 }}>
+              Chi phí / HĐ<br />
+              <span style={{ fontSize: 'var(--fs-label)', fontWeight: 400, color: 'var(--color-text-muted)' }}>
+                {hasCompare ? `tr/HĐ · vs ${compareLabel}` : 'tr/HĐ'}
+              </span>
+            </th>
+            <th style={{ ...TH_BASE, minWidth: 120 }}>Tỷ lệ KHĐ / GDTD<br /><span style={{ fontSize: 'var(--fs-label)', fontWeight: 400, color: 'var(--color-text-muted)' }}>%</span></th>
           </tr>
         </thead>
       );
@@ -459,6 +468,7 @@ export function PlanVsActualTab({
         <td style={CELL}>{formatNumber(Math.round(kpis.gdtd)) || '—'}{hasCompare && deltaArrow(kpis.gdtd, ck?.gdtd ?? null, true)}</td>
         <td style={CELL}>{kpis.cr1 !== null ? `${kpis.cr1}%` : '—'}{hasCompare && deltaArrow(kpis.cr1, ck?.cr1 ?? null, true)}</td>
         <td style={{ ...CELL, fontWeight: 600, color: 'var(--color-success)' }}>{formatNumber(Math.round(kpis.khd)) || '—'}{hasCompare && deltaArrow(kpis.khd, ck?.khd ?? null, true)}</td>
+        <td style={CELL}>{fmtK(kpis.cphd, 2)}{hasCompare && deltaArrow(kpis.cphd, ck?.cphd ?? null, false)}</td>
         <td style={CELL}>{kpis.cr2 !== null ? `${kpis.cr2}%` : '—'}{hasCompare && deltaArrow(kpis.cr2, ck?.cr2 ?? null, true)}</td>
       </tr>
     );

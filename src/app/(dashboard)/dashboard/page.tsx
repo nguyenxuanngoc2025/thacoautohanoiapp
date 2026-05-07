@@ -209,12 +209,17 @@ const SortableHeader = ({ column, title, align = 'left' }: { column: any, title:
 
   // mkt_brand: lọc bảng SR theo showroom được phép
   const visibleShowroomBreakdown = useMemo(() => {
+    let result = showroomBreakdown;
     if (effectiveRole === 'mkt_brand' && visibleShowrooms.length < showrooms.length) {
       const allowed = new Set(visibleShowrooms.map(s => s.name));
-      return showroomBreakdown.filter(r => allowed.has(r.name));
+      result = result.filter(r => allowed.has(r.name));
     }
-    return showroomBreakdown;
-  }, [showroomBreakdown, effectiveRole, visibleShowrooms, showrooms]);
+    // Khi filter theo brand/channel, ẩn showroom không có data nào
+    if (effectiveFilterBrand.length > 0 || filterChannel) {
+      result = result.filter(r => r.plan > 0 || r.actual > 0 || r.khqt > 0 || r.gdtd > 0 || r.khd > 0);
+    }
+    return result;
+  }, [showroomBreakdown, effectiveRole, visibleShowrooms, showrooms, effectiveFilterBrand, filterChannel]);
 
   // ── REUI Table Columns (Showroom) ───────────────────────────────
   const showroomColumns = useMemo(() => {
