@@ -203,6 +203,47 @@ export default function ReportsPage() {
   const { data: viewMasterRows }        = useViewBudgetMaster(unitIdForViews, filters.year);
   const { data: prevYearMasterRows }    = useViewBudgetMaster(unitIdForViews, filters.year - 1);
 
+  // ── Context sets — loại orphan entries (cùng logic với useFilteredBudget) ──
+  // Đảm bảo reports dùng cùng scope với dashboard và planning.
+  const ctxShowroomIds = useMemo(() => new Set(showroomItems.map(s => s.id)), [showroomItems]);
+  const ctxBrandNames  = useMemo(() => new Set(brands.map(b => b.name)), [brands]);
+  const ctxChannelCodes = useMemo(
+    () => new Set(channels.filter(c => !c.isAggregate).map(c => c.code)),
+    [channels],
+  );
+  const ctxBrandModelPairs = useMemo(() => {
+    const s = new Set<string>();
+    for (const b of brands) {
+      for (const m of (b.modelData ?? [])) {
+        s.add(`${b.name}|${m.name}`);
+      }
+    }
+    return s;
+  }, [brands]);
+
+  // Context-clean master rows — loại orphan showroom/brand/channel/model
+  const contextCleanMasterRows = useMemo<ViewBudgetMaster[] | null>(() => {
+    if (!viewMasterRows) return null;
+    return viewMasterRows.filter(r => {
+      if (!ctxShowroomIds.has(r.showroom_id)) return false;
+      if (!ctxBrandNames.has(r.brand_name)) return false;
+      if (!ctxChannelCodes.has(r.channel_code)) return false;
+      if (ctxBrandModelPairs.size > 0 && !ctxBrandModelPairs.has(`${r.brand_name}|${r.model_name}`)) return false;
+      return true;
+    });
+  }, [viewMasterRows, ctxShowroomIds, ctxBrandNames, ctxChannelCodes, ctxBrandModelPairs]);
+
+  const contextCleanPrevYearMasterRows = useMemo<ViewBudgetMaster[] | null>(() => {
+    if (!prevYearMasterRows) return null;
+    return prevYearMasterRows.filter(r => {
+      if (!ctxShowroomIds.has(r.showroom_id)) return false;
+      if (!ctxBrandNames.has(r.brand_name)) return false;
+      if (!ctxChannelCodes.has(r.channel_code)) return false;
+      if (ctxBrandModelPairs.size > 0 && !ctxBrandModelPairs.has(`${r.brand_name}|${r.model_name}`)) return false;
+      return true;
+    });
+  }, [prevYearMasterRows, ctxShowroomIds, ctxBrandNames, ctxChannelCodes, ctxBrandModelPairs]);
+
   // ── Filter resolution ─────────────────────────────────────────────────────
   const hasAnyFilter = !!(filters.brand || filters.showroom || filters.channel) || brandRestriction.length > 0;
 
@@ -216,10 +257,10 @@ export default function ReportsPage() {
     return nameToCode.get(filters.channel) ?? filters.channel;
   }, [filters.channel, nameToCode]);
 
-  // ── Filtered master rows — áp dụng tất cả filters lên v_budget_master ─────
+  // ── Filtered master rows — áp dụng user filters lên context-clean rows ────
   const filteredMasterRows = useMemo<ViewBudgetMaster[] | null>(() => {
-    if (!hasAnyFilter || !viewMasterRows) return null;
-    return viewMasterRows.filter(r => {
+    if (!hasAnyFilter || !contextCleanMasterRows) return null;
+    return contextCleanMasterRows.filter(r => {
       if (filterShowroomId && r.showroom_id !== filterShowroomId) return false;
       if (filters.brand && r.brand_name !== filters.brand) return false;
       // mkt_brand: lọc theo brand restriction nếu chưa chọn brand cụ thể
@@ -227,18 +268,18 @@ export default function ReportsPage() {
       if (filterChannelCode && r.channel_code !== filterChannelCode) return false;
       return true;
     });
-  }, [viewMasterRows, hasAnyFilter, filterShowroomId, filters.brand, filterChannelCode, brandRestriction]);
+  }, [contextCleanMasterRows, hasAnyFilter, filterShowroomId, filters.brand, filterChannelCode, brandRestriction]);
 
   const filteredPrevYearMasterRows = useMemo<ViewBudgetMaster[] | null>(() => {
-    if (!hasAnyFilter || !prevYearMasterRows) return null;
-    return prevYearMasterRows.filter(r => {
+    if (!hasAnyFilter || !contextCleanPrevYearMasterRows) return null;
+    return contextCleanPrevYearMasterRows.filter(r => {
       if (filterShowroomId && r.showroom_id !== filterShowroomId) return false;
       if (filters.brand && r.brand_name !== filters.brand) return false;
       if (brandRestriction.length > 0 && !filters.brand && !brandRestriction.includes(r.brand_name)) return false;
       if (filterChannelCode && r.channel_code !== filterChannelCode) return false;
       return true;
     });
-  }, [prevYearMasterRows, hasAnyFilter, filterShowroomId, filters.brand, filterChannelCode, brandRestriction]);
+  }, [contextCleanPrevYearMasterRows, hasAnyFilter, filterShowroomId, filters.brand, filterChannelCode, brandRestriction]);
 
   // ── Build MonthlyPayloads — ưu tiên master rows (kèm model data) ─────────
   // QUAN TRỌNG: CHỈ dùng channel keys + model keys.
@@ -253,35 +294,35 @@ export default function ReportsPage() {
   }
 
   const plansByMonth = useMemo<MonthlyPayloads>(() => {
-    const rows = filteredMasterRows ?? viewMasterRows;
+    const rows = filteredMasterRows ?? contextCleanMasterRows;
     if (rows) return buildFromMaster(rows, 'plan');
     return mergeViewPayloads(
       buildChannelPayloads(viewChannelRows, 'plan', codeToName),
       buildBrandPayloads(viewBrandRows, 'plan'),
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredMasterRows, viewMasterRows, viewChannelRows, viewBrandRows, codeToName]);
+  }, [filteredMasterRows, contextCleanMasterRows, viewChannelRows, viewBrandRows, codeToName]);
 
   const actualsByMonth = useMemo<MonthlyPayloads>(() => {
-    const rows = filteredMasterRows ?? viewMasterRows;
+    const rows = filteredMasterRows ?? contextCleanMasterRows;
     if (rows) return buildFromMaster(rows, 'actual');
     return mergeViewPayloads(
       buildChannelPayloads(viewChannelRows, 'actual', codeToName),
       buildBrandPayloads(viewBrandRows, 'actual'),
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredMasterRows, viewMasterRows, viewChannelRows, viewBrandRows, codeToName]);
+  }, [filteredMasterRows, contextCleanMasterRows, viewChannelRows, viewBrandRows, codeToName]);
 
   const prevYearActualsByMonth = useMemo<MonthlyPayloads>(() => {
     if (compareMode !== 'prev_year') return {};
-    const rows = filteredPrevYearMasterRows ?? prevYearMasterRows;
+    const rows = filteredPrevYearMasterRows ?? contextCleanPrevYearMasterRows;
     if (rows) return buildFromMaster(rows, 'actual');
     return mergeViewPayloads(
       buildChannelPayloads(prevYearChannelRows, 'actual', codeToName),
       buildBrandPayloads(prevYearBrandRows, 'actual'),
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredPrevYearMasterRows, prevYearMasterRows, prevYearChannelRows, prevYearBrandRows, compareMode, codeToName]);
+  }, [filteredPrevYearMasterRows, contextCleanPrevYearMasterRows, prevYearChannelRows, prevYearBrandRows, compareMode, codeToName]);
 
   // When unitIdForViews is null (super_admin "all" mode), views are skipped — treat as ready
   const viewsReady = unitIdForViews === null
@@ -383,7 +424,7 @@ export default function ReportsPage() {
 
   const showroomPayloadsByMonth = useMemo<Record<string, { plan: MonthlyPayloads; actual: MonthlyPayloads }>>(() => {
     // Dùng filteredMasterRows khi có filter (brand/channel) để per-showroom rows nhất quán với Tổng cộng
-    const sourceRows = filteredMasterRows ?? viewMasterRows;
+    const sourceRows = filteredMasterRows ?? contextCleanMasterRows;
     if (!sourceRows) return {};
     const result: Record<string, { plan: MonthlyPayloads; actual: MonthlyPayloads }> = {};
     for (const sr of showroomItems) {
